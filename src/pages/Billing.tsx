@@ -21,7 +21,7 @@ const Billing: React.FC = () => {
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const selected = invoices.find(i => i.id === selectedId) || invoices[0];
-  const pendingBookings = bookings.filter(b => b.status === 'confirmed');
+  const pendingBookings = bookings.filter(b => b.status === 'confirmed' || b.status === 'pending');
 
   const outstanding = invoices.filter(i => i.balance_due > 0);
   const advanceTotal = invoices.reduce((s, i) => s + (i.advance_paid || 0), 0);
@@ -116,7 +116,7 @@ const Billing: React.FC = () => {
               <div>
                 <label style={lbl}>Select booking *</label>
                 <select style={inp} value={createForm.booking_id} onChange={e => setCreateForm({ ...createForm, booking_id: e.target.value })}>
-                  <option value="">-- Select confirmed booking --</option>
+                  <option value="">-- Select booking --</option>
                   {pendingBookings.map(b => <option key={b.id} value={b.id}>{b.customer?.name} — {b.event_type} ({format(parseISO(b.event_date), 'MMM d')})</option>)}
                 </select>
               </div>
