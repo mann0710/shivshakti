@@ -148,7 +148,6 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
   );
 };
 
-const topbar: React.CSSProperties = { background: '#FFFFFF', borderBottom: '0.5px solid #E5E5E0', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
 const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
 const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
