@@ -84,28 +84,28 @@ const Finance: React.FC = () => {
 
   return (
     <div>
-      <div style={topbar}>
+      <div className="page-topbar">
         <div>
           <div style={{ fontSize: 16, fontWeight: 600 }}>Finance & Analytics</div>
           <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>Complete financial overview</div>
         </div>
         <button style={btnGhost} onClick={handleExport}>Export CSV</button>
       </div>
-      <div style={{ padding: 20 }}>
+      <div className="page-content">
         {/* KPI Row 1 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 12 }}>
+        <div className="g3">
           <KPI label="Total revenue" value={`₹${(totalRevenue / 100000).toFixed(1)}L`} sub="All time" />
           <KPI label="Amount collected" value={`₹${(totalCollected / 100000).toFixed(1)}L`} sub={`${collectionRate}% collection rate`} subColor="#639922" />
           <KPI label="Outstanding dues" value={`₹${totalOutstanding.toLocaleString()}`} sub={`${overdue.length} invoices`} subColor={totalOutstanding > 0 ? '#E24B4A' : '#639922'} />
         </div>
         {/* KPI Row 2 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+        <div className="g3" style={{ marginBottom: 20 }}>
           <KPI label="GST collected" value={`₹${totalGST.toLocaleString()}`} sub="@18% all invoices" />
           <KPI label="Avg. booking value" value={`₹${avgBookingValue.toLocaleString()}`} sub="Per invoice" />
           <KPI label="Total bookings" value={bookings.length} sub={`${customers.length} customers`} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="g2" style={{ marginBottom: 16 }}>
           {/* Monthly revenue */}
           <div style={card}>
             <div style={cardTitle}>Monthly revenue</div>
@@ -139,7 +139,7 @@ const Finance: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="g2">
           {/* Top customers */}
           <div style={card}>
             <div style={cardTitle}>Top customers by spend</div>
@@ -204,7 +204,6 @@ const KPI: React.FC<{ label: string; value: any; sub: string; subColor?: string 
   </div>
 );
 
-const topbar: React.CSSProperties = { background: '#FFFFFF', borderBottom: '0.5px solid #E5E5E0', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
 const cardTitle: React.CSSProperties = { fontSize: 13, fontWeight: 600, marginBottom: 14 };
 const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };

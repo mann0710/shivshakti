@@ -30,7 +30,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
   return (
     <div>
       {/* Topbar */}
-      <div style={topbarStyle}>
+      <div className="page-topbar">
         <div>
           <div style={{ fontSize: 16, fontWeight: 600 }}>Good morning, Sharma ji 👋</div>
           <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{format(today, 'EEEE, MMMM d, yyyy')}</div>
@@ -43,7 +43,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
         </div>
       </div>
 
-      <div style={{ padding: 20 }}>
+      <div className="page-content">
         {/* Alerts */}
         {urgentBookings.map(b => (
           <div key={b.id} style={alertWarn}>
@@ -57,14 +57,14 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
         ))}
 
         {/* Stat cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+        <div className="g4">
           <StatCard label="Active bookings" value={activeBookings.length} sub={`${bookings.filter(b => b.status === 'pending').length} pending confirmation`} />
           <StatCard label="Events this month" value={thisMonthEvents.length} sub="This calendar month" />
           <StatCard label="Next event" value={nextEvent ? format(parseISO(nextEvent.event_date), 'MMM d') : '—'} sub={nextEvent ? `${nextEvent.customer?.name} · ${nextEvent.guest_count} guests` : 'No upcoming events'} />
           <StatCard label="Outstanding invoices" value={overdueInvoices.length} sub={`₹${overdueInvoices.reduce((s, i) => s + i.balance_due, 0).toLocaleString()} total due`} subColor="#E24B4A" />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        <div className="g2" style={{ marginBottom: 16 }}>
           {/* Upcoming bookings */}
           <div style={card}>
             <div style={cardTitle}>
@@ -156,7 +156,6 @@ const Avatar: React.FC<{ name: string }> = ({ name }) => {
   );
 };
 
-const topbarStyle: React.CSSProperties = { background: '#FFFFFF', borderBottom: '0.5px solid #E5E5E0', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
 const cardTitle: React.CSSProperties = { fontSize: 13, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const cardLink: React.CSSProperties = { fontSize: 12, color: '#378ADD', cursor: 'pointer', fontWeight: 400 };

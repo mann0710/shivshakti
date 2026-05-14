@@ -14,30 +14,56 @@ const queryClient = new QueryClient();
 
 export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar';
 
+const bottomNavItems: { page: Page; icon: string; label: string }[] = [
+  { page: 'dashboard', icon: '🏠', label: 'Home' },
+  { page: 'bookings',  icon: '📋', label: 'Bookings' },
+  { page: 'customers', icon: '👥', label: 'Clients' },
+  { page: 'billing',   icon: '🧾', label: 'Billing' },
+  { page: 'menus',     icon: '🍽', label: 'Menus' },
+  { page: 'finance',   icon: '📊', label: 'Finance' },
+  { page: 'calendar',  icon: '📅', label: 'Calendar' },
+];
+
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
 
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard': return <Dashboard onNavigate={setCurrentPage} />;
-      case 'bookings': return <Bookings />;
+      case 'bookings':  return <Bookings />;
       case 'customers': return <Customers onNavigate={setCurrentPage} />;
-      case 'menus': return <Menus />;
-      case 'billing': return <Billing />;
-      case 'finance': return <Finance />;
-      case 'calendar': return <CalendarPage />;
-      default: return <Dashboard onNavigate={setCurrentPage} />;
+      case 'menus':     return <Menus />;
+      case 'billing':   return <Billing />;
+      case 'finance':   return <Finance />;
+      case 'calendar':  return <CalendarPage />;
+      default:          return <Dashboard onNavigate={setCurrentPage} />;
     }
   };
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: 'Inter, system-ui, sans-serif', fontSize: 14, background: '#F5F5F0' }}>
+      <div className="app-layout">
         <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
-        <main style={{ flex: 1, overflow: 'auto', background: '#F5F5F0' }}>
+        <main className="app-main">
           {renderPage()}
         </main>
       </div>
+
+      {/* Bottom navigation — visible only on mobile via CSS */}
+      <nav className="bottom-nav">
+        {bottomNavItems.map(item => (
+          <div
+            key={item.page}
+            className={`bn-item${currentPage === item.page ? ' active' : ''}`}
+            onClick={() => setCurrentPage(item.page)}
+          >
+            <span className="bn-icon">{item.icon}</span>
+            <span className="bn-label">{item.label}</span>
+            {currentPage === item.page && <span className="bn-dot" />}
+          </div>
+        ))}
+      </nav>
+
       <Toaster position="top-right" />
     </QueryClientProvider>
   );

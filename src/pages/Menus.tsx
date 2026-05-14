@@ -64,17 +64,17 @@ const Menus: React.FC = () => {
 
   return (
     <div>
-      <div style={topbar}>
+      <div className="page-topbar">
         <div style={{ fontSize: 16, fontWeight: 600 }}>Menus & Packages</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={btnPrimary} onClick={() => setShowForm(!showForm)}>+ New Menu</button>
         </div>
       </div>
-      <div style={{ padding: 20 }}>
+      <div className="page-content">
         {(showForm || editingMenu) && (
           <div style={{ ...card, marginBottom: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>{editingMenu ? 'Edit menu' : 'Add new menu'}</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div className="g3" style={{ marginBottom: 10 }}>
               <div><label style={lbl}>Menu name *</label><input style={inp} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Gujarati Thali" /></div>
               <div><label style={lbl}>Price per plate (₹) *</label><input type="number" style={inp} value={form.price_per_plate} onChange={e => setForm({ ...form, price_per_plate: e.target.value })} placeholder="450" /></div>
               <div><label style={lbl}>Category</label>
@@ -105,7 +105,7 @@ const Menus: React.FC = () => {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+        <div className="g-menus">
           {menus.map(m => {
             const c = accentColors[m.category] || accentColors['Gujarati'];
             return (
@@ -144,7 +144,6 @@ const Menus: React.FC = () => {
   );
 };
 
-const topbar: React.CSSProperties = { background: '#FFFFFF', borderBottom: '0.5px solid #E5E5E0', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
 const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
 const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };

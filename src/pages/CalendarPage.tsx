@@ -32,7 +32,7 @@ const CalendarPage: React.FC = () => {
 
   return (
     <div>
-      <div style={topbar}>
+      <div className="page-topbar">
         <div style={{ fontSize: 16, fontWeight: 600 }}>Calendar</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button style={btnGhost} onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>◀ Prev</button>
@@ -42,8 +42,8 @@ const CalendarPage: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ padding: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
+      <div className="page-content">
+        <div className="g-calendar">
           {/* Calendar grid */}
           <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', background: '#FAFAF8', borderBottom: '0.5px solid #E5E5E0' }}>
@@ -129,7 +129,6 @@ const CalendarPage: React.FC = () => {
   );
 };
 
-const topbar: React.CSSProperties = { background: '#FFFFFF', borderBottom: '0.5px solid #E5E5E0', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
 const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
 

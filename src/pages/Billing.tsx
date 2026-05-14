@@ -94,15 +94,15 @@ const Billing: React.FC = () => {
 
   return (
     <div>
-      <div style={topbar}>
+      <div className="page-topbar">
         <div style={{ fontSize: 16, fontWeight: 600 }}>Billing & Invoices</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={btnPrimary} onClick={() => setShowCreateForm(!showCreateForm)}>+ Create Invoice</button>
         </div>
       </div>
-      <div style={{ padding: 20 }}>
+      <div className="page-content">
         {/* Stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 20 }}>
+        <div className="g3" style={{ marginBottom: 20 }}>
           <div style={statCard}><div style={statLbl}>Outstanding dues</div><div style={{ fontSize: 22, fontWeight: 600 }}>₹{outstanding.reduce((s, i) => s + i.balance_due, 0).toLocaleString()}</div><div style={{ fontSize: 11, color: '#E24B4A', marginTop: 3 }}>{outstanding.length} invoices unpaid</div></div>
           <div style={statCard}><div style={statLbl}>Advance received</div><div style={{ fontSize: 22, fontWeight: 600 }}>₹{advanceTotal.toLocaleString()}</div><div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>Across all invoices</div></div>
           <div style={statCard}><div style={statLbl}>Invoices this month</div><div style={{ fontSize: 22, fontWeight: 600 }}>{thisMonth.length}</div><div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>{thisMonth.filter(i => i.status === 'paid').length} paid · {thisMonth.filter(i => i.status !== 'paid').length} pending</div></div>
@@ -112,7 +112,7 @@ const Billing: React.FC = () => {
         {showCreateForm && (
           <div style={{ ...card, marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Create invoice from booking</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <div className="g3" style={{ marginBottom: 12 }}>
               <div>
                 <label style={lbl}>Select booking *</label>
                 <select style={inp} value={createForm.booking_id} onChange={e => setCreateForm({ ...createForm, booking_id: e.target.value })}>
@@ -131,9 +131,9 @@ const Billing: React.FC = () => {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="g2-billing">
           {/* Invoice list */}
-          <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+          <div className="table-wrap" style={{ ...card, padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '12px 14px', borderBottom: '0.5px solid #E5E5E0', fontSize: 13, fontWeight: 600 }}>
               All invoices
             </div>
@@ -253,7 +253,6 @@ const Billing: React.FC = () => {
   );
 };
 
-const topbar: React.CSSProperties = { background: '#FFFFFF', borderBottom: '0.5px solid #E5E5E0', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
 const statCard: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: '14px 16px' };
 const statLbl: React.CSSProperties = { fontSize: 11, color: '#888880', marginBottom: 6 };

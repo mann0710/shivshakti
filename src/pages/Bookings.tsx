@@ -67,14 +67,14 @@ const Bookings: React.FC = () => {
 
   return (
     <div>
-      <div style={topbar}>
+      <div className="page-topbar">
         <div style={{ fontSize: 16, fontWeight: 600 }}>Bookings</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={btnGhost}>Filter</button>
           <button style={btnPrimary} onClick={() => setShowForm(!showForm)}>+ New Booking</button>
         </div>
       </div>
-      <div style={{ padding: 20 }}>
+      <div className="page-content">
         {/* Filters */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           {(['all', 'pending', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map(s => (
@@ -89,7 +89,7 @@ const Bookings: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 20 }} className="table-wrap">
           {isLoading ? (
             <div style={{ padding: 40, textAlign: 'center', color: '#888880' }}>Loading bookings...</div>
           ) : filtered.length === 0 ? (

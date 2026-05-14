@@ -18,11 +18,7 @@ const navItems: { page: Page; label: string; color: string }[] = [
 
 const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => {
   return (
-    <aside style={{
-      width: 210, minWidth: 210, background: '#FAFAF8',
-      borderRight: '0.5px solid #E5E5E0', display: 'flex',
-      flexDirection: 'column', height: '100vh'
-    }}>
+    <aside className="app-sidebar">
       {/* Logo */}
       <div style={{ padding: '20px 18px 14px', borderBottom: '0.5px solid #E5E5E0' }}>
         <div style={{ fontSize: 15, fontWeight: 600, color: '#1A1A18' }}>🍽 CaterPro</div>

@@ -43,7 +43,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
 
   return (
     <div>
-      <div style={topbar}>
+      <div className="page-topbar">
         <div style={{ fontSize: 16, fontWeight: 600 }}>Customers</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <input style={{ padding: '6px 12px', borderRadius: 8, border: '0.5px solid #D0D0CC', fontSize: 13, width: 200 }}
@@ -51,7 +51,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
           <button style={btnPrimary} onClick={() => setShowForm(!showForm)}>+ Add Customer</button>
         </div>
       </div>
-      <div style={{ padding: 20 }}>
+      <div className="page-content">
         {showForm && (
           <div style={{ ...card, marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>New Customer</div>
@@ -68,7 +68,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16 }}>
+        <div className="g-customer">
           {/* Customer list */}
           <div>
             <div style={{ fontSize: 11, color: '#888880', marginBottom: 8, fontWeight: 500 }}>{filtered.length} customers</div>
@@ -107,7 +107,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
                   </div>
                   <button style={btnPrimary} onClick={() => { toast.success(`Creating booking for ${selectedCustomer.name}`); onNavigate('bookings'); }}>Repeat Booking</button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                <div className="g3">
                   <div style={statCard}><div style={statLabel}>Total bookings</div><div style={statVal}>{customerBookings.length}</div></div>
                   <div style={statCard}><div style={statLabel}>Total spend</div><div style={statVal}>₹{(totalSpend / 100000).toFixed(1)}L</div></div>
                   <div style={statCard}><div style={statLabel}>Last event</div><div style={statVal}>{customerBookings[0] ? format(parseISO(customerBookings[0].event_date), 'MMM d') : '—'}</div></div>
@@ -115,7 +115,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
                 {selectedCustomer.notes && <div style={{ marginTop: 12, fontSize: 12, color: '#888880', background: '#FAFAF8', padding: '8px 12px', borderRadius: 8 }}>📝 {selectedCustomer.notes}</div>}
               </div>
 
-              <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+              <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-wrap">
                 <div style={{ padding: '12px 14px', borderBottom: '0.5px solid #E5E5E0', fontSize: 13, fontWeight: 600 }}>Booking history</div>
                 {customerBookings.length === 0 ? (
                   <div style={{ padding: 24, textAlign: 'center', color: '#888880', fontSize: 12 }}>No bookings yet for this customer</div>
