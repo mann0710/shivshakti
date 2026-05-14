@@ -4,6 +4,16 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
+// Catch any error before React mounts and show it on the page
+window.onerror = (msg, _src, _line, _col, err) => {
+  document.getElementById('root')!.innerHTML =
+    `<pre style="color:#A32D2D;background:#FCEBEB;padding:24px;margin:24px;border-radius:8px;font-size:13px;white-space:pre-wrap">${msg}\n\n${err?.stack || ''}</pre>`;
+};
+window.addEventListener('unhandledrejection', e => {
+  document.getElementById('root')!.innerHTML =
+    `<pre style="color:#A32D2D;background:#FCEBEB;padding:24px;margin:24px;border-radius:8px;font-size:13px;white-space:pre-wrap">Unhandled promise rejection:\n${e.reason?.stack || e.reason}</pre>`;
+});
+
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
   state = { error: null };
   static getDerivedStateFromError(error: Error) { return { error }; }
