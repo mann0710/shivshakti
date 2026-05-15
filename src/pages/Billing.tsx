@@ -64,7 +64,7 @@ const Billing: React.FC = () => {
       toast.success('Payment recorded!');
       setShowPaymentForm(false);
       setPayForm({ amount: '', payment_mode: 'upi', notes: '' });
-    } catch { toast.error('Failed to record payment'); }
+    } catch (e: any) { toast.error(e?.message || 'Failed to record payment'); }
   };
 
   const downloadPDF = async () => {

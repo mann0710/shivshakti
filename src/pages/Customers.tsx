@@ -34,7 +34,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
       toast.success('Customer added!');
       setShowForm(false);
       setForm({ name: '', phone: '', address: '', notes: '' });
-    } catch { toast.error('Failed to add customer'); }
+    } catch (e: any) { toast.error(e?.message || 'Failed to add customer'); }
   };
 
   const initials = (name: string) => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();

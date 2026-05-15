@@ -28,7 +28,7 @@ const Menus: React.FC = () => {
       toast.success('Menu added!');
       setShowForm(false);
       setForm(emptyForm);
-    } catch { toast.error('Failed to add menu'); }
+    } catch (e: any) { toast.error(e?.message || 'Failed to add menu'); }
   };
 
   const handleEdit = (m: Menu) => {
@@ -50,7 +50,7 @@ const Menus: React.FC = () => {
       toast.success('Menu updated!');
       setEditingMenu(null);
       setForm(emptyForm);
-    } catch { toast.error('Failed to update menu'); }
+    } catch (e: any) { toast.error(e?.message || 'Failed to update menu'); }
   };
 
   const accentColors: Record<string, { bg: string; text: string; accent: string }> = {
