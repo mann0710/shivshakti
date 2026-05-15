@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import {
   useDataCenter, useUpsertDataCenter,
   useTeamMembers, useCreateTeamMember, useUpdateTeamMember, useDeleteTeamMember,
   useEventTypes, useCreateEventType, useUpdateEventType, useDeleteEventType,
+  DEFAULT_EVENTS,
 } from '../hooks/useDataCenter';
 
 const DataCenter: React.FC = () => {
   const { data: dc } = useDataCenter();
   const { data: teamMembers = [] } = useTeamMembers();
-  const { data: eventTypes = [] } = useEventTypes();
+  const { data: eventTypes = [], isSuccess: etLoaded } = useEventTypes();
   const upsertDC = useUpsertDataCenter();
   const createMember = useCreateTeamMember();
   const updateMember = useUpdateTeamMember();
@@ -22,6 +23,7 @@ const DataCenter: React.FC = () => {
   const [gst, setGst] = useState('');
   const [fssaiUrl, setFssaiUrl] = useState('');
   const [uploading, setUploading] = useState(false);
+  const seededRef = useRef(false);
 
   // Team member form
   const [showMemberForm, setShowMemberForm] = useState(false);
@@ -37,6 +39,15 @@ const DataCenter: React.FC = () => {
   useEffect(() => {
     if (dc) { setGst(dc.gst_number || ''); setFssaiUrl(dc.fssai_certificate_url || ''); }
   }, [dc]);
+
+  // Auto-seed DEFAULT_EVENTS when table is empty
+  useEffect(() => {
+    if (!etLoaded || eventTypes.length > 0 || seededRef.current) return;
+    seededRef.current = true;
+    DEFAULT_EVENTS.forEach(name => {
+      createEventType.mutate(name, { onError: () => {} });
+    });
+  }, [etLoaded, eventTypes.length]); // eslint-disable-line
 
   const handleSaveInfo = async () => {
     try {
