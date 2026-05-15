@@ -15,7 +15,7 @@ a { color: inherit; }
   font-size: 14px;
   background: #F5F5F0;
 }
-.app-main { flex: 1; overflow: auto; background: #F5F5F0; }
+.app-main { flex: 1; overflow-x: hidden; overflow-y: auto; background: #F5F5F0; min-width: 0; }
 
 /* ─── Sidebar ─── */
 .app-sidebar {

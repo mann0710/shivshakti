@@ -1,12 +1,16 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { useInvoices, useCreateInvoice, useRecordPayment, usePaymentHistory } from '../hooks/useInvoices';
+import {
+  useInvoices, useCreateInvoice, useRecordPayment,
+  useUpdatePayment, useDeletePayment, usePaymentHistory,
+} from '../hooks/useInvoices';
 import { useBookings } from '../hooks/useBookings';
 import { useDataCenter } from '../hooks/useDataCenter';
 import StatusPill from '../components/StatusPill';
 import { formatDateIST, formatDateTimeIST, todayIST } from '../lib/ist';
+import { Payment } from '../types';
 
 const Billing: React.FC = () => {
   const { data: invoices = [], isLoading } = useInvoices();
@@ -14,18 +18,34 @@ const Billing: React.FC = () => {
   const { data: dc } = useDataCenter();
   const createInvoice = useCreateInvoice();
   const recordPayment = useRecordPayment();
+  const updatePayment = useUpdatePayment();
+  const deletePayment = useDeletePayment();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [createForm, setCreateForm] = useState({ booking_id: '', advance_paid: '', extra_description: '', extra_amount: '' });
-  const [payForm, setPayForm] = useState({ amount: '', payment_type: 'advance' as 'advance' | 'partial', payment_mode: 'upi', notes: '' });
+  const [showGST, setShowGST] = useState(true);
+
+  const [createForm, setCreateForm] = useState({
+    booking_id: '', advance_paid: '', extra_description: '', extra_amount: '',
+    discount_type: 'amount' as 'amount' | 'percentage', discount_value: '',
+  });
+  const [payForm, setPayForm] = useState({
+    amount: '', payment_type: 'advance' as 'advance' | 'partial',
+    payment_mode: 'upi', notes: '', payment_date: todayIST(),
+  });
+
+  // Edit payment state
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editPayForm, setEditPayForm] = useState({
+    amount: '', payment_type: 'advance' as 'advance' | 'partial',
+    payment_mode: 'upi', notes: '', payment_date: todayIST(),
+  });
+
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const selected = invoices.find(i => i.id === selectedId) || invoices[0];
-
-  // Only confirmed bookings for invoice creation
   const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
 
   const outstanding = invoices.filter(i => i.balance_due > 0);
@@ -36,24 +56,44 @@ const Billing: React.FC = () => {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
 
-  // Payment history for selected invoice
   const { data: paymentHistory = [] } = usePaymentHistory(selected?.id);
+
+  useEffect(() => {
+    if (dc?.gst_number) setShowGST(true);
+  }, [dc]);
 
   const handleCreate = async () => {
     if (!createForm.booking_id) { toast.error('Select a booking'); return; }
     const booking = bookings.find(b => b.id === createForm.booking_id);
     if (!booking) return;
     const lineItems = [
-      { description: `${booking.menu?.name || 'Catering'} × ${booking.guest_count} guests`, quantity: booking.guest_count, unit_price: booking.menu?.price_per_plate || 0, total: booking.estimated_cost },
+      {
+        description: `${booking.menu?.name || 'Catering'} × ${booking.guest_count} guests`,
+        quantity: booking.guest_count,
+        unit_price: booking.menu?.price_per_plate || 0,
+        total: booking.estimated_cost,
+      },
     ];
     if (createForm.extra_description && createForm.extra_amount) {
-      lineItems.push({ description: createForm.extra_description, quantity: 1, unit_price: parseFloat(createForm.extra_amount), total: parseFloat(createForm.extra_amount) });
+      lineItems.push({
+        description: createForm.extra_description,
+        quantity: 1,
+        unit_price: parseFloat(createForm.extra_amount),
+        total: parseFloat(createForm.extra_amount),
+      });
     }
     const subtotal = lineItems.reduce((s, l) => s + l.total, 0);
+    const discountVal = parseFloat(createForm.discount_value) || 0;
+    const discount_amount = createForm.discount_type === 'percentage'
+      ? Math.round((subtotal * discountVal) / 100)
+      : discountVal;
+
     try {
       const inv = await createInvoice.mutateAsync({
         booking_id: createForm.booking_id,
         subtotal,
+        discount_amount,
+        discount_type: createForm.discount_type,
         advance_paid: parseFloat(createForm.advance_paid) || 0,
         line_items: lineItems,
         status: 'draft',
@@ -62,7 +102,7 @@ const Billing: React.FC = () => {
       setSelectedId(inv.id);
       toast.success('Invoice created!');
       setShowCreateForm(false);
-      setCreateForm({ booking_id: '', advance_paid: '', extra_description: '', extra_amount: '' });
+      setCreateForm({ booking_id: '', advance_paid: '', extra_description: '', extra_amount: '', discount_type: 'amount', discount_value: '' });
     } catch (e: any) { toast.error(e.message || 'Failed to create invoice'); }
   };
 
@@ -79,11 +119,47 @@ const Billing: React.FC = () => {
         payment_type: payForm.payment_type,
         payment_mode: payForm.payment_mode,
         notes: payForm.notes,
+        payment_date: payForm.payment_date || todayIST(),
       });
       toast.success('Payment recorded!');
       setShowPaymentForm(false);
-      setPayForm({ amount: '', payment_type: 'advance', payment_mode: 'upi', notes: '' });
+      setPayForm({ amount: '', payment_type: 'advance', payment_mode: 'upi', notes: '', payment_date: todayIST() });
     } catch (e: any) { toast.error(e?.message || 'Failed to record payment'); }
+  };
+
+  const handleEditPayment = (p: Payment) => {
+    setEditingPaymentId(p.id);
+    setEditPayForm({
+      amount: String(p.amount),
+      payment_type: p.payment_type,
+      payment_mode: p.payment_mode,
+      notes: p.notes || '',
+      payment_date: p.payment_date,
+    });
+  };
+
+  const handleSaveEditPayment = async (p: Payment) => {
+    if (!editPayForm.amount) { toast.error('Enter amount'); return; }
+    try {
+      await updatePayment.mutateAsync({
+        id: p.id,
+        invoiceId: p.invoice_id,
+        amount: parseFloat(editPayForm.amount),
+        payment_type: editPayForm.payment_type,
+        payment_mode: editPayForm.payment_mode as Payment['payment_mode'],
+        notes: editPayForm.notes,
+        payment_date: editPayForm.payment_date,
+      });
+      toast.success('Payment updated!');
+      setEditingPaymentId(null);
+    } catch (e: any) { toast.error(e?.message || 'Failed to update'); }
+  };
+
+  const handleDeletePayment = async (p: Payment) => {
+    try {
+      await deletePayment.mutateAsync({ id: p.id, invoiceId: p.invoice_id });
+      toast.success('Payment deleted');
+    } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
   };
 
   const downloadPDF = async () => {
@@ -105,8 +181,40 @@ const Billing: React.FC = () => {
     const booking = selected.booking;
     const customer = booking?.customer;
     const phone = customer?.phone?.replace(/\D/g, '') || '';
+    const menuItems = booking?.menu?.items?.length
+      ? booking.menu.items.map((item: string) => `  • ${item}`).join('\n')
+      : `  • ${booking?.menu?.name || 'Catering service'}`;
+    const payHistLines = paymentHistory.length
+      ? paymentHistory.map(p =>
+          `  • ₹${p.amount.toLocaleString()} — ${p.payment_type === 'advance' ? 'Advance' : 'Partial'} (${p.payment_mode.replace('_', ' ').toUpperCase()}) on ${formatDateIST(p.payment_date, 'dd MMM yyyy')}`
+        ).join('\n')
+      : '  None yet';
+
+    const discountLine = selected.discount_amount > 0
+      ? `Discount: -₹${selected.discount_amount.toLocaleString()}\n`
+      : '';
+    const gstLine = showGST && dc?.gst_number
+      ? `GST @${selected.gst_rate}%: ₹${selected.gst_amount.toLocaleString()}\n`
+      : '';
+
     const msg = encodeURIComponent(
-      `Dear ${customer?.name},\n\nYour invoice ${selected.invoice_number} for ${booking?.event_type} on ${formatDateIST(booking?.event_date, 'MMM d, yyyy')} is ready.\n\nTotal: ₹${selected.total_amount.toLocaleString()}\nAdvance paid: ₹${selected.advance_paid.toLocaleString()}\nBalance due: ₹${selected.balance_due.toLocaleString()}\n\nThank you!\nShiv Shakti Caterers`
+      `Dear ${customer?.name},\n\nYour invoice *${selected.invoice_number}* is ready.\n\n` +
+      `*Event Details*\n` +
+      `Event: ${booking?.event_type}\n` +
+      `Date: ${formatDateIST(booking?.event_date, 'EEEE, MMM d, yyyy')}\n` +
+      `Venue: ${booking?.venue || '—'}\n` +
+      `Guests: ${booking?.guest_count}\n\n` +
+      `*Menu: ${booking?.menu?.name || 'Catering'}*\n` +
+      `${menuItems}\n\n` +
+      `*Invoice Summary*\n` +
+      `Subtotal: ₹${selected.subtotal.toLocaleString()}\n` +
+      discountLine +
+      gstLine +
+      `*Total: ₹${selected.total_amount.toLocaleString()}*\n\n` +
+      `*Payment History*\n${payHistLines}\n\n` +
+      `Total Paid: ₹${selected.advance_paid.toLocaleString()}\n` +
+      `Balance Due: ₹${selected.balance_due.toLocaleString()}\n\n` +
+      `Thank you!\nShiv Shakti Caterers`
     );
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
   };
@@ -122,9 +230,21 @@ const Billing: React.FC = () => {
       <div className="page-content">
         {/* Stats */}
         <div className="g3" style={{ marginBottom: 20 }}>
-          <div style={statCard}><div style={statLbl}>Outstanding dues</div><div style={{ fontSize: 22, fontWeight: 600 }}>₹{outstanding.reduce((s, i) => s + i.balance_due, 0).toLocaleString()}</div><div style={{ fontSize: 11, color: '#E24B4A', marginTop: 3 }}>{outstanding.length} invoices unpaid</div></div>
-          <div style={statCard}><div style={statLbl}>Total collected</div><div style={{ fontSize: 22, fontWeight: 600 }}>₹{advanceTotal.toLocaleString()}</div><div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>Advance + partial payments</div></div>
-          <div style={statCard}><div style={statLbl}>Invoices this month</div><div style={{ fontSize: 22, fontWeight: 600 }}>{thisMonth.length}</div><div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>{thisMonth.filter(i => i.status === 'paid').length} paid · {thisMonth.filter(i => i.status !== 'paid').length} pending</div></div>
+          <div style={statCard}>
+            <div style={statLbl}>Outstanding dues</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>₹{outstanding.reduce((s, i) => s + i.balance_due, 0).toLocaleString()}</div>
+            <div style={{ fontSize: 11, color: '#E24B4A', marginTop: 3 }}>{outstanding.length} invoices unpaid</div>
+          </div>
+          <div style={statCard}>
+            <div style={statLbl}>Total collected</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>₹{advanceTotal.toLocaleString()}</div>
+            <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>Advance + partial payments</div>
+          </div>
+          <div style={statCard}>
+            <div style={statLbl}>Invoices this month</div>
+            <div style={{ fontSize: 22, fontWeight: 600 }}>{thisMonth.length}</div>
+            <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>{thisMonth.filter(i => i.status === 'paid').length} paid · {thisMonth.filter(i => i.status !== 'paid').length} pending</div>
+          </div>
         </div>
 
         {/* Create Invoice Form */}
@@ -141,12 +261,34 @@ const Billing: React.FC = () => {
                 <label style={lbl}>Select booking *</label>
                 <select style={inp} value={createForm.booking_id} onChange={e => setCreateForm({ ...createForm, booking_id: e.target.value })}>
                   <option value="">-- Select confirmed booking --</option>
-                  {confirmedBookings.map(b => <option key={b.id} value={b.id}>{b.customer?.name} — {b.event_type} ({formatDateIST(b.event_date, 'MMM d')})</option>)}
+                  {confirmedBookings.map(b => (
+                    <option key={b.id} value={b.id}>{b.customer?.name} — {b.event_type} ({formatDateIST(b.event_date, 'MMM d')})</option>
+                  ))}
                 </select>
               </div>
-              <div><label style={lbl}>Advance paid (₹)</label><input type="number" style={inp} value={createForm.advance_paid} onChange={e => setCreateForm({ ...createForm, advance_paid: e.target.value })} placeholder="0" /></div>
-              <div><label style={lbl}>Extra item (optional)</label><input style={inp} value={createForm.extra_description} onChange={e => setCreateForm({ ...createForm, extra_description: e.target.value })} placeholder="e.g. Extra sweet counter" /></div>
-              <div><label style={lbl}>Extra amount (₹)</label><input type="number" style={inp} value={createForm.extra_amount} onChange={e => setCreateForm({ ...createForm, extra_amount: e.target.value })} placeholder="0" /></div>
+              <div>
+                <label style={lbl}>Advance paid (₹)</label>
+                <input type="number" style={inp} value={createForm.advance_paid} onChange={e => setCreateForm({ ...createForm, advance_paid: e.target.value })} placeholder="0" />
+              </div>
+              <div>
+                <label style={lbl}>Extra item (optional)</label>
+                <input style={inp} value={createForm.extra_description} onChange={e => setCreateForm({ ...createForm, extra_description: e.target.value })} placeholder="e.g. Extra sweet counter" />
+              </div>
+              <div>
+                <label style={lbl}>Extra amount (₹)</label>
+                <input type="number" style={inp} value={createForm.extra_amount} onChange={e => setCreateForm({ ...createForm, extra_amount: e.target.value })} placeholder="0" />
+              </div>
+              <div>
+                <label style={lbl}>Discount type</label>
+                <select style={inp} value={createForm.discount_type} onChange={e => setCreateForm({ ...createForm, discount_type: e.target.value as 'amount' | 'percentage' })}>
+                  <option value="amount">Amount (₹)</option>
+                  <option value="percentage">Percentage (%)</option>
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Discount {createForm.discount_type === 'percentage' ? '(%)' : '(₹)'}</label>
+                <input type="number" style={inp} value={createForm.discount_value} onChange={e => setCreateForm({ ...createForm, discount_value: e.target.value })} placeholder="0" />
+              </div>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button style={btnGhost} onClick={() => setShowCreateForm(false)}>Cancel</button>
@@ -160,40 +302,55 @@ const Billing: React.FC = () => {
           <div className="table-wrap" style={{ ...card, padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '12px 14px', borderBottom: '0.5px solid #E5E5E0', fontSize: 13, fontWeight: 600 }}>All invoices</div>
             {isLoading ? <div style={{ padding: 30, textAlign: 'center', color: '#888880' }}>Loading...</div> : (
-              invoices.length === 0 ? <div style={{ padding: 30, textAlign: 'center', color: '#888880', fontSize: 13 }}>No invoices yet</div> : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead><tr style={{ background: '#FAFAF8' }}>
-                    {['Invoice #', 'Customer', 'Amount', 'Balance', 'Status'].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: '#888880', fontSize: 12 }}>{h}</th>)}
-                  </tr></thead>
-                  <tbody>
-                    {invoices.map(inv => (
-                      <tr key={inv.id} onClick={() => { setSelectedId(inv.id); setShowHistory(false); setShowPaymentForm(false); }}
-                        style={{ borderTop: '0.5px solid #F0F0EC', cursor: 'pointer', background: selectedId === inv.id || (!selectedId && inv === invoices[0]) ? '#FFFBF5' : 'transparent' }}>
-                        <td style={{ padding: '9px 12px', fontWeight: 500, color: '#E8750A' }}>{inv.invoice_number}</td>
-                        <td style={{ padding: '9px 8px' }}>{inv.booking?.customer?.name}</td>
-                        <td style={{ padding: '9px 8px', fontWeight: 500 }}>₹{inv.total_amount.toLocaleString()}</td>
-                        <td style={{ padding: '9px 8px', color: inv.balance_due > 0 ? '#A32D2D' : '#3B6D11', fontWeight: 500 }}>₹{inv.balance_due.toLocaleString()}</td>
-                        <td style={{ padding: '9px 12px' }}><StatusPill status={inv.status} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
+              invoices.length === 0
+                ? <div style={{ padding: 30, textAlign: 'center', color: '#888880', fontSize: 13 }}>No invoices yet</div>
+                : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead><tr style={{ background: '#FAFAF8' }}>
+                      {['Invoice #', 'Customer', 'Amount', 'Balance', 'Status'].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: '#888880', fontSize: 12 }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {invoices.map(inv => (
+                        <tr key={inv.id}
+                          onClick={() => { setSelectedId(inv.id); setShowHistory(false); setShowPaymentForm(false); setEditingPaymentId(null); }}
+                          style={{ borderTop: '0.5px solid #F0F0EC', cursor: 'pointer', background: (selectedId === inv.id || (!selectedId && inv === invoices[0])) ? '#FFFBF5' : 'transparent' }}>
+                          <td style={{ padding: '9px 12px', fontWeight: 500, color: '#E8750A' }}>{inv.invoice_number}</td>
+                          <td style={{ padding: '9px 8px' }}>{inv.booking?.customer?.name}</td>
+                          <td style={{ padding: '9px 8px', fontWeight: 500 }}>₹{inv.total_amount.toLocaleString()}</td>
+                          <td style={{ padding: '9px 8px', color: inv.balance_due > 0 ? '#A32D2D' : '#3B6D11', fontWeight: 500 }}>₹{inv.balance_due.toLocaleString()}</td>
+                          <td style={{ padding: '9px 12px' }}><StatusPill status={inv.status} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
             )}
           </div>
 
           {/* Invoice preview */}
           {selected ? (
             <div style={card}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14, display: 'flex', justifyContent: 'space-between' }}>
-                Invoice preview <span style={{ fontSize: 11, color: '#888880', fontWeight: 400 }}>{selected.invoice_number}</span>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Invoice preview</span>
+                <span style={{ fontSize: 11, color: '#888880', fontWeight: 400 }}>{selected.invoice_number}</span>
               </div>
 
+              {/* GST checkbox */}
+              {dc?.gst_number && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666660', marginBottom: 10, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={showGST} onChange={e => setShowGST(e.target.checked)} style={{ accentColor: '#E8750A' }} />
+                  Show GST Number ({dc.gst_number})
+                </label>
+              )}
+
               <div ref={invoiceRef} style={{ border: '0.5px solid #E5E5E0', borderRadius: 10, padding: 16, fontSize: 12, background: '#fff' }}>
+                {/* Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>Shiv Shakti Caterers</div>
-                    {dc?.gst_number && <div style={{ color: '#888880', fontSize: 11 }}>GSTIN: {dc.gst_number}</div>}
+                    {showGST && dc?.gst_number && <div style={{ color: '#888880', fontSize: 11 }}>GSTIN: {dc.gst_number}</div>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 600 }}>{selected.invoice_number}</div>
@@ -202,14 +359,22 @@ const Billing: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Bill to */}
                 <div style={{ background: '#FAFAF8', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
                   <div style={{ fontWeight: 500 }}>Bill to: {selected.booking?.customer?.name}</div>
                   <div style={{ color: '#888880', fontSize: 11, marginTop: 2 }}>
-                    {selected.booking?.event_type} · {formatDateIST(selected.booking?.event_date, 'MMM d, yyyy')} · {selected.booking?.venue} · {selected.booking?.guest_count} guests
+                    {selected.booking?.event_type} · {formatDateIST(selected.booking?.event_date, 'MMM d, yyyy')}
                   </div>
+                  <div style={{ color: '#888880', fontSize: 11 }}>
+                    {selected.booking?.venue} · {selected.booking?.guest_count} guests
+                  </div>
+                  {selected.booking?.customer?.phone && (
+                    <div style={{ color: '#888880', fontSize: 11 }}>{selected.booking.customer.phone}</div>
+                  )}
                 </div>
 
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12, fontSize: 12 }}>
+                {/* Line items */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4, fontSize: 12 }}>
                   <thead><tr style={{ borderBottom: '0.5px solid #E5E5E0' }}>
                     <th style={{ textAlign: 'left', padding: '4px 0', color: '#888880', fontWeight: 500 }}>Description</th>
                     <th style={{ textAlign: 'right', padding: '4px 0', color: '#888880', fontWeight: 500 }}>Amount</th>
@@ -217,19 +382,45 @@ const Billing: React.FC = () => {
                   <tbody>
                     {(selected.line_items || []).map((item, i) => (
                       <tr key={i} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
-                        <td style={{ padding: '5px 0', color: '#666660' }}>{item.description}</td>
+                        <td style={{ padding: '5px 0', color: '#333' }}>{item.description}</td>
                         <td style={{ padding: '5px 0', textAlign: 'right' }}>₹{item.total.toLocaleString()}</td>
                       </tr>
                     ))}
-                    <tr style={{ borderBottom: '0.5px solid #E5E5E0' }}>
-                      <td style={{ padding: '5px 0', color: '#666660' }}>GST @{selected.gst_rate}%</td>
-                      <td style={{ padding: '5px 0', textAlign: 'right' }}>₹{selected.gst_amount.toLocaleString()}</td>
-                    </tr>
-                    <tr><td style={{ padding: '7px 0', fontWeight: 600, fontSize: 13 }}>Total</td><td style={{ padding: '7px 0', textAlign: 'right', fontWeight: 600, fontSize: 13 }}>₹{selected.total_amount.toLocaleString()}</td></tr>
                   </tbody>
                 </table>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {/* Menu items */}
+                {selected.booking?.menu?.items?.length ? (
+                  <div style={{ marginBottom: 12, paddingLeft: 8 }}>
+                    {(selected.booking.menu.items as string[]).map((item, i) => (
+                      <div key={i} style={{ fontSize: 11, color: '#666660', lineHeight: 1.6 }}>· {item}</div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* Totals */}
+                <div style={{ borderTop: '0.5px solid #E5E5E0', paddingTop: 8, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#666660' }}>
+                    <span>Subtotal</span><span>₹{selected.subtotal.toLocaleString()}</span>
+                  </div>
+                  {selected.discount_amount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#3B6D11' }}>
+                      <span>Discount {selected.discount_type === 'percentage' ? `(${Math.round((selected.discount_amount / selected.subtotal) * 100)}%)` : ''}</span>
+                      <span>-₹{selected.discount_amount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {showGST && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#666660' }}>
+                      <span>GST @{selected.gst_rate}%</span><span>₹{selected.gst_amount.toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 13, fontWeight: 600, borderTop: '0.5px solid #E5E5E0', marginTop: 4 }}>
+                    <span>Total</span><span>₹{selected.total_amount.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Payment summary boxes */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                   <div style={{ background: '#EAF3DE', padding: '8px 12px', borderRadius: 8 }}>
                     <div style={{ fontSize: 11, color: '#3B6D11' }}>Amount paid</div>
                     <div style={{ fontWeight: 600, color: '#3B6D11', fontSize: 14, marginTop: 2 }}>₹{selected.advance_paid.toLocaleString()}</div>
@@ -241,6 +432,19 @@ const Billing: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Payment history in PDF */}
+                {paymentHistory.length > 0 && (
+                  <div style={{ borderTop: '0.5px solid #E5E5E0', paddingTop: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#888880', marginBottom: 6 }}>Payment History</div>
+                    {paymentHistory.map(p => (
+                      <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666660', padding: '2px 0' }}>
+                        <span>₹{p.amount.toLocaleString()} · {p.payment_type === 'advance' ? 'Advance' : 'Partial'} · {p.payment_mode.replace('_', ' ').toUpperCase()}</span>
+                        <span>{formatDateIST(p.payment_date, 'dd MMM yyyy')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Action buttons */}
@@ -278,10 +482,16 @@ const Billing: React.FC = () => {
                     <div>
                       <label style={lbl}>Payment mode</label>
                       <select style={inp} value={payForm.payment_mode} onChange={e => setPayForm({ ...payForm, payment_mode: e.target.value })}>
-                        {['upi', 'cash', 'bank_transfer', 'cheque'].map(m => <option key={m} value={m}>{m.replace('_', ' ').toUpperCase()}</option>)}
+                        {['upi', 'cash', 'bank_transfer', 'cheque'].map(m => (
+                          <option key={m} value={m}>{m.replace('_', ' ').toUpperCase()}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
+                      <label style={lbl}>Payment date</label>
+                      <input type="date" style={inp} value={payForm.payment_date} onChange={e => setPayForm({ ...payForm, payment_date: e.target.value })} />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1' }}>
                       <label style={lbl}>Notes</label>
                       <input style={inp} value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} placeholder="Optional note" />
                     </div>
@@ -290,27 +500,68 @@ const Billing: React.FC = () => {
                 </div>
               )}
 
-              {/* Payment history */}
+              {/* Payment history panel */}
               {showHistory && (
                 <div style={{ marginTop: 12, padding: 12, background: '#FAFAF8', borderRadius: 8 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Payment history</div>
                   {paymentHistory.length === 0 ? (
                     <div style={{ fontSize: 12, color: '#888880' }}>No payments recorded yet</div>
                   ) : paymentHistory.map(p => (
-                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid #E5E5E0' }}>
-                      <div>
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          <span style={{ fontSize: 12, fontWeight: 500 }}>₹{p.amount.toLocaleString()}</span>
-                          <span style={{ fontSize: 10, background: p.payment_type === 'advance' ? '#EAF3DE' : '#E6F1FB', color: p.payment_type === 'advance' ? '#3B6D11' : '#185FA5', padding: '1px 7px', borderRadius: 12, fontWeight: 600 }}>
-                            {p.payment_type === 'advance' ? 'Advance' : 'Partial'}
-                          </span>
-                          <span style={{ fontSize: 10, color: '#888880' }}>{p.payment_mode.replace('_', ' ').toUpperCase()}</span>
+                    <div key={p.id} style={{ borderBottom: '0.5px solid #E5E5E0', paddingBottom: 10, marginBottom: 10 }}>
+                      {editingPaymentId === p.id ? (
+                        /* Inline edit form */
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <div>
+                            <label style={lbl}>Type</label>
+                            <select style={inp} value={editPayForm.payment_type} onChange={e => setEditPayForm({ ...editPayForm, payment_type: e.target.value as 'advance' | 'partial' })}>
+                              <option value="advance">Advance</option>
+                              <option value="partial">Partial</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={lbl}>Amount (₹)</label>
+                            <input type="number" style={inp} value={editPayForm.amount} onChange={e => setEditPayForm({ ...editPayForm, amount: e.target.value })} />
+                          </div>
+                          <div>
+                            <label style={lbl}>Mode</label>
+                            <select style={inp} value={editPayForm.payment_mode} onChange={e => setEditPayForm({ ...editPayForm, payment_mode: e.target.value })}>
+                              {['upi', 'cash', 'bank_transfer', 'cheque'].map(m => (
+                                <option key={m} value={m}>{m.replace('_', ' ').toUpperCase()}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={lbl}>Date</label>
+                            <input type="date" style={inp} value={editPayForm.payment_date} onChange={e => setEditPayForm({ ...editPayForm, payment_date: e.target.value })} />
+                          </div>
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <label style={lbl}>Notes</label>
+                            <input style={inp} value={editPayForm.notes} onChange={e => setEditPayForm({ ...editPayForm, notes: e.target.value })} placeholder="Optional note" />
+                          </div>
+                          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button onClick={() => setEditingPaymentId(null)} style={{ ...btnGhost, fontSize: 11, padding: '3px 10px' }}>Cancel</button>
+                            <button onClick={() => handleSaveEditPayment(p)} style={{ ...btnPrimary, fontSize: 11, padding: '3px 10px' }}>Save</button>
+                          </div>
                         </div>
-                        {p.notes && <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{p.notes}</div>}
-                      </div>
-                      <div style={{ fontSize: 11, color: '#888880', textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
-                        {formatDateTimeIST(p.created_at)}
-                      </div>
+                      ) : (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                              <span style={{ fontSize: 12, fontWeight: 500 }}>₹{p.amount.toLocaleString()}</span>
+                              <span style={{ fontSize: 10, background: p.payment_type === 'advance' ? '#EAF3DE' : '#E6F1FB', color: p.payment_type === 'advance' ? '#3B6D11' : '#185FA5', padding: '1px 7px', borderRadius: 12, fontWeight: 600 }}>
+                                {p.payment_type === 'advance' ? 'Advance' : 'Partial'}
+                              </span>
+                              <span style={{ fontSize: 10, color: '#888880' }}>{p.payment_mode.replace('_', ' ').toUpperCase()}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{formatDateIST(p.payment_date, 'dd MMM yyyy')}</div>
+                            {p.notes && <div style={{ fontSize: 11, color: '#888880' }}>{p.notes}</div>}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, flexShrink: 0, marginLeft: 8 }}>
+                            <button onClick={() => handleEditPayment(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#378ADD', fontSize: 12 }}>✏ Edit</button>
+                            <button onClick={() => handleDeletePayment(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D', fontSize: 16 }}>×</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -333,6 +584,6 @@ const statLbl: React.CSSProperties = { fontSize: 11, color: '#888880', marginBot
 const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
 const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
 const lbl: React.CSSProperties = { fontSize: 11, color: '#888880', display: 'block', marginBottom: 4 };
-const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 7, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18' };
+const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 7, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
 
 export default Billing;

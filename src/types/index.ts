@@ -42,6 +42,8 @@ export interface Invoice {
   booking?: Booking;
   invoice_number: string;
   subtotal: number;
+  discount_amount: number;
+  discount_type: 'amount' | 'percentage';
   gst_rate: number;
   gst_amount: number;
   total_amount: number;
@@ -83,5 +85,11 @@ export interface TeamMember {
   name: string;
   mobile?: string;
   email?: string;
+  created_at: string;
+}
+
+export interface EventType {
+  id: string;
+  name: string;
   created_at: string;
 }
