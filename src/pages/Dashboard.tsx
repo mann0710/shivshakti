@@ -39,7 +39,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
     <div>
       <div className="page-topbar">
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>{getISTGreeting()}, Sharma ji 👋</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{getISTGreeting()} 👋</div>
           <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{format(today, 'EEEE, MMMM d, yyyy')}</div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
