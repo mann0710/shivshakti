@@ -9,7 +9,7 @@ import {
 import { useBookings } from '../hooks/useBookings';
 import { useDataCenter } from '../hooks/useDataCenter';
 import StatusPill from '../components/StatusPill';
-import { formatDateIST, formatDateTimeIST, todayIST } from '../lib/ist';
+import { formatDateIST, todayIST } from '../lib/ist';
 import { Payment } from '../types';
 
 const Billing: React.FC = () => {
