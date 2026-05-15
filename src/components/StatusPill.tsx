@@ -1,9 +1,11 @@
 import React from 'react';
 
 const colors: Record<string, { bg: string; color: string }> = {
+  inquiry:   { bg: '#E6F1FB', color: '#185FA5' },
+  followup:  { bg: '#EEEDFE', color: '#534AB7' },
   pending:   { bg: '#FAEEDA', color: '#854F0B' },
   confirmed: { bg: '#EAF3DE', color: '#3B6D11' },
-  completed: { bg: '#E6F1FB', color: '#185FA5' },
+  completed: { bg: '#E6F1FB', color: '#0F6E56' },
   cancelled: { bg: '#FCEBEB', color: '#A32D2D' },
   draft:     { bg: '#F1EFE8', color: '#5F5E5A' },
   sent:      { bg: '#FAEEDA', color: '#854F0B' },

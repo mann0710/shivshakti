@@ -1,35 +1,43 @@
 import React, { useState, useRef } from 'react';
-import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { useInvoices, useCreateInvoice, useRecordPayment } from '../hooks/useInvoices';
+import { useInvoices, useCreateInvoice, useRecordPayment, usePaymentHistory } from '../hooks/useInvoices';
 import { useBookings } from '../hooks/useBookings';
+import { useDataCenter } from '../hooks/useDataCenter';
 import StatusPill from '../components/StatusPill';
+import { formatDateIST, formatDateTimeIST, todayIST } from '../lib/ist';
 
 const Billing: React.FC = () => {
   const { data: invoices = [], isLoading } = useInvoices();
   const { data: bookings = [] } = useBookings();
+  const { data: dc } = useDataCenter();
   const createInvoice = useCreateInvoice();
   const recordPayment = useRecordPayment();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [createForm, setCreateForm] = useState({ booking_id: '', advance_paid: '', extra_description: '', extra_amount: '' });
-  const [payForm, setPayForm] = useState({ amount: '', payment_mode: 'upi', notes: '' });
+  const [payForm, setPayForm] = useState({ amount: '', payment_type: 'advance' as 'advance' | 'partial', payment_mode: 'upi', notes: '' });
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   const selected = invoices.find(i => i.id === selectedId) || invoices[0];
-  const pendingBookings = bookings.filter(b => b.status === 'confirmed' || b.status === 'pending');
+
+  // Only confirmed bookings for invoice creation
+  const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
 
   const outstanding = invoices.filter(i => i.balance_due > 0);
   const advanceTotal = invoices.reduce((s, i) => s + (i.advance_paid || 0), 0);
   const thisMonth = invoices.filter(i => {
-    const d = parseISO(i.created_at);
+    const d = new Date(i.created_at);
     const now = new Date();
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   });
+
+  // Payment history for selected invoice
+  const { data: paymentHistory = [] } = usePaymentHistory(selected?.id);
 
   const handleCreate = async () => {
     if (!createForm.booking_id) { toast.error('Select a booking'); return; }
@@ -49,21 +57,32 @@ const Billing: React.FC = () => {
         advance_paid: parseFloat(createForm.advance_paid) || 0,
         line_items: lineItems,
         status: 'draft',
-        issue_date: format(new Date(), 'yyyy-MM-dd'),
+        issue_date: todayIST(),
       });
       setSelectedId(inv.id);
       toast.success('Invoice created!');
       setShowCreateForm(false);
-    } catch (e: any) { toast.error(e.message); }
+      setCreateForm({ booking_id: '', advance_paid: '', extra_description: '', extra_amount: '' });
+    } catch (e: any) { toast.error(e.message || 'Failed to create invoice'); }
   };
 
   const handlePayment = async () => {
     if (!selected || !payForm.amount) { toast.error('Enter payment amount'); return; }
+    const amount = parseFloat(payForm.amount);
+    if (amount > selected.balance_due) {
+      toast.error(`Amount cannot exceed balance due ₹${selected.balance_due.toLocaleString()}`); return;
+    }
     try {
-      await recordPayment.mutateAsync({ invoiceId: selected.id, amount: parseFloat(payForm.amount), payment_mode: payForm.payment_mode, notes: payForm.notes });
+      await recordPayment.mutateAsync({
+        invoiceId: selected.id,
+        amount,
+        payment_type: payForm.payment_type,
+        payment_mode: payForm.payment_mode,
+        notes: payForm.notes,
+      });
       toast.success('Payment recorded!');
       setShowPaymentForm(false);
-      setPayForm({ amount: '', payment_mode: 'upi', notes: '' });
+      setPayForm({ amount: '', payment_type: 'advance', payment_mode: 'upi', notes: '' });
     } catch (e: any) { toast.error(e?.message || 'Failed to record payment'); }
   };
 
@@ -87,7 +106,7 @@ const Billing: React.FC = () => {
     const customer = booking?.customer;
     const phone = customer?.phone?.replace(/\D/g, '') || '';
     const msg = encodeURIComponent(
-      `Dear ${customer?.name},\n\nYour invoice ${selected.invoice_number} for ${booking?.event_type} on ${format(parseISO(booking?.event_date || ''), 'MMM d, yyyy')} is ready.\n\nTotal: ₹${selected.total_amount.toLocaleString()}\nAdvance paid: ₹${selected.advance_paid.toLocaleString()}\nBalance due: ₹${selected.balance_due.toLocaleString()}\n\nThank you!\nSharma Caterers`
+      `Dear ${customer?.name},\n\nYour invoice ${selected.invoice_number} for ${booking?.event_type} on ${formatDateIST(booking?.event_date, 'MMM d, yyyy')} is ready.\n\nTotal: ₹${selected.total_amount.toLocaleString()}\nAdvance paid: ₹${selected.advance_paid.toLocaleString()}\nBalance due: ₹${selected.balance_due.toLocaleString()}\n\nThank you!\nShiv Shakti Caterers`
     );
     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
   };
@@ -104,20 +123,25 @@ const Billing: React.FC = () => {
         {/* Stats */}
         <div className="g3" style={{ marginBottom: 20 }}>
           <div style={statCard}><div style={statLbl}>Outstanding dues</div><div style={{ fontSize: 22, fontWeight: 600 }}>₹{outstanding.reduce((s, i) => s + i.balance_due, 0).toLocaleString()}</div><div style={{ fontSize: 11, color: '#E24B4A', marginTop: 3 }}>{outstanding.length} invoices unpaid</div></div>
-          <div style={statCard}><div style={statLbl}>Advance received</div><div style={{ fontSize: 22, fontWeight: 600 }}>₹{advanceTotal.toLocaleString()}</div><div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>Across all invoices</div></div>
+          <div style={statCard}><div style={statLbl}>Total collected</div><div style={{ fontSize: 22, fontWeight: 600 }}>₹{advanceTotal.toLocaleString()}</div><div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>Advance + partial payments</div></div>
           <div style={statCard}><div style={statLbl}>Invoices this month</div><div style={{ fontSize: 22, fontWeight: 600 }}>{thisMonth.length}</div><div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>{thisMonth.filter(i => i.status === 'paid').length} paid · {thisMonth.filter(i => i.status !== 'paid').length} pending</div></div>
         </div>
 
         {/* Create Invoice Form */}
         {showCreateForm && (
           <div style={{ ...card, marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Create invoice from booking</div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Create invoice from confirmed booking</div>
+            {confirmedBookings.length === 0 && (
+              <div style={{ background: '#FFF8EE', border: '0.5px solid #FAC775', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#854F0B' }}>
+                ⚠️ No confirmed bookings found. Set a booking's status to "Confirmed" first.
+              </div>
+            )}
             <div className="g3" style={{ marginBottom: 12 }}>
               <div>
                 <label style={lbl}>Select booking *</label>
                 <select style={inp} value={createForm.booking_id} onChange={e => setCreateForm({ ...createForm, booking_id: e.target.value })}>
-                  <option value="">-- Select booking --</option>
-                  {pendingBookings.map(b => <option key={b.id} value={b.id}>{b.customer?.name} — {b.event_type} ({format(parseISO(b.event_date), 'MMM d')})</option>)}
+                  <option value="">-- Select confirmed booking --</option>
+                  {confirmedBookings.map(b => <option key={b.id} value={b.id}>{b.customer?.name} — {b.event_type} ({formatDateIST(b.event_date, 'MMM d')})</option>)}
                 </select>
               </div>
               <div><label style={lbl}>Advance paid (₹)</label><input type="number" style={inp} value={createForm.advance_paid} onChange={e => setCreateForm({ ...createForm, advance_paid: e.target.value })} placeholder="0" /></div>
@@ -134,22 +158,21 @@ const Billing: React.FC = () => {
         <div className="g2-billing">
           {/* Invoice list */}
           <div className="table-wrap" style={{ ...card, padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 14px', borderBottom: '0.5px solid #E5E5E0', fontSize: 13, fontWeight: 600 }}>
-              All invoices
-            </div>
+            <div style={{ padding: '12px 14px', borderBottom: '0.5px solid #E5E5E0', fontSize: 13, fontWeight: 600 }}>All invoices</div>
             {isLoading ? <div style={{ padding: 30, textAlign: 'center', color: '#888880' }}>Loading...</div> : (
               invoices.length === 0 ? <div style={{ padding: 30, textAlign: 'center', color: '#888880', fontSize: 13 }}>No invoices yet</div> : (
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead><tr style={{ background: '#FAFAF8' }}>
-                    {['Invoice #', 'Customer', 'Amount', 'Status'].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: '#888880', fontSize: 12 }}>{h}</th>)}
+                    {['Invoice #', 'Customer', 'Amount', 'Balance', 'Status'].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: '#888880', fontSize: 12 }}>{h}</th>)}
                   </tr></thead>
                   <tbody>
                     {invoices.map(inv => (
-                      <tr key={inv.id} onClick={() => setSelectedId(inv.id)}
-                        style={{ borderTop: '0.5px solid #F0F0EC', cursor: 'pointer', background: selectedId === inv.id ? '#FFFBF5' : 'transparent' }}>
+                      <tr key={inv.id} onClick={() => { setSelectedId(inv.id); setShowHistory(false); setShowPaymentForm(false); }}
+                        style={{ borderTop: '0.5px solid #F0F0EC', cursor: 'pointer', background: selectedId === inv.id || (!selectedId && inv === invoices[0]) ? '#FFFBF5' : 'transparent' }}>
                         <td style={{ padding: '9px 12px', fontWeight: 500, color: '#E8750A' }}>{inv.invoice_number}</td>
                         <td style={{ padding: '9px 8px' }}>{inv.booking?.customer?.name}</td>
                         <td style={{ padding: '9px 8px', fontWeight: 500 }}>₹{inv.total_amount.toLocaleString()}</td>
+                        <td style={{ padding: '9px 8px', color: inv.balance_due > 0 ? '#A32D2D' : '#3B6D11', fontWeight: 500 }}>₹{inv.balance_due.toLocaleString()}</td>
                         <td style={{ padding: '9px 12px' }}><StatusPill status={inv.status} /></td>
                       </tr>
                     ))}
@@ -169,13 +192,12 @@ const Billing: React.FC = () => {
               <div ref={invoiceRef} style={{ border: '0.5px solid #E5E5E0', borderRadius: 10, padding: 16, fontSize: 12, background: '#fff' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>Sharma Caterers</div>
-                    <div style={{ color: '#888880', fontSize: 11 }}>GSTIN: 24ABCDE1234F1Z5</div>
-                    <div style={{ color: '#888880', fontSize: 11 }}>Ahmedabad, Gujarat</div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>Shiv Shakti Caterers</div>
+                    {dc?.gst_number && <div style={{ color: '#888880', fontSize: 11 }}>GSTIN: {dc.gst_number}</div>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 600 }}>{selected.invoice_number}</div>
-                    <div style={{ color: '#888880', fontSize: 11 }}>Date: {format(parseISO(selected.issue_date), 'MMM d, yyyy')}</div>
+                    <div style={{ color: '#888880', fontSize: 11 }}>Date: {formatDateIST(selected.issue_date, 'MMM d, yyyy')}</div>
                     <div style={{ marginTop: 4 }}><StatusPill status={selected.status} /></div>
                   </div>
                 </div>
@@ -183,7 +205,7 @@ const Billing: React.FC = () => {
                 <div style={{ background: '#FAFAF8', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
                   <div style={{ fontWeight: 500 }}>Bill to: {selected.booking?.customer?.name}</div>
                   <div style={{ color: '#888880', fontSize: 11, marginTop: 2 }}>
-                    {selected.booking?.event_type} · {selected.booking?.event_date ? format(parseISO(selected.booking.event_date), 'MMM d, yyyy') : ''} · {selected.booking?.venue} · {selected.booking?.guest_count} guests
+                    {selected.booking?.event_type} · {formatDateIST(selected.booking?.event_date, 'MMM d, yyyy')} · {selected.booking?.venue} · {selected.booking?.guest_count} guests
                   </div>
                 </div>
 
@@ -209,36 +231,88 @@ const Billing: React.FC = () => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div style={{ background: '#EAF3DE', padding: '8px 12px', borderRadius: 8 }}>
-                    <div style={{ fontSize: 11, color: '#3B6D11' }}>Advance paid</div>
+                    <div style={{ fontSize: 11, color: '#3B6D11' }}>Amount paid</div>
                     <div style={{ fontWeight: 600, color: '#3B6D11', fontSize: 14, marginTop: 2 }}>₹{selected.advance_paid.toLocaleString()}</div>
                   </div>
                   <div style={{ background: selected.balance_due > 0 ? '#FCEBEB' : '#EAF3DE', padding: '8px 12px', borderRadius: 8 }}>
                     <div style={{ fontSize: 11, color: selected.balance_due > 0 ? '#A32D2D' : '#3B6D11' }}>Balance due</div>
-                    <div style={{ fontWeight: 600, color: selected.balance_due > 0 ? '#A32D2D' : '#3B6D11', fontSize: 14, marginTop: 2 }}>₹{selected.balance_due.toLocaleString()}</div>
+                    <div style={{ fontWeight: 600, color: selected.balance_due > 0 ? '#A32D2D' : '#3B6D11', fontSize: 14, marginTop: 2 }}>
+                      {selected.balance_due <= 0 ? '✓ Fully paid' : `₹${selected.balance_due.toLocaleString()}`}
+                    </div>
                   </div>
                 </div>
               </div>
 
+              {/* Action buttons */}
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button style={{ ...btnGhost, flex: 1, fontSize: 12 }} onClick={sendWhatsApp}>📱 WhatsApp</button>
-                <button style={{ ...btnPrimary, flex: 1, fontSize: 12 }} onClick={downloadPDF}>⬇ Download PDF</button>
+                <button style={{ ...btnGhost, flex: 1, fontSize: 12 }} onClick={() => { setShowHistory(!showHistory); setShowPaymentForm(false); }}>📜 History</button>
+                <button style={{ ...btnPrimary, flex: 1, fontSize: 12 }} onClick={downloadPDF}>⬇ PDF</button>
               </div>
-              <button style={{ ...btnGhost, width: '100%', marginTop: 8, fontSize: 12 }} onClick={() => setShowPaymentForm(!showPaymentForm)}>
-                + Record payment received
-              </button>
 
-              {showPaymentForm && (
+              {/* Record payment — hidden when fully paid */}
+              {selected.balance_due > 0 && (
+                <button style={{ ...btnGhost, width: '100%', marginTop: 8, fontSize: 12 }} onClick={() => { setShowPaymentForm(!showPaymentForm); setShowHistory(false); }}>
+                  + Record payment received
+                </button>
+              )}
+
+              {/* Payment form */}
+              {showPaymentForm && selected.balance_due > 0 && (
                 <div style={{ marginTop: 12, padding: 12, background: '#FAFAF8', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, color: '#888880', marginBottom: 8 }}>
+                    Balance due: <strong style={{ color: '#A32D2D' }}>₹{selected.balance_due.toLocaleString()}</strong>
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                    <div><label style={lbl}>Amount (₹)</label><input type="number" style={inp} value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} placeholder="Enter amount" /></div>
-                    <div><label style={lbl}>Payment mode</label>
+                    <div>
+                      <label style={lbl}>Payment type</label>
+                      <select style={inp} value={payForm.payment_type} onChange={e => setPayForm({ ...payForm, payment_type: e.target.value as 'advance' | 'partial' })}>
+                        <option value="advance">Advance payment</option>
+                        <option value="partial">Partial payment</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={lbl}>Amount (₹)</label>
+                      <input type="number" style={inp} value={payForm.amount} onChange={e => setPayForm({ ...payForm, amount: e.target.value })} placeholder={`Max ₹${selected.balance_due}`} />
+                    </div>
+                    <div>
+                      <label style={lbl}>Payment mode</label>
                       <select style={inp} value={payForm.payment_mode} onChange={e => setPayForm({ ...payForm, payment_mode: e.target.value })}>
                         {['upi', 'cash', 'bank_transfer', 'cheque'].map(m => <option key={m} value={m}>{m.replace('_', ' ').toUpperCase()}</option>)}
                       </select>
                     </div>
+                    <div>
+                      <label style={lbl}>Notes</label>
+                      <input style={inp} value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} placeholder="Optional note" />
+                    </div>
                   </div>
-                  <div style={{ marginBottom: 8 }}><label style={lbl}>Notes</label><input style={inp} value={payForm.notes} onChange={e => setPayForm({ ...payForm, notes: e.target.value })} placeholder="Optional note" /></div>
                   <button style={{ ...btnPrimary, width: '100%' }} onClick={handlePayment}>Save Payment</button>
+                </div>
+              )}
+
+              {/* Payment history */}
+              {showHistory && (
+                <div style={{ marginTop: 12, padding: 12, background: '#FAFAF8', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Payment history</div>
+                  {paymentHistory.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#888880' }}>No payments recorded yet</div>
+                  ) : paymentHistory.map(p => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '0.5px solid #E5E5E0' }}>
+                      <div>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <span style={{ fontSize: 12, fontWeight: 500 }}>₹{p.amount.toLocaleString()}</span>
+                          <span style={{ fontSize: 10, background: p.payment_type === 'advance' ? '#EAF3DE' : '#E6F1FB', color: p.payment_type === 'advance' ? '#3B6D11' : '#185FA5', padding: '1px 7px', borderRadius: 12, fontWeight: 600 }}>
+                            {p.payment_type === 'advance' ? 'Advance' : 'Partial'}
+                          </span>
+                          <span style={{ fontSize: 10, color: '#888880' }}>{p.payment_mode.replace('_', ' ').toUpperCase()}</span>
+                        </div>
+                        {p.notes && <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{p.notes}</div>}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#888880', textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
+                        {formatDateTimeIST(p.created_at)}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

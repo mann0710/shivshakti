@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
-import { Invoice } from '../types';
+import { Invoice, Payment } from '../types';
+import { todayIST } from '../lib/ist';
 
 export const useInvoices = () =>
   useQuery({
@@ -19,7 +20,6 @@ export const useCreateInvoice = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (invoice: Partial<Invoice>) => {
-      // Auto-generate invoice number
       const { count } = await supabase
         .from('invoices')
         .select('*', { count: 'exact', head: true });
@@ -40,6 +40,7 @@ export const useCreateInvoice = () => {
           gst_amount,
           total_amount,
           balance_due,
+          issue_date: invoice.issue_date || todayIST(),
         })
         .select('*, booking:bookings(*, customer:customers(*), menu:menus(*))')
         .single();
@@ -56,24 +57,26 @@ export const useRecordPayment = () => {
     mutationFn: async ({
       invoiceId,
       amount,
+      payment_type,
       payment_mode,
       notes,
     }: {
       invoiceId: string;
       amount: number;
+      payment_type: 'advance' | 'partial';
       payment_mode: string;
       notes?: string;
     }) => {
-      // Insert payment record
       const { error: payErr } = await supabase.from('payments').insert({
         invoice_id: invoiceId,
         amount,
+        payment_type,
         payment_mode,
         notes,
+        payment_date: todayIST(),
       });
       if (payErr) throw payErr;
 
-      // Update invoice balance
       const { data: inv } = await supabase
         .from('invoices')
         .select('advance_paid, total_amount')
@@ -82,7 +85,7 @@ export const useRecordPayment = () => {
 
       if (inv) {
         const newAdvance = (inv.advance_paid || 0) + amount;
-        const newBalance = inv.total_amount - newAdvance;
+        const newBalance = Math.max(0, inv.total_amount - newAdvance);
         const newStatus = newBalance <= 0 ? 'paid' : 'sent';
         await supabase
           .from('invoices')
@@ -90,6 +93,36 @@ export const useRecordPayment = () => {
           .eq('id', invoiceId);
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      qc.invalidateQueries({ queryKey: ['payments'] });
+    },
   });
 };
+
+export const usePaymentHistory = (invoiceId: string | undefined) =>
+  useQuery({
+    queryKey: ['payments', invoiceId],
+    enabled: !!invoiceId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('invoice_id', invoiceId!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data as Payment[];
+    },
+  });
+
+export const useAllPayments = () =>
+  useQuery({
+    queryKey: ['all_payments'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('id, amount, payment_type, created_at');
+      if (error) throw error;
+      return (data || []) as Pick<Payment, 'id' | 'amount' | 'payment_type' | 'created_at'>[];
+    },
+  });

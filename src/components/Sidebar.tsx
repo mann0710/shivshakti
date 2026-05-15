@@ -7,39 +7,41 @@ interface Props {
 }
 
 const navItems: { page: Page; label: string; color: string }[] = [
-  { page: 'dashboard', label: 'Dashboard', color: '#E8750A' },
-  { page: 'bookings', label: 'Bookings', color: '#378ADD' },
-  { page: 'customers', label: 'Customers', color: '#639922' },
-  { page: 'menus', label: 'Menus & Packages', color: '#7F77DD' },
-  { page: 'billing', label: 'Billing', color: '#BA7517' },
-  { page: 'finance', label: 'Finance & Analytics', color: '#0F6E56' },
-  { page: 'calendar', label: 'Calendar', color: '#D4537E' },
+  { page: 'dashboard',   label: 'Dashboard',          color: '#E8750A' },
+  { page: 'bookings',    label: 'Bookings',            color: '#378ADD' },
+  { page: 'customers',   label: 'Customers',           color: '#639922' },
+  { page: 'menus',       label: 'Menus & Packages',    color: '#7F77DD' },
+  { page: 'billing',     label: 'Billing',             color: '#BA7517' },
+  { page: 'finance',     label: 'Finance & Analytics', color: '#0F6E56' },
+  { page: 'calendar',    label: 'Calendar',            color: '#D4537E' },
+  { page: 'datacenter',  label: 'Data Center',         color: '#888880' },
 ];
 
 const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => {
   return (
     <aside className="app-sidebar">
-      {/* Logo */}
       <div style={{ padding: '20px 18px 14px', borderBottom: '0.5px solid #E5E5E0' }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: '#1A1A18' }}>🍽 CaterPro</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: '#1A1A18' }}>🍽 Shiv Shakti</div>
         <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>Business Manager</div>
       </div>
 
-      {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
         <div style={{ fontSize: 10, fontWeight: 600, color: '#AAAAAA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '8px 10px 4px' }}>Main</div>
         {navItems.slice(0, 3).map(item => (
           <NavItem key={item.page} item={item} active={currentPage === item.page} onClick={() => onNavigate(item.page)} />
         ))}
         <div style={{ fontSize: 10, fontWeight: 600, color: '#AAAAAA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '12px 10px 4px' }}>Operations</div>
-        {navItems.slice(3).map(item => (
+        {navItems.slice(3, 7).map(item => (
+          <NavItem key={item.page} item={item} active={currentPage === item.page} onClick={() => onNavigate(item.page)} />
+        ))}
+        <div style={{ fontSize: 10, fontWeight: 600, color: '#AAAAAA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '12px 10px 4px' }}>Settings</div>
+        {navItems.slice(7).map(item => (
           <NavItem key={item.page} item={item} active={currentPage === item.page} onClick={() => onNavigate(item.page)} />
         ))}
       </nav>
 
-      {/* Footer */}
       <div style={{ padding: '12px 16px', borderTop: '0.5px solid #E5E5E0', fontSize: 11, color: '#AAAAAA' }}>
-        Sharma Caterers · v1.0
+        Shiv Shakti · v1.0
       </div>
     </aside>
   );
@@ -60,9 +62,6 @@ const NavItem: React.FC<{ item: typeof navItems[0]; active: boolean; onClick: ()
   >
     <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
     {item.label}
-    {item.page === 'finance' && (
-      <span style={{ marginLeft: 'auto', background: '#EAF3DE', color: '#3B6D11', fontSize: 9, padding: '1px 6px', borderRadius: 20, fontWeight: 600 }}>New</span>
-    )}
   </div>
 );
 

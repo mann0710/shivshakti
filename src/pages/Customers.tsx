@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 import { useCustomers, useCreateCustomer } from '../hooks/useCustomers';
 import { useBookings } from '../hooks/useBookings';
 import StatusPill from '../components/StatusPill';
 import { Page } from '../App';
+import { formatDateIST } from '../lib/ist';
 
 interface Props { onNavigate: (page: Page) => void; }
 
@@ -16,11 +16,12 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', phone: '', address: '', notes: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', notes: '' });
 
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search)
+    c.phone?.includes(search) ||
+    c.email?.toLowerCase().includes(search.toLowerCase())
   );
 
   const selectedCustomer = customers.find(c => c.id === selected) || filtered[0];
@@ -29,11 +30,14 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
 
   const handleAdd = async () => {
     if (!form.name) { toast.error('Name is required'); return; }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      toast.error('Enter a valid email address'); return;
+    }
     try {
       await createCustomer.mutateAsync(form);
       toast.success('Customer added!');
       setShowForm(false);
-      setForm({ name: '', phone: '', address: '', notes: '' });
+      setForm({ name: '', phone: '', email: '', address: '', notes: '' });
     } catch (e: any) { toast.error(e?.message || 'Failed to add customer'); }
   };
 
@@ -47,7 +51,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
         <div style={{ fontSize: 16, fontWeight: 600 }}>Customers</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <input style={{ padding: '6px 12px', borderRadius: 8, border: '0.5px solid #D0D0CC', fontSize: 13, width: 200 }}
-            placeholder="Search by name or phone..." value={search} onChange={e => setSearch(e.target.value)} />
+            placeholder="Search by name, phone or email..." value={search} onChange={e => setSearch(e.target.value)} />
           <button style={btnPrimary} onClick={() => setShowForm(!showForm)}>+ Add Customer</button>
         </div>
       </div>
@@ -55,12 +59,18 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
         {showForm && (
           <div style={{ ...card, marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>New Customer</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <div className="g3" style={{ marginBottom: 10 }}>
               <div><label style={label}>Full name *</label><input style={input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Rajesh Patel" /></div>
               <div><label style={label}>Phone</label><input style={input} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 98765 43210" /></div>
-              <div><label style={label}>Address</label><input style={input} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Area, City" /></div>
+              <div>
+                <label style={label}>Email</label>
+                <input type="email" style={input} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="customer@example.com" />
+              </div>
             </div>
-            <div style={{ marginBottom: 12 }}><label style={label}>Notes</label><input style={input} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes about this customer" /></div>
+            <div className="g2" style={{ marginBottom: 10 }}>
+              <div><label style={label}>Address</label><input style={input} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Area, City" /></div>
+              <div><label style={label}>Notes</label><input style={input} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes about this customer" /></div>
+            </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button style={btnGhost} onClick={() => setShowForm(false)}>Cancel</button>
               <button style={btnPrimary} onClick={handleAdd}>Save Customer</button>
@@ -102,7 +112,9 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 17, fontWeight: 600 }}>{selectedCustomer.name}</div>
                     <div style={{ fontSize: 12, color: '#888880', marginTop: 2 }}>
-                      {selectedCustomer.phone} {selectedCustomer.address && `· ${selectedCustomer.address}`}
+                      {selectedCustomer.phone}
+                      {selectedCustomer.email && <> · {selectedCustomer.email}</>}
+                      {selectedCustomer.address && <> · {selectedCustomer.address}</>}
                     </div>
                   </div>
                   <button style={btnPrimary} onClick={() => { toast.success(`Creating booking for ${selectedCustomer.name}`); onNavigate('bookings'); }}>Repeat Booking</button>
@@ -110,7 +122,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
                 <div className="g3">
                   <div style={statCard}><div style={statLabel}>Total bookings</div><div style={statVal}>{customerBookings.length}</div></div>
                   <div style={statCard}><div style={statLabel}>Total spend</div><div style={statVal}>₹{(totalSpend / 100000).toFixed(1)}L</div></div>
-                  <div style={statCard}><div style={statLabel}>Last event</div><div style={statVal}>{customerBookings[0] ? format(parseISO(customerBookings[0].event_date), 'MMM d') : '—'}</div></div>
+                  <div style={statCard}><div style={statLabel}>Last event</div><div style={statVal}>{customerBookings[0] ? formatDateIST(customerBookings[0].event_date, 'MMM d') : '—'}</div></div>
                 </div>
                 {selectedCustomer.notes && <div style={{ marginTop: 12, fontSize: 12, color: '#888880', background: '#FAFAF8', padding: '8px 12px', borderRadius: 8 }}>📝 {selectedCustomer.notes}</div>}
               </div>
@@ -125,7 +137,7 @@ const Customers: React.FC<Props> = ({ onNavigate }) => {
                       {customerBookings.map(b => (
                         <tr key={b.id} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
                           <td style={{ padding: '9px 14px', fontWeight: 500 }}>{b.event_type}</td>
-                          <td style={{ padding: '9px 8px', color: '#888880' }}>{format(parseISO(b.event_date), 'MMM d, yyyy')}</td>
+                          <td style={{ padding: '9px 8px', color: '#888880' }}>{formatDateIST(b.event_date, 'MMM d, yyyy')}</td>
                           <td style={{ padding: '9px 8px' }}>{b.venue}</td>
                           <td style={{ padding: '9px 8px' }}>{b.guest_count} guests</td>
                           <td style={{ padding: '9px 8px', fontWeight: 500 }}>₹{b.estimated_cost.toLocaleString()}</td>

@@ -1,15 +1,17 @@
 import React from 'react';
 import { format, isWithinInterval, addDays, parseISO } from 'date-fns';
 import { useBookings } from '../hooks/useBookings';
-import { useInvoices } from '../hooks/useInvoices';
+import { useInvoices, useAllPayments } from '../hooks/useInvoices';
 import StatusPill from '../components/StatusPill';
 import { Page } from '../App';
+import { getISTGreeting, formatDateIST } from '../lib/ist';
 
 interface Props { onNavigate: (page: Page) => void; }
 
 const Dashboard: React.FC<Props> = ({ onNavigate }) => {
   const { data: bookings = [] } = useBookings();
   const { data: invoices = [] } = useInvoices();
+  const { data: allPayments = [] } = useAllPayments();
   const today = new Date();
 
   const activeBookings = bookings.filter(b => b.status !== 'cancelled' && b.status !== 'completed');
@@ -27,12 +29,17 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
   });
   const overdueInvoices = invoices.filter(i => i.balance_due > 0 && i.status !== 'paid');
 
+  // Payment stats
+  const advanceTotal = allPayments.filter(p => p.payment_type === 'advance').reduce((s, p) => s + p.amount, 0);
+  const partialTotal = allPayments.filter(p => p.payment_type === 'partial').reduce((s, p) => s + p.amount, 0);
+  const remainingDue = invoices.reduce((s, i) => s + i.balance_due, 0);
+  const fullyPaidTotal = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total_amount, 0);
+
   return (
     <div>
-      {/* Topbar */}
       <div className="page-topbar">
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Good morning, Sharma ji 👋</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{getISTGreeting()}, Sharma ji 👋</div>
           <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{format(today, 'EEEE, MMMM d, yyyy')}</div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -44,28 +51,34 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
       </div>
 
       <div className="page-content">
-        {/* Alerts */}
         {urgentBookings.map(b => (
           <div key={b.id} style={alertWarn}>
-            ⚠️ <strong>{b.customer?.name}</strong> — {b.event_type} on {format(parseISO(b.event_date), 'MMM d')} is in less than 3 days!
+            ⚠️ <strong>{b.customer?.name}</strong> — {b.event_type} on {formatDateIST(b.event_date, 'MMM d')} is in less than 3 days!
           </div>
         ))}
         {overdueInvoices.slice(0, 1).map(i => (
           <div key={i.id} style={alertDanger}>
-            🔴 Balance due ₹{i.balance_due.toLocaleString()} from {(i.booking as any)?.customer?.name} — <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => onNavigate('billing')}>View invoice</span>
+            🔴 Balance due ₹{i.balance_due.toLocaleString()} from {i.booking?.customer?.name} — <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => onNavigate('billing')}>View invoice</span>
           </div>
         ))}
 
-        {/* Stat cards */}
+        {/* Booking stats */}
         <div className="g4">
-          <StatCard label="Active bookings" value={activeBookings.length} sub={`${bookings.filter(b => b.status === 'pending').length} pending confirmation`} />
+          <StatCard label="Active bookings" value={activeBookings.length} sub={`${bookings.filter(b => b.status === 'inquiry' || b.status === 'pending').length} inquiries pending`} />
           <StatCard label="Events this month" value={thisMonthEvents.length} sub="This calendar month" />
-          <StatCard label="Next event" value={nextEvent ? format(parseISO(nextEvent.event_date), 'MMM d') : '—'} sub={nextEvent ? `${nextEvent.customer?.name} · ${nextEvent.guest_count} guests` : 'No upcoming events'} />
+          <StatCard label="Next event" value={nextEvent ? formatDateIST(nextEvent.event_date, 'MMM d') : '—'} sub={nextEvent ? `${nextEvent.customer?.name} · ${nextEvent.guest_count} guests` : 'No upcoming events'} />
           <StatCard label="Outstanding invoices" value={overdueInvoices.length} sub={`₹${overdueInvoices.reduce((s, i) => s + i.balance_due, 0).toLocaleString()} total due`} subColor="#E24B4A" />
         </div>
 
+        {/* Payment stats */}
+        <div className="g4" style={{ marginBottom: 16 }}>
+          <StatCard label="Advance received" value={`₹${advanceTotal.toLocaleString()}`} sub="Total advance payments" subColor="#3B6D11" />
+          <StatCard label="Partial received" value={`₹${partialTotal.toLocaleString()}`} sub="Total partial payments" subColor="#378ADD" />
+          <StatCard label="Balance due" value={`₹${remainingDue.toLocaleString()}`} sub="Remaining to collect" subColor={remainingDue > 0 ? '#E24B4A' : '#3B6D11'} />
+          <StatCard label="Fully collected" value={`₹${fullyPaidTotal.toLocaleString()}`} sub={`${invoices.filter(i => i.status === 'paid').length} invoices paid`} subColor="#3B6D11" />
+        </div>
+
         <div className="g2" style={{ marginBottom: 16 }}>
-          {/* Upcoming bookings */}
           <div style={card}>
             <div style={cardTitle}>
               Upcoming bookings
@@ -78,7 +91,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{b.customer?.name} — {b.event_type}</div>
                   <div style={{ fontSize: 11, color: '#888880', marginTop: 1 }}>
-                    {format(parseISO(b.event_date), 'MMM d')} · {b.venue} · {b.guest_count} guests
+                    {formatDateIST(b.event_date, 'MMM d')} · {b.venue} · {b.guest_count} guests
                   </div>
                 </div>
                 <StatusPill status={b.status} />
@@ -86,17 +99,16 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
             ))}
           </div>
 
-          {/* Quick actions */}
           <div style={card}>
             <div style={cardTitle}>Quick actions</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { icon: '📋', label: 'New booking', page: 'bookings', bg: '#FFF0E0' },
-                { icon: '👤', label: 'Add customer', page: 'customers', bg: '#E6F1FB' },
-                { icon: '🧾', label: 'Create invoice', page: 'billing', bg: '#EAF3DE' },
-                { icon: '🍽', label: 'Manage menus', page: 'menus', bg: '#EEEDFE' },
-                { icon: '📅', label: 'Open calendar', page: 'calendar', bg: '#FBEAF0' },
-                { icon: '📊', label: 'View analytics', page: 'finance', bg: '#E1F5EE' },
+                { icon: '📋', label: 'New booking',    page: 'bookings',    bg: '#FFF0E0' },
+                { icon: '👤', label: 'Add customer',   page: 'customers',   bg: '#E6F1FB' },
+                { icon: '🧾', label: 'Create invoice', page: 'billing',     bg: '#EAF3DE' },
+                { icon: '🍽',  label: 'Manage menus',   page: 'menus',       bg: '#EEEDFE' },
+                { icon: '📅', label: 'Open calendar',  page: 'calendar',    bg: '#FBEAF0' },
+                { icon: '⚙️', label: 'Data Center',    page: 'datacenter',  bg: '#F5F5F0' },
               ].map(a => (
                 <div key={a.label} onClick={() => onNavigate(a.page as Page)}
                   style={{ background: a.bg, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -108,7 +120,6 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
           </div>
         </div>
 
-        {/* Event pipeline */}
         <div style={card}>
           <div style={cardTitle}>Event pipeline</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
@@ -121,7 +132,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
                 <div key={b.id}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span style={{ fontSize: 12, fontWeight: 500 }}>{b.customer?.name} — {b.event_type}</span>
-                    <span style={{ fontSize: 11, color: '#888880' }}>{format(parseISO(b.event_date), 'MMM d')}</span>
+                    <span style={{ fontSize: 11, color: '#888880' }}>{formatDateIST(b.event_date, 'MMM d')}</span>
                   </div>
                   <div style={{ height: 6, background: '#EBEBEB', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${readiness}%`, background: color, borderRadius: 3 }} />
@@ -129,6 +140,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
                 </div>
               );
             })}
+            {upcoming.length === 0 && <div style={{ color: '#888880', fontSize: 12 }}>No upcoming events</div>}
           </div>
         </div>
       </div>

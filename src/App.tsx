@@ -9,19 +9,20 @@ import Menus from './pages/Menus';
 import Billing from './pages/Billing';
 import Finance from './pages/Finance';
 import CalendarPage from './pages/CalendarPage';
+import DataCenter from './pages/DataCenter';
 
 const queryClient = new QueryClient();
 
-export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar';
+export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar' | 'datacenter';
 
 const bottomNavItems: { page: Page; icon: string; label: string }[] = [
-  { page: 'dashboard', icon: '🏠', label: 'Home' },
-  { page: 'bookings',  icon: '📋', label: 'Bookings' },
-  { page: 'customers', icon: '👥', label: 'Clients' },
-  { page: 'billing',   icon: '🧾', label: 'Billing' },
-  { page: 'menus',     icon: '🍽', label: 'Menus' },
-  { page: 'finance',   icon: '📊', label: 'Finance' },
-  { page: 'calendar',  icon: '📅', label: 'Calendar' },
+  { page: 'dashboard',  icon: '🏠', label: 'Home' },
+  { page: 'bookings',   icon: '📋', label: 'Bookings' },
+  { page: 'customers',  icon: '👥', label: 'Clients' },
+  { page: 'billing',    icon: '🧾', label: 'Billing' },
+  { page: 'menus',      icon: '🍽', label: 'Menus' },
+  { page: 'finance',    icon: '📊', label: 'Finance' },
+  { page: 'calendar',   icon: '📅', label: 'Calendar' },
 ];
 
 function App() {
@@ -29,14 +30,15 @@ function App() {
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'dashboard': return <Dashboard onNavigate={setCurrentPage} />;
-      case 'bookings':  return <Bookings />;
-      case 'customers': return <Customers onNavigate={setCurrentPage} />;
-      case 'menus':     return <Menus />;
-      case 'billing':   return <Billing />;
-      case 'finance':   return <Finance />;
-      case 'calendar':  return <CalendarPage />;
-      default:          return <Dashboard onNavigate={setCurrentPage} />;
+      case 'dashboard':  return <Dashboard onNavigate={setCurrentPage} />;
+      case 'bookings':   return <Bookings />;
+      case 'customers':  return <Customers onNavigate={setCurrentPage} />;
+      case 'menus':      return <Menus />;
+      case 'billing':    return <Billing />;
+      case 'finance':    return <Finance />;
+      case 'calendar':   return <CalendarPage />;
+      case 'datacenter': return <DataCenter />;
+      default:           return <Dashboard onNavigate={setCurrentPage} />;
     }
   };
 
@@ -49,7 +51,6 @@ function App() {
         </main>
       </div>
 
-      {/* Bottom navigation — visible only on mobile via CSS */}
       <nav className="bottom-nav">
         {bottomNavItems.map(item => (
           <div
