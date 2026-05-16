@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
+import { formatDateIST } from '../lib/ist';
 import { useBookings } from '../hooks/useBookings';
 import { useMenuItemsFull } from '../hooks/useMenuBuilder';
 import { useDataCenter } from '../hooks/useDataCenter';
@@ -48,7 +49,7 @@ const downloadPDF = (q: Quotation) => {
   y = 38;
 
   doc.setTextColor(80, 80, 78); doc.setFontSize(9);
-  doc.text(`Date: ${q.issue_date}`, margin, y);
+  doc.text(`Date: ${formatDateIST(q.issue_date, 'dd-MM-yyyy')}`, margin, y);
   doc.text(`Status: ${q.status.charAt(0).toUpperCase() + q.status.slice(1)}`, W - margin, y, { align: 'right' });
   y += 6; hline(y); y += 7;
 
@@ -63,8 +64,8 @@ const downloadPDF = (q: Quotation) => {
     y += 3; hline(y); y += 6;
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 148); doc.text('EVENT DETAILS', margin, y); y += 4;
     doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
-    const details: [string, string][] = [['Event', booking.event_type || '—'], ['Date', booking.event_date || '—']];
-    if (booking.end_date && booking.end_date !== booking.event_date) details.push(['End Date', booking.end_date]);
+    const details: [string, string][] = [['Event', booking.event_type || '—'], ['Date', formatDateIST(booking.event_date, 'dd-MM-yyyy')]];
+    if (booking.end_date && booking.end_date !== booking.event_date) details.push(['End Date', formatDateIST(booking.end_date, 'dd-MM-yyyy')]);
     if (booking.event_time) details.push(['Time', booking.event_time]);
     if (booking.venue) details.push(['Venue', booking.venue]);
     details.forEach(([lbl, val]) => {
@@ -81,7 +82,7 @@ const downloadPDF = (q: Quotation) => {
       if (y > 240) { doc.addPage(); y = 20; }
       doc.setFillColor(249, 248, 245); doc.rect(margin, y - 3, W - margin * 2, 8, 'F');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(232, 117, 10);
-      doc.text(`Day ${day.day_number}  —  ${day.date}`, margin + 2, y + 1);
+      doc.text(`Day ${day.day_number}  —  ${formatDateIST(day.date, 'dd-MM-yyyy')}`, margin + 2, y + 1);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
       doc.text(`₹${day.day_subtotal.toLocaleString('en-IN')}`, W - margin - 2, y + 1, { align: 'right' });
       y += 10;
@@ -1038,7 +1039,7 @@ const Quotations: React.FC = () => {
                         ))}
                       </select>
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: 12, color: '#888880', whiteSpace: 'nowrap' }}>{q.issue_date}</td>
+                    <td style={{ padding: '10px 12px', fontSize: 12, color: '#888880', whiteSpace: 'nowrap' }}>{formatDateIST(q.issue_date, 'dd-MM-yyyy')}</td>
                     <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <button onClick={() => downloadPDF(q)} style={actionBtn('#378ADD')}>⬇ PDF</button>
                       <button onClick={() => openEdit(q)} style={actionBtn('#444')}>✏ Edit</button>

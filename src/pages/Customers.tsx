@@ -181,7 +181,7 @@ const Customers: React.FC<Props> = () => {
                   <div className="g3">
                     <div style={statCard}><div style={statLabel}>Total bookings</div><div style={statVal}>{customerBookings.length}</div></div>
                     <div style={statCard}><div style={statLabel}>Total spend</div><div style={statVal}>₹{(totalSpend / 100000).toFixed(1)}L</div></div>
-                    <div style={statCard}><div style={statLabel}>Last event</div><div style={statVal}>{customerBookings[0] ? formatDateIST(customerBookings[0].event_date, 'MMM d') : '—'}</div></div>
+                    <div style={statCard}><div style={statLabel}>Last event</div><div style={statVal}>{customerBookings[0] ? formatDateIST(customerBookings[0].event_date, 'dd-MM') : '—'}</div></div>
                   </div>
                   {selectedCustomer.notes && <div style={{ marginTop: 12, fontSize: 12, color: '#888880', background: '#FAFAF8', padding: '8px 12px', borderRadius: 8 }}>📝 {selectedCustomer.notes}</div>}
                 </div>
@@ -197,7 +197,7 @@ const Customers: React.FC<Props> = () => {
                       {customerBookings.map(b => (
                         <tr key={b.id} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
                           <td style={{ padding: '9px 14px', fontWeight: 500 }}>{b.event_type}</td>
-                          <td style={{ padding: '9px 8px', color: '#888880' }}>{formatDateIST(b.event_date, 'MMM d, yyyy')}</td>
+                          <td style={{ padding: '9px 8px', color: '#888880' }}>{formatDateIST(b.event_date, 'dd-MM-yyyy')}</td>
                           <td style={{ padding: '9px 8px' }}>{b.venue}</td>
                           <td style={{ padding: '9px 8px' }}>{b.guest_count} guests</td>
                           <td style={{ padding: '9px 8px', fontWeight: 500 }}>₹{b.estimated_cost.toLocaleString()}</td>

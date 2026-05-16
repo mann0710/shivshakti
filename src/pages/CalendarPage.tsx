@@ -121,7 +121,7 @@ const CalendarPage: React.FC = () => {
             {selectedDay && (
               <div style={card}>
                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
-                  {format(selectedDay, 'EEEE, MMM d')}
+                  {format(selectedDay, 'EEEE, dd-MM-yyyy')}
                 </div>
                 {selectedBookings.length === 0 ? (
                   <div style={{ fontSize: 12, color: '#888880' }}>No bookings on this day</div>
@@ -176,13 +176,13 @@ const CalendarPage: React.FC = () => {
               ) : thisMonthBookings.map((b, i) => (
                 <div key={b.id} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', alignItems: 'center' }}>
                   <div style={{ width: 36, textAlign: 'center', flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: eventColors[i % eventColors.length] }}>{format(parseISO(b.event_date), 'd')}</div>
-                    <div style={{ fontSize: 9, color: '#888880' }}>{format(parseISO(b.event_date), 'MMM')}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: eventColors[i % eventColors.length] }}>{format(parseISO(b.event_date), 'dd')}</div>
+                    <div style={{ fontSize: 9, color: '#888880' }}>{format(parseISO(b.event_date), 'MM')}</div>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.customer?.name}</div>
                     <div style={{ fontSize: 11, color: '#888880' }}>
-                      {b.event_type}{b.end_date && b.end_date !== b.event_date ? ` · to ${format(parseISO(b.end_date), 'MMM d')}` : ''} · {b.guest_count}g
+                      {b.event_type}{b.end_date && b.end_date !== b.event_date ? ` · to ${format(parseISO(b.end_date), 'dd-MM')}` : ''} · {b.guest_count}g
                     </div>
                   </div>
                   <StatusPill status={b.status} />

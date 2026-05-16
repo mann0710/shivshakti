@@ -40,7 +40,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
       <div className="page-topbar">
         <div>
           <div style={{ fontSize: 16, fontWeight: 600 }}>{getISTGreeting()} 👋</div>
-          <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{format(today, 'EEEE, MMMM d, yyyy')}</div>
+          <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{format(today, 'EEEE, dd-MM-yyyy')}</div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button style={btnGhost} onClick={() => onNavigate('bookings')}>
@@ -53,7 +53,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
       <div className="page-content">
         {urgentBookings.map(b => (
           <div key={b.id} style={alertWarn}>
-            ⚠️ <strong>{b.customer?.name}</strong> — {b.event_type} on {formatDateIST(b.event_date, 'MMM d')} is in less than 3 days!
+            ⚠️ <strong>{b.customer?.name}</strong> — {b.event_type} on {formatDateIST(b.event_date, 'dd-MM')} is in less than 3 days!
           </div>
         ))}
         {overdueInvoices.slice(0, 1).map(i => (
@@ -66,7 +66,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
         <div className="g4">
           <StatCard label="Active bookings" value={activeBookings.length} sub={`${bookings.filter(b => b.status === 'inquiry' || b.status === 'pending').length} inquiries pending`} />
           <StatCard label="Events this month" value={thisMonthEvents.length} sub="This calendar month" />
-          <StatCard label="Next event" value={nextEvent ? formatDateIST(nextEvent.event_date, 'MMM d') : '—'} sub={nextEvent ? `${nextEvent.customer?.name} · ${nextEvent.guest_count} guests` : 'No upcoming events'} />
+          <StatCard label="Next event" value={nextEvent ? formatDateIST(nextEvent.event_date, 'dd-MM') : '—'} sub={nextEvent ? `${nextEvent.customer?.name} · ${nextEvent.guest_count} guests` : 'No upcoming events'} />
           <StatCard label="Outstanding invoices" value={overdueInvoices.length} sub={`₹${overdueInvoices.reduce((s, i) => s + i.balance_due, 0).toLocaleString()} total due`} subColor="#E24B4A" />
         </div>
 
@@ -91,7 +91,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{b.customer?.name} — {b.event_type}</div>
                   <div style={{ fontSize: 11, color: '#888880', marginTop: 1 }}>
-                    {formatDateIST(b.event_date, 'MMM d')} · {b.venue} · {b.guest_count} guests
+                    {formatDateIST(b.event_date, 'dd-MM')} · {b.venue} · {b.guest_count} guests
                   </div>
                 </div>
                 <StatusPill status={b.status} />
@@ -132,7 +132,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
                 <div key={b.id}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                     <span style={{ fontSize: 12, fontWeight: 500 }}>{b.customer?.name} — {b.event_type}</span>
-                    <span style={{ fontSize: 11, color: '#888880' }}>{formatDateIST(b.event_date, 'MMM d')}</span>
+                    <span style={{ fontSize: 11, color: '#888880' }}>{formatDateIST(b.event_date, 'dd-MM')}</span>
                   </div>
                   <div style={{ height: 6, background: '#EBEBEB', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${readiness}%`, background: color, borderRadius: 3 }} />

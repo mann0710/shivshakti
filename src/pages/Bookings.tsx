@@ -260,9 +260,9 @@ const Bookings: React.FC = () => {
                     </td>
                     <td style={{ padding: '10px 12px' }}>{b.event_type}</td>
                     <td style={{ padding: '10px 12px', color: '#666660' }}>
-                      {formatDateIST(b.event_date, 'MMM d, yyyy')}
+                      {formatDateIST(b.event_date, 'dd-MM-yyyy')}
                       {b.end_date && b.end_date !== b.event_date && (
-                        <div style={{ fontSize: 11, color: '#E8750A', marginTop: 1 }}>to {formatDateIST(b.end_date, 'MMM d, yyyy')}</div>
+                        <div style={{ fontSize: 11, color: '#E8750A', marginTop: 1 }}>to {formatDateIST(b.end_date, 'dd-MM-yyyy')}</div>
                       )}
                     </td>
                     <td style={{ padding: '10px 12px', color: '#666660', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.venue || '—'}</td>

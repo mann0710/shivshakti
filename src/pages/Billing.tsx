@@ -50,7 +50,7 @@ const generateInvoicePDF = (
   doc.text('INVOICE', W - margin, 12, { align: 'right' });
   doc.setFontSize(9); doc.setFont('helvetica', 'normal');
   doc.text(inv.invoice_number, W - margin, 19, { align: 'right' });
-  doc.text(`Date: ${formatDateIST(inv.issue_date, 'MMM d, yyyy')}`, W - margin, 25, { align: 'right' });
+  doc.text(`Date: ${formatDateIST(inv.issue_date, 'dd-MM-yyyy')}`, W - margin, 25, { align: 'right' });
   y = 38;
 
   // Customer info
@@ -74,7 +74,7 @@ const generateInvoicePDF = (
     for (const day of (inv.event_days as any[])) {
       if (y > 255) { doc.addPage(); y = 20; }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(232, 117, 10);
-      doc.text(`Day ${day.day_number}  —  ${day.date}`, margin, y); y += 5;
+      doc.text(`Day ${day.day_number}  —  ${formatDateIST(day.date, 'dd-MM-yyyy')}`, margin, y); y += 5;
       for (const meal of (day.meals as any[])) {
         if (y > 255) { doc.addPage(); y = 20; }
         doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(60, 60, 58);
@@ -92,7 +92,8 @@ const generateInvoicePDF = (
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 30, 28);
       doc.text(`  Day ${day.day_number} Subtotal`, margin, y);
       doc.text(`Rs.${(day.day_subtotal || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
-      y += 7;
+      y += 5;
+      doc.setDrawColor(220, 220, 218); doc.line(margin, y, W - margin, y); y += 5;
     }
   } else {
     if ((inv.line_items || []).length > 0) {
@@ -160,7 +161,7 @@ const generateInvoicePDF = (
       doc.setTextColor(60, 60, 58);
       doc.text(`· Rs.${p.amount.toLocaleString('en-IN')} · ${p.payment_type} · ${p.payment_mode.replace('_', ' ')}`, margin + 2, y);
       doc.setTextColor(150, 150, 148);
-      doc.text(formatDateIST(p.payment_date, 'dd MMM yyyy'), W - margin, y, { align: 'right' });
+      doc.text(formatDateIST(p.payment_date, 'dd-MM-yyyy'), W - margin, y, { align: 'right' });
       y += 5;
     });
   }
@@ -186,7 +187,6 @@ const Billing: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [showGST, setShowGST] = useState(true);
 
   const [createBookingId, setCreateBookingId] = useState('');
@@ -430,11 +430,11 @@ const Billing: React.FC = () => {
     const gstLine = selected.gst_rate > 0 ? `GST @${selected.gst_rate}%: ₹${selected.gst_amount.toLocaleString()}\n` : '';
     const transportLine = (selected.transportation_charge || 0) > 0 ? `Transportation: +₹${selected.transportation_charge.toLocaleString()}\n` : '';
     const payHistLines = paymentHistory.length
-      ? paymentHistory.map(p => `  · ₹${p.amount.toLocaleString()} (${p.payment_type}, ${p.payment_mode}) on ${formatDateIST(p.payment_date, 'dd MMM yyyy')}`).join('\n')
+      ? paymentHistory.map(p => `  · ₹${p.amount.toLocaleString()} (${p.payment_type}, ${p.payment_mode}) on ${formatDateIST(p.payment_date, 'dd-MM-yyyy')}`).join('\n')
       : '  None yet';
     const msg = encodeURIComponent(
       `Dear ${customer?.name},\n\nYour invoice *${selected.invoice_number}* is ready.\n\n` +
-      `*Event:* ${booking?.event_type} · ${formatDateIST(booking?.event_date, 'MMM d, yyyy')}\n` +
+      `*Event:* ${booking?.event_type} · ${formatDateIST(booking?.event_date, 'dd-MM-yyyy')}\n` +
       `*Venue:* ${booking?.venue || '—'} · *Guests:* ${booking?.guest_count}\n\n` +
       `*Menu Items:*\n${itemLines}\n\n` +
       (extraLines ? `*Extra Charges:*\n${extraLines}\n\n` : '') +
@@ -487,7 +487,7 @@ const Billing: React.FC = () => {
               <select style={inp} value={createBookingId} onChange={e => setCreateBookingId(e.target.value)}>
                 <option value="">-- Select confirmed booking --</option>
                 {confirmedBookings.map(b => (
-                  <option key={b.id} value={b.id}>{b.customer?.name} — {b.event_type} on {formatDateIST(b.event_date, 'MMM d, yyyy')}</option>
+                  <option key={b.id} value={b.id}>{b.customer?.name} — {b.event_type} on {formatDateIST(b.event_date, 'dd-MM-yyyy')}</option>
                 ))}
               </select>
             </div>
@@ -498,7 +498,7 @@ const Billing: React.FC = () => {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, marginBottom: 10 }}>
                   <div><div style={infoLbl}>Customer Address</div><div style={infoVal}>{selectedCreateBooking.customer?.address || '—'}</div></div>
-                  <div><div style={infoLbl}>Event Date</div><div style={infoVal}>{formatDateIST(selectedCreateBooking.event_date, 'EEEE, MMM d, yyyy')}</div></div>
+                  <div><div style={infoLbl}>Event Date</div><div style={infoVal}>{formatDateIST(selectedCreateBooking.event_date, 'EEEE, dd-MM-yyyy')}</div></div>
                   <div><div style={infoLbl}>Event Venue</div><div style={infoVal}>{selectedCreateBooking.venue || '—'}</div></div>
                   <div><div style={infoLbl}>Guests · Menu</div><div style={infoVal}>{selectedCreateBooking.guest_count} guests · {selectedCreateBooking.menu?.name || 'No menu'}{selectedCreateBooking.menu && ` (₹${selectedCreateBooking.menu.price_per_plate}/plate)`}</div></div>
                 </div>
@@ -549,7 +549,7 @@ const Billing: React.FC = () => {
                     <tbody>
                       {invoices.map(inv => (
                         <tr key={inv.id}
-                          onClick={() => { setSelectedId(inv.id); setShowHistory(false); setShowPaymentForm(false); setEditingPaymentId(null); }}
+                          onClick={() => { setSelectedId(inv.id); setShowPaymentForm(false); setEditingPaymentId(null); }}
                           style={{ borderTop: '0.5px solid #F0F0EC', cursor: 'pointer', background: (selectedId === inv.id || (!selectedId && inv === invoices[0])) ? '#FFFBF5' : 'transparent' }}>
                           <td style={{ padding: '9px 12px', fontWeight: 500, color: '#E8750A' }}>{inv.invoice_number}</td>
                           <td style={{ padding: '9px 8px' }}>{inv.booking?.customer?.name}</td>
@@ -574,7 +574,7 @@ const Billing: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>Invoice Preview</div>
-                  <div style={{ fontSize: 11, color: '#888880' }}>{selected.invoice_number} · {formatDateIST(selected.issue_date, 'MMM d, yyyy')}</div>
+                  <div style={{ fontSize: 11, color: '#888880' }}>{selected.invoice_number} · {formatDateIST(selected.issue_date, 'dd-MM-yyyy')}</div>
                 </div>
                 <StatusPill status={selected.status} />
               </div>
@@ -776,28 +776,65 @@ const Billing: React.FC = () => {
                 </div>
               </div>
 
-              {/* ── Payment History (compact, in preview) ── */}
-              {paymentHistory.length > 0 && (
-                <div style={{ background: '#FAFAF8', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#888880', marginBottom: 6 }}>PAYMENT HISTORY</div>
-                  {paymentHistory.map(p => (
-                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666660', padding: '2px 0' }}>
-                      <span>₹{p.amount.toLocaleString()} · {p.payment_type === 'advance' ? 'Advance' : 'Partial'} · {p.payment_mode.replace('_', ' ').toUpperCase()}</span>
-                      <span>{formatDateIST(p.payment_date, 'dd MMM yyyy')}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* ── Payment History (always visible, with edit/delete) ── */}
+              <div style={{ background: '#FAFAF8', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#888880', marginBottom: 8 }}>PAYMENT HISTORY</div>
+                {paymentHistory.length === 0 ? (
+                  <div style={{ fontSize: 12, color: '#BBBBBB' }}>No payments recorded yet</div>
+                ) : paymentHistory.map(p => (
+                  <div key={p.id} style={{ borderBottom: '0.5px solid #E5E5E0', paddingBottom: 8, marginBottom: 8 }}>
+                    {editingPaymentId === p.id ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        <div><label style={lbl}>Type</label>
+                          <select style={inp} value={editPayForm.payment_type} onChange={e => setEditPayForm({ ...editPayForm, payment_type: e.target.value as 'advance' | 'partial' })}>
+                            <option value="advance">Advance</option><option value="partial">Partial</option>
+                          </select></div>
+                        <div><label style={lbl}>Amount (₹)</label>
+                          <input type="number" style={inp} value={editPayForm.amount} onChange={e => setEditPayForm({ ...editPayForm, amount: e.target.value })} /></div>
+                        <div><label style={lbl}>Mode</label>
+                          <select style={inp} value={editPayForm.payment_mode} onChange={e => setEditPayForm({ ...editPayForm, payment_mode: e.target.value })}>
+                            {['upi', 'cash', 'bank_transfer', 'cheque'].map(m => <option key={m} value={m}>{m.replace('_', ' ').toUpperCase()}</option>)}
+                          </select></div>
+                        <div><label style={lbl}>Date</label>
+                          <input type="date" style={inp} value={editPayForm.payment_date} onChange={e => setEditPayForm({ ...editPayForm, payment_date: e.target.value })} /></div>
+                        <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Notes</label>
+                          <input style={inp} value={editPayForm.notes} onChange={e => setEditPayForm({ ...editPayForm, notes: e.target.value })} /></div>
+                        <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                          <button onClick={() => setEditingPaymentId(null)} style={{ ...btnGhost, fontSize: 11, padding: '3px 10px' }}>Cancel</button>
+                          <button onClick={() => handleSaveEditPayment(p)} style={{ ...btnPrimary, fontSize: 11, padding: '3px 10px' }}>Save</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500 }}>₹{p.amount.toLocaleString()}</span>
+                            <span style={{ fontSize: 10, background: p.payment_type === 'advance' ? '#EAF3DE' : '#E6F1FB', color: p.payment_type === 'advance' ? '#3B6D11' : '#185FA5', padding: '1px 7px', borderRadius: 12, fontWeight: 600 }}>
+                              {p.payment_type === 'advance' ? 'Advance' : 'Partial'}
+                            </span>
+                            <span style={{ fontSize: 10, color: '#888880' }}>{p.payment_mode.replace('_', ' ').toUpperCase()}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{formatDateIST(p.payment_date, 'dd-MM-yyyy')}</div>
+                          {p.notes && <div style={{ fontSize: 11, color: '#888880' }}>{p.notes}</div>}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4, flexShrink: 0, marginLeft: 8 }}>
+                          <button onClick={() => handleEditPayment(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#378ADD', fontSize: 12 }}>✏ Edit</button>
+                          <button onClick={() => handleDeletePayment(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D', fontSize: 16 }}>×</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
 
               {/* ── Action buttons ── */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                 <button style={{ ...btnGhost, flex: 1, fontSize: 12 }} onClick={sendWhatsApp}>📱 WhatsApp</button>
-                <button style={{ ...btnGhost, flex: 1, fontSize: 12 }} onClick={() => { setShowHistory(!showHistory); setShowPaymentForm(false); }}>📜 History</button>
                 <button style={{ ...btnPrimary, flex: 1, fontSize: 12 }} onClick={downloadPDF}>⬇ PDF</button>
               </div>
 
               {selected.balance_due > 0 && (
-                <button style={{ ...btnGhost, width: '100%', fontSize: 12 }} onClick={() => { setShowPaymentForm(!showPaymentForm); setShowHistory(false); }}>
+                <button style={{ ...btnGhost, width: '100%', fontSize: 12 }} onClick={() => setShowPaymentForm(!showPaymentForm)}>
                   + Record payment received
                 </button>
               )}
@@ -841,58 +878,6 @@ const Billing: React.FC = () => {
                 </div>
               )}
 
-              {/* Payment history panel (detailed, with edit/delete) */}
-              {showHistory && (
-                <div style={{ marginTop: 10, padding: 12, background: '#FAFAF8', borderRadius: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>Payment history</div>
-                  {paymentHistory.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#888880' }}>No payments recorded yet</div>
-                  ) : paymentHistory.map(p => (
-                    <div key={p.id} style={{ borderBottom: '0.5px solid #E5E5E0', paddingBottom: 10, marginBottom: 10 }}>
-                      {editingPaymentId === p.id ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                          <div><label style={lbl}>Type</label>
-                            <select style={inp} value={editPayForm.payment_type} onChange={e => setEditPayForm({ ...editPayForm, payment_type: e.target.value as 'advance' | 'partial' })}>
-                              <option value="advance">Advance</option><option value="partial">Partial</option>
-                            </select></div>
-                          <div><label style={lbl}>Amount (₹)</label>
-                            <input type="number" style={inp} value={editPayForm.amount} onChange={e => setEditPayForm({ ...editPayForm, amount: e.target.value })} /></div>
-                          <div><label style={lbl}>Mode</label>
-                            <select style={inp} value={editPayForm.payment_mode} onChange={e => setEditPayForm({ ...editPayForm, payment_mode: e.target.value })}>
-                              {['upi', 'cash', 'bank_transfer', 'cheque'].map(m => <option key={m} value={m}>{m.replace('_', ' ').toUpperCase()}</option>)}
-                            </select></div>
-                          <div><label style={lbl}>Date</label>
-                            <input type="date" style={inp} value={editPayForm.payment_date} onChange={e => setEditPayForm({ ...editPayForm, payment_date: e.target.value })} /></div>
-                          <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Notes</label>
-                            <input style={inp} value={editPayForm.notes} onChange={e => setEditPayForm({ ...editPayForm, notes: e.target.value })} /></div>
-                          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                            <button onClick={() => setEditingPaymentId(null)} style={{ ...btnGhost, fontSize: 11, padding: '3px 10px' }}>Cancel</button>
-                            <button onClick={() => handleSaveEditPayment(p)} style={{ ...btnPrimary, fontSize: 11, padding: '3px 10px' }}>Save</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <div>
-                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                              <span style={{ fontSize: 12, fontWeight: 500 }}>₹{p.amount.toLocaleString()}</span>
-                              <span style={{ fontSize: 10, background: p.payment_type === 'advance' ? '#EAF3DE' : '#E6F1FB', color: p.payment_type === 'advance' ? '#3B6D11' : '#185FA5', padding: '1px 7px', borderRadius: 12, fontWeight: 600 }}>
-                                {p.payment_type === 'advance' ? 'Advance' : 'Partial'}
-                              </span>
-                              <span style={{ fontSize: 10, color: '#888880' }}>{p.payment_mode.replace('_', ' ').toUpperCase()}</span>
-                            </div>
-                            <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>{formatDateIST(p.payment_date, 'dd MMM yyyy')}</div>
-                            {p.notes && <div style={{ fontSize: 11, color: '#888880' }}>{p.notes}</div>}
-                          </div>
-                          <div style={{ display: 'flex', gap: 4, flexShrink: 0, marginLeft: 8 }}>
-                            <button onClick={() => handleEditPayment(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#378ADD', fontSize: 12 }}>✏ Edit</button>
-                            <button onClick={() => handleDeletePayment(p)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D', fontSize: 16 }}>×</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           ) : (
             <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888880', fontSize: 13 }}>
