@@ -158,11 +158,12 @@ export const usePaymentHistory = (invoiceId: string | undefined) =>
 export const useRecalculateTotals = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ invoiceId, discount_amount, discount_type, apply_gst }: {
+    mutationFn: async ({ invoiceId, discount_amount, discount_type, apply_gst, gst_rate: customGstRate }: {
       invoiceId: string;
       discount_amount: number;
       discount_type: 'amount' | 'percentage';
       apply_gst: boolean;
+      gst_rate?: number;
     }) => {
       const { data: inv } = await supabase
         .from('invoices').select('subtotal, advance_paid').eq('id', invoiceId).single();
@@ -171,8 +172,9 @@ export const useRecalculateTotals = () => {
         ? Math.round((inv.subtotal * discount_amount) / 100)
         : discount_amount;
       const discountedSubtotal = Math.max(0, inv.subtotal - discAmt);
-      const gst_rate = apply_gst ? 18 : 0;
-      const gst_amount = apply_gst ? Math.round((discountedSubtotal * 18) / 100) : 0;
+      const appliedRate = customGstRate ?? 18;
+      const gst_rate = apply_gst ? appliedRate : 0;
+      const gst_amount = apply_gst ? Math.round((discountedSubtotal * appliedRate) / 100) : 0;
       const total_amount = discountedSubtotal + gst_amount;
       const advance_paid = inv.advance_paid || 0;
       const balance_due = Math.max(0, total_amount - advance_paid);

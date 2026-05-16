@@ -76,6 +76,7 @@ export interface Payment {
 export interface DataCenter {
   id: string;
   gst_number?: string;
+  gst_rate?: number;
   fssai_certificate_url?: string;
   updated_at?: string;
 }

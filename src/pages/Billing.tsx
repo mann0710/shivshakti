@@ -167,8 +167,9 @@ const Billing: React.FC = () => {
         discount_amount: parseFloat(discountForm.value) || 0,
         discount_type: discountForm.type,
         apply_gst: checked,
+        gst_rate: dc?.gst_rate ?? 18,
       });
-      toast.success(checked ? 'GST added to bill' : 'GST removed from bill');
+      toast.success(checked ? `GST @${dc?.gst_rate ?? 18}% added to bill` : 'GST removed from bill');
     } catch (e: any) { toast.error(e?.message || 'Failed to update GST'); }
   };
 
@@ -180,6 +181,7 @@ const Billing: React.FC = () => {
         discount_amount: parseFloat(discountForm.value) || 0,
         discount_type: discountForm.type,
         apply_gst: showGST,
+        gst_rate: dc?.gst_rate ?? 18,
       });
       toast.success('Discount applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply discount'); }
@@ -370,7 +372,7 @@ const Billing: React.FC = () => {
               {dc?.gst_number && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666660', marginBottom: 10, cursor: 'pointer' }}>
                   <input type="checkbox" checked={showGST} onChange={e => handleGSTToggle(e.target.checked)} style={{ accentColor: '#E8750A' }} />
-                  Include GST @18% in bill ({dc.gst_number})
+                  Include GST @{dc.gst_rate ?? 18}% in bill ({dc.gst_number})
                 </label>
               )}
 

@@ -21,6 +21,7 @@ const DataCenter: React.FC = () => {
   const deleteEventType = useDeleteEventType();
 
   const [gst, setGst] = useState('');
+  const [gstRate, setGstRate] = useState('18');
   const [fssaiUrl, setFssaiUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const seededRef = useRef(false);
@@ -37,7 +38,7 @@ const DataCenter: React.FC = () => {
   const [editEventName, setEditEventName] = useState('');
 
   useEffect(() => {
-    if (dc) { setGst(dc.gst_number || ''); setFssaiUrl(dc.fssai_certificate_url || ''); }
+    if (dc) { setGst(dc.gst_number || ''); setGstRate(String(dc.gst_rate ?? 18)); setFssaiUrl(dc.fssai_certificate_url || ''); }
   }, [dc]);
 
   // Auto-seed DEFAULT_EVENTS when table is empty
@@ -51,7 +52,7 @@ const DataCenter: React.FC = () => {
 
   const handleSaveInfo = async () => {
     try {
-      await upsertDC.mutateAsync({ gst_number: gst, fssai_certificate_url: fssaiUrl });
+      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: fssaiUrl });
       toast.success('Business info saved!');
     } catch (e: any) { toast.error(e?.message || 'Failed to save'); }
   };
@@ -66,7 +67,7 @@ const DataCenter: React.FC = () => {
       if (upErr) throw upErr;
       const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path);
       setFssaiUrl(publicUrl);
-      await upsertDC.mutateAsync({ gst_number: gst, fssai_certificate_url: publicUrl });
+      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: publicUrl });
       toast.success('Certificate uploaded!');
     } catch (e: any) {
       toast.error(e?.message || 'Upload failed — create a public "documents" bucket in Supabase Storage first.');
@@ -141,6 +142,19 @@ const DataCenter: React.FC = () => {
             <div>
               <label style={lbl}>GST Number</label>
               <input style={inp} value={gst} onChange={e => setGst(e.target.value)} placeholder="e.g. 24ABCDE1234F1Z5" />
+            </div>
+            <div>
+              <label style={lbl}>GST Rate (%)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="number" min="0" max="100" step="0.5"
+                  style={{ ...inp, maxWidth: 100 }}
+                  value={gstRate}
+                  onChange={e => setGstRate(e.target.value)}
+                  placeholder="18"
+                />
+                <span style={{ fontSize: 12, color: '#888880' }}>% (used in billing)</span>
+              </div>
             </div>
             <div>
               <label style={lbl}>FSSAI Certificate</label>
