@@ -49,9 +49,10 @@ export const useCreateInvoice = () => {
       const discount_amount = invoice.discount_amount || 0;
       const discount_type = invoice.discount_type || 'amount';
       const discountedSubtotal = Math.max(0, subtotal - discount_amount);
-      const gst_rate = 18;
-      const gst_amount = Math.round((discountedSubtotal * gst_rate) / 100);
-      const total_amount = discountedSubtotal + gst_amount;
+      // GST is OFF by default; user enables it via checkbox in invoice preview
+      const gst_rate = 0;
+      const gst_amount = 0;
+      const total_amount = discountedSubtotal;
       const balance_due = Math.max(0, total_amount - (invoice.advance_paid || 0));
 
       const { data, error } = await supabase
