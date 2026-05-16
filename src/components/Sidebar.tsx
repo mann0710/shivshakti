@@ -10,11 +10,13 @@ const navItems: { page: Page; label: string; color: string }[] = [
   { page: 'dashboard',   label: 'Dashboard',          color: '#E8750A' },
   { page: 'bookings',    label: 'Bookings',            color: '#378ADD' },
   { page: 'customers',   label: 'Customers',           color: '#639922' },
-  { page: 'menus',       label: 'Menus & Packages',    color: '#7F77DD' },
-  { page: 'billing',     label: 'Billing',             color: '#BA7517' },
-  { page: 'finance',     label: 'Finance & Analytics', color: '#0F6E56' },
-  { page: 'calendar',    label: 'Calendar',            color: '#D4537E' },
-  { page: 'datacenter',  label: 'Data Center',         color: '#888880' },
+  { page: 'menus',        label: 'Menus & Packages',    color: '#7F77DD' },
+  { page: 'menubuilder',  label: 'Menu Builder',        color: '#9B59B6' },
+  { page: 'quotations',   label: 'Quotations',          color: '#1ABC9C' },
+  { page: 'billing',      label: 'Billing',             color: '#BA7517' },
+  { page: 'finance',      label: 'Finance & Analytics', color: '#0F6E56' },
+  { page: 'calendar',     label: 'Calendar',            color: '#D4537E' },
+  { page: 'datacenter',   label: 'Data Center',         color: '#888880' },
 ];
 
 const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => {
@@ -31,7 +33,7 @@ const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => {
           <NavItem key={item.page} item={item} active={currentPage === item.page} onClick={() => onNavigate(item.page)} />
         ))}
         <div style={{ fontSize: 10, fontWeight: 600, color: '#AAAAAA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '12px 10px 4px' }}>Operations</div>
-        {navItems.slice(3, 7).map(item => (
+        {navItems.slice(3, 9).map(item => (
           <NavItem key={item.page} item={item} active={currentPage === item.page} onClick={() => onNavigate(item.page)} />
         ))}
         <div style={{ fontSize: 10, fontWeight: 600, color: '#AAAAAA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '12px 10px 4px' }}>Settings</div>

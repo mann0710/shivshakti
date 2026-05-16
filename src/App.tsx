@@ -10,10 +10,12 @@ import Billing from './pages/Billing';
 import Finance from './pages/Finance';
 import CalendarPage from './pages/CalendarPage';
 import DataCenter from './pages/DataCenter';
+import MenuBuilder from './pages/MenuBuilder';
+import Quotations from './pages/Quotations';
 
 const queryClient = new QueryClient();
 
-export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar' | 'datacenter';
+export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar' | 'datacenter' | 'menubuilder' | 'quotations';
 
 const bottomNavItems: { page: Page; icon: string; label: string }[] = [
   { page: 'dashboard',  icon: '🏠', label: 'Home' },
@@ -37,8 +39,10 @@ function App() {
       case 'billing':    return <Billing />;
       case 'finance':    return <Finance />;
       case 'calendar':   return <CalendarPage />;
-      case 'datacenter': return <DataCenter />;
-      default:           return <Dashboard onNavigate={setCurrentPage} />;
+      case 'datacenter':   return <DataCenter />;
+      case 'menubuilder':  return <MenuBuilder />;
+      case 'quotations':   return <Quotations />;
+      default:             return <Dashboard onNavigate={setCurrentPage} />;
     }
   };
 
