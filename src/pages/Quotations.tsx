@@ -42,18 +42,16 @@ const Quotations: React.FC = () => {
     it => it.is_active && it.subcategory?.is_active && it.subcategory?.category?.is_active,
   );
 
-  // Items already chosen (by id)
-  const chosenIds = new Set(selectedItems.map(i => i.item_id));
-
   // Left-panel items: filter by search, exclude chosen
   const leftItems = useMemo(() => {
+    const chosen = new Set(selectedItems.map(i => i.item_id));
     const q = searchLeft.trim().toLowerCase();
     return activeItems.filter(
-      it => !chosenIds.has(it.id) && (!q || it.name.toLowerCase().includes(q)
+      it => !chosen.has(it.id) && (!q || it.name.toLowerCase().includes(q)
         || it.subcategory?.name.toLowerCase().includes(q)
         || it.subcategory?.category?.name.toLowerCase().includes(q)),
     );
-  }, [activeItems, chosenIds, searchLeft]);
+  }, [activeItems, selectedItems, searchLeft]);
 
   // Group left items by category → subcategory
   const groupedLeft = useMemo(() => {
