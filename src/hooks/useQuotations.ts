@@ -10,6 +10,23 @@ export interface QuotationLineItem {
   amount: number;
 }
 
+export interface MealSlot {
+  id: string;
+  meal_type: string;
+  time: string;
+  guest_count: number;
+  per_plate_amount: number;
+  items: QuotationLineItem[];
+  subtotal: number;
+}
+
+export interface EventDay {
+  day_number: number;
+  date: string;
+  meals: MealSlot[];
+  day_subtotal: number;
+}
+
 export interface Quotation {
   id: string;
   booking_id?: string;
@@ -31,6 +48,8 @@ export interface Quotation {
   notes?: string;
   status: 'draft' | 'sent' | 'accepted' | 'rejected';
   issue_date: string;
+  is_multi_day?: boolean;
+  event_days?: EventDay[];
   created_at: string;
 }
 
@@ -50,6 +69,8 @@ type QuotationPayload = {
   transportation_charges: { description: string; amount: number }[];
   notes?: string;
   status: string;
+  is_multi_day?: boolean;
+  event_days?: EventDay[];
 };
 
 export const useQuotations = () =>

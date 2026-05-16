@@ -25,6 +25,7 @@ export interface Booking {
   customer?: Customer;
   event_type: string;
   event_date: string;
+  end_date?: string;
   event_time?: string;
   venue: string;
   guest_count: number;
@@ -56,6 +57,8 @@ export interface Invoice {
   issue_date: string;
   line_items?: LineItem[];
   extra_charges?: { description: string; amount: number }[];
+  is_multi_day?: boolean;
+  event_days?: any[];
   created_at: string;
 }
 

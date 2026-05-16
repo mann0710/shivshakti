@@ -19,7 +19,12 @@ const CalendarPage: React.FC = () => {
   const paddedDays: (Date | null)[] = [...Array(startPad).fill(null), ...days];
 
   const bookingsForDay = (day: Date) =>
-    bookings.filter(b => isSameDay(parseISO(b.event_date), day) && b.status !== 'cancelled');
+    bookings.filter(b => {
+      if (b.status === 'cancelled') return false;
+      const start = parseISO(b.event_date);
+      const end = b.end_date ? parseISO(b.end_date) : start;
+      return day >= start && day <= end;
+    });
 
   const selectedBookings = selectedDay ? bookingsForDay(selectedDay) : [];
 
@@ -116,7 +121,7 @@ const CalendarPage: React.FC = () => {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.customer?.name}</div>
-                    <div style={{ fontSize: 11, color: '#888880' }}>{b.event_type} · {b.guest_count}g</div>
+                    <div style={{ fontSize: 11, color: '#888880' }}>{b.event_type}{b.end_date ? ` · to ${format(parseISO(b.end_date), 'MMM d')}` : ''} · {b.guest_count}g</div>
                   </div>
                   <StatusPill status={b.status} />
                 </div>

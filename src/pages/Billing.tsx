@@ -67,23 +67,49 @@ const generateInvoicePDF = (
   if (customer?.phone)     { doc.text(`Phone: ${customer.phone}`, margin, y); y += 4; }
   y += 3; hline(y); y += 7;
 
-  // Menu items
-  if ((inv.line_items || []).length > 0) {
+  // Multi-day event schedule OR flat menu items
+  if (inv.is_multi_day && (inv.event_days as any[] || []).length > 0) {
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 148);
-    doc.text('MENU ITEMS', margin, y); y += 5;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(60, 60, 58);
-    (inv.line_items || []).forEach(item => {
-      if (y > 240) { doc.addPage(); y = 20; }
-      doc.text(`· ${item.description}`, margin + 2, y); y += 4.5;
-    });
-    y += 2;
-  }
-
-  // Per plate + guests
-  if ((quotation?.per_plate_amount ?? 0) > 0) {
-    doc.setFontSize(9); doc.setTextColor(100, 100, 98);
-    row('Per Plate Rate', `Rs.${(quotation!.per_plate_amount).toLocaleString('en-IN')}`);
-    row('Number of Guests', String(booking?.guest_count || quotation!.guest_count));
+    doc.text('EVENT SCHEDULE', margin, y); y += 6;
+    for (const day of (inv.event_days as any[])) {
+      if (y > 255) { doc.addPage(); y = 20; }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(232, 117, 10);
+      doc.text(`Day ${day.day_number}  —  ${day.date}`, margin, y); y += 5;
+      for (const meal of (day.meals as any[])) {
+        if (y > 255) { doc.addPage(); y = 20; }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(60, 60, 58);
+        doc.text(`  ${meal.meal_type}${meal.time ? ` (${meal.time})` : ''}  ·  ${meal.guest_count} guests  ·  Rs.${meal.per_plate_amount}/plate`, margin + 2, y); y += 4;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 100, 98);
+        for (const item of (meal.items as any[])) {
+          if (y > 255) { doc.addPage(); y = 20; }
+          doc.text(`    · ${item.item_name}`, margin + 4, y); y += 4;
+        }
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 58);
+        doc.text(`  ${meal.meal_type} subtotal:`, margin + 2, y);
+        doc.text(`Rs.${(meal.subtotal || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
+        y += 5;
+      }
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 30, 28);
+      doc.text(`  Day ${day.day_number} Subtotal`, margin, y);
+      doc.text(`Rs.${(day.day_subtotal || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
+      y += 7;
+    }
+  } else {
+    if ((inv.line_items || []).length > 0) {
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 148);
+      doc.text('MENU ITEMS', margin, y); y += 5;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(60, 60, 58);
+      (inv.line_items || []).forEach(item => {
+        if (y > 240) { doc.addPage(); y = 20; }
+        doc.text(`· ${item.description}`, margin + 2, y); y += 4.5;
+      });
+      y += 2;
+    }
+    if ((quotation?.per_plate_amount ?? 0) > 0) {
+      doc.setFontSize(9); doc.setTextColor(100, 100, 98);
+      row('Per Plate Rate', `Rs.${(quotation!.per_plate_amount).toLocaleString('en-IN')}`);
+      row('Number of Guests', String(booking?.guest_count || quotation!.guest_count));
+    }
   }
 
   y += 2; hline(y); y += 6;
@@ -242,10 +268,26 @@ const Billing: React.FC = () => {
       quotation_id = quotationForBooking.id;
       extra_charges = quotationForBooking.extra_charges || [];
       transportation_charges = quotationForBooking.transportation_charges || [];
-      lineItems = quotationForBooking.items.map(item => ({
-        description: `${item.category_name} › ${item.subcategory_name} › ${item.item_name}`,
-        quantity: 1, unit_price: item.amount, total: item.amount,
-      }));
+      if (quotationForBooking.is_multi_day && quotationForBooking.event_days?.length) {
+        lineItems = [];
+        for (const day of quotationForBooking.event_days) {
+          for (const meal of day.meals) {
+            for (const item of meal.items) {
+              lineItems.push({
+                description: `Day ${day.day_number} · ${meal.meal_type} · ${item.item_name}`,
+                quantity: meal.guest_count,
+                unit_price: item.amount,
+                total: item.amount,
+              });
+            }
+          }
+        }
+      } else {
+        lineItems = quotationForBooking.items.map(item => ({
+          description: `${item.category_name} › ${item.subcategory_name} › ${item.item_name}`,
+          quantity: 1, unit_price: item.amount, total: item.amount,
+        }));
+      }
     } else {
       subtotal = booking.estimated_cost;
       lineItems = [{
@@ -262,6 +304,8 @@ const Billing: React.FC = () => {
         discount_amount, discount_type, gst_rate, gst_amount, extra_charges, transportation_charges,
         advance_paid: parseFloat(createAdvance) || 0,
         line_items: lineItems, status: 'draft', issue_date: todayIST(),
+        is_multi_day: quotationForBooking?.is_multi_day,
+        event_days: quotationForBooking?.event_days,
       });
       setSelectedId(inv.id);
       toast.success('Invoice created as Draft!');
@@ -465,7 +509,10 @@ const Billing: React.FC = () => {
                   </div>
                   {quotationForBooking && (
                     <div style={{ fontSize: 10, color: '#639922', marginTop: 3 }}>
-                      From {quotationForBooking.quotation_number} · {quotationForBooking.items.length} items
+                      From {quotationForBooking.quotation_number} ·{' '}
+                      {quotationForBooking.is_multi_day
+                        ? `Multi-day (${quotationForBooking.event_days?.length ?? 0} days)`
+                        : `${quotationForBooking.items.length} items`}
                       {quotationForBooking.gst_rate > 0 && ` · GST @${quotationForBooking.gst_rate}% included`}
                     </div>
                   )}
@@ -549,32 +596,65 @@ const Billing: React.FC = () => {
                 </div>
               </div>
 
-              {/* ── Menu Items ── */}
-              {(selected.line_items || []).length > 0 && (
+              {/* ── Event content: multi-day schedule or flat menu items ── */}
+              {selected.is_multi_day && (selected.event_days || []).length > 0 ? (
                 <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
-                  <div style={{ padding: '7px 12px', background: '#F9F8F5', fontSize: 11, fontWeight: 600, color: '#888880', borderBottom: '0.5px solid #E5E5E0' }}>MENU ITEMS</div>
-                  <div style={{ padding: '8px 12px' }}>
-                    {(selected.line_items || []).map((item, i) => (
-                      <div key={i} style={{ fontSize: 12, color: '#333', padding: '3px 0', borderBottom: i < (selected.line_items?.length ?? 0) - 1 ? '0.5px solid #F5F5F0' : 'none' }}>
-                        · {item.description}
+                  <div style={{ padding: '7px 12px', background: '#F9F8F5', fontSize: 11, fontWeight: 600, color: '#888880', borderBottom: '0.5px solid #E5E5E0' }}>EVENT SCHEDULE</div>
+                  {(selected.event_days as any[]).map((day: any, di: number) => (
+                    <div key={di} style={{ borderBottom: di < (selected.event_days?.length ?? 0) - 1 ? '0.5px solid #E5E5E0' : 'none' }}>
+                      <div style={{ padding: '8px 12px 4px', fontWeight: 600, fontSize: 12, color: '#E8750A', background: '#FFFBF5' }}>
+                        Day {day.day_number} — {day.date}
                       </div>
-                    ))}
-                  </div>
+                      {(day.meals as any[]).map((meal: any, mi: number) => (
+                        <div key={mi} style={{ padding: '6px 12px', borderTop: '0.5px solid #F5F5F0' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>{meal.meal_type}{meal.time ? ` (${meal.time})` : ''}</span>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#E8750A' }}>₹{(meal.subtotal || 0).toLocaleString()}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: '#888880', marginBottom: 4 }}>
+                            {meal.guest_count} guests × ₹{meal.per_plate_amount}/plate
+                          </div>
+                          {(meal.items as any[]).map((item: any, ii: number) => (
+                            <div key={ii} style={{ fontSize: 11, color: '#666660', paddingLeft: 8, paddingTop: 1 }}>· {item.item_name}</div>
+                          ))}
+                        </div>
+                      ))}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', background: '#F9F8F5', borderTop: '0.5px solid #E5E5E0' }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#444' }}>Day {day.day_number} Subtotal</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1A1A18' }}>₹{(day.day_subtotal || 0).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              )}
-
-              {/* ── Per Plate Rate + Guests ── */}
-              {(selectedInvoiceQuotation?.per_plate_amount ?? 0) > 0 && (
-                <div style={{ background: '#F9F8F5', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#444' }}>
-                    <span style={{ color: '#888880' }}>Per Plate Rate</span>
-                    <span style={{ fontWeight: 600 }}>₹{(selectedInvoiceQuotation?.per_plate_amount ?? 0).toLocaleString()}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#444' }}>
-                    <span style={{ color: '#888880' }}>Number of Guests</span>
-                    <span style={{ fontWeight: 600 }}>{selected.booking?.guest_count}</span>
-                  </div>
-                </div>
+              ) : (
+                <>
+                  {/* ── Menu Items ── */}
+                  {(selected.line_items || []).length > 0 && (
+                    <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
+                      <div style={{ padding: '7px 12px', background: '#F9F8F5', fontSize: 11, fontWeight: 600, color: '#888880', borderBottom: '0.5px solid #E5E5E0' }}>MENU ITEMS</div>
+                      <div style={{ padding: '8px 12px' }}>
+                        {(selected.line_items || []).map((item, i) => (
+                          <div key={i} style={{ fontSize: 12, color: '#333', padding: '3px 0', borderBottom: i < (selected.line_items?.length ?? 0) - 1 ? '0.5px solid #F5F5F0' : 'none' }}>
+                            · {item.description}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* ── Per Plate Rate + Guests ── */}
+                  {(selectedInvoiceQuotation?.per_plate_amount ?? 0) > 0 && (
+                    <div style={{ background: '#F9F8F5', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#444' }}>
+                        <span style={{ color: '#888880' }}>Per Plate Rate</span>
+                        <span style={{ fontWeight: 600 }}>₹{(selectedInvoiceQuotation?.per_plate_amount ?? 0).toLocaleString()}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#444' }}>
+                        <span style={{ color: '#888880' }}>Number of Guests</span>
+                        <span style={{ fontWeight: 600 }}>{selected.booking?.guest_count}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* ── Extra Charges (from quotation) ── */}
@@ -655,7 +735,7 @@ const Billing: React.FC = () => {
               <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '10px 12px', marginBottom: 12, background: '#fff' }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#888880', marginBottom: 8 }}>TOTAL SUMMARY</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#666660' }}>
-                  <span>Subtotal{(selectedInvoiceQuotation?.per_plate_amount ?? 0) > 0 ? ` (₹${selectedInvoiceQuotation?.per_plate_amount}/plate × ${selectedInvoiceQuotation?.guest_count})` : ''}</span>
+                  <span>Subtotal{!selected.is_multi_day && (selectedInvoiceQuotation?.per_plate_amount ?? 0) > 0 ? ` (₹${selectedInvoiceQuotation?.per_plate_amount}/plate × ${selectedInvoiceQuotation?.guest_count})` : ''}</span>
                   <span>₹{selected.subtotal.toLocaleString()}</span>
                 </div>
                 {(selected.extra_charges || []).map((ec, i) => (
