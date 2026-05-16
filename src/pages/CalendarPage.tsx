@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addMonths, subMonths } from 'date-fns';
 import { useBookings } from '../hooks/useBookings';
+import { useQuotations } from '../hooks/useQuotations';
 import StatusPill from '../components/StatusPill';
 
 const eventColors = ['#E8750A', '#378ADD', '#639922', '#7F77DD', '#D4537E', '#BA7517', '#0F6E56'];
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 const CalendarPage: React.FC = () => {
   const { data: bookings = [] } = useBookings();
+  const { data: quotations = [] } = useQuotations();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
@@ -14,7 +18,6 @@ const CalendarPage: React.FC = () => {
   const monthEnd = endOfMonth(currentMonth);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Pad days to start from Sunday
   const startPad = monthStart.getDay();
   const paddedDays: (Date | null)[] = [...Array(startPad).fill(null), ...days];
 
@@ -25,6 +28,33 @@ const CalendarPage: React.FC = () => {
       const end = b.end_date ? parseISO(b.end_date) : start;
       return day >= start && day <= end;
     });
+
+  // Returns meals scheduled for a booking on a specific date (from its multi-day quotation)
+  const getMealsForDay = (bookingId: string, day: Date): { meal_type: string; time: string; guest_count: number; per_plate_amount: number; subtotal: number }[] => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const q = quotations.find(qt => qt.booking_id === bookingId && qt.is_multi_day && (qt.event_days?.length ?? 0) > 0);
+    if (!q?.event_days) return [];
+    const result: any[] = [];
+    for (const occ of q.event_days) {
+      if (occ.date === dateStr) {
+        for (const meal of occ.meals) result.push(meal);
+      }
+    }
+    return result;
+  };
+
+  // Chip label: show meal types for multi-day, event type for single-day
+  const chipLabel = (b: typeof bookings[0], day: Date) => {
+    const firstName = b.customer?.name?.split(' ')[0] || '';
+    const meals = getMealsForDay(b.id, day);
+    if (meals.length > 0) {
+      const seen: string[] = [];
+      meals.forEach(m => { const n = capitalize(m.meal_type); if (!seen.includes(n)) seen.push(n); });
+      const names = seen;
+      return `${firstName} · ${names.join(', ')}`;
+    }
+    return `${firstName} ${b.event_type}`;
+  };
 
   const selectedBookings = selectedDay ? bookingsForDay(selectedDay) : [];
 
@@ -73,7 +103,7 @@ const CalendarPage: React.FC = () => {
                       <div key={b.id} style={{ background: eventColors[bi % eventColors.length] + '22',
                         color: eventColors[bi % eventColors.length], fontSize: 10, padding: '1px 5px', borderRadius: 3,
                         marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 500 }}>
-                        {b.customer?.name?.split(' ')[0]} {b.event_type}
+                        {chipLabel(b, day)}
                       </div>
                     ))}
                     {dayBookings.length > 2 && (
@@ -95,14 +125,44 @@ const CalendarPage: React.FC = () => {
                 </div>
                 {selectedBookings.length === 0 ? (
                   <div style={{ fontSize: 12, color: '#888880' }}>No bookings on this day</div>
-                ) : selectedBookings.map((b, i) => (
-                  <div key={b.id} style={{ marginBottom: 10, padding: 10, background: eventColors[i % eventColors.length] + '11', borderRadius: 8, borderLeft: `3px solid ${eventColors[i % eventColors.length]}` }}>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{b.customer?.name}</div>
-                    <div style={{ fontSize: 11, color: '#666660', marginTop: 2 }}>{b.event_type} · {b.venue}</div>
-                    <div style={{ fontSize: 11, color: '#666660' }}>{b.guest_count} guests · ₹{b.estimated_cost.toLocaleString()}</div>
-                    <div style={{ marginTop: 6 }}><StatusPill status={b.status} /></div>
-                  </div>
-                ))}
+                ) : selectedBookings.map((b, i) => {
+                  const meals = getMealsForDay(b.id, selectedDay);
+                  return (
+                    <div key={b.id} style={{ marginBottom: 10, padding: 10, background: eventColors[i % eventColors.length] + '11', borderRadius: 8, borderLeft: `3px solid ${eventColors[i % eventColors.length]}` }}>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{b.customer?.name}</div>
+                      <div style={{ fontSize: 11, color: '#666660', marginTop: 2 }}>{b.event_type} · {b.venue}</div>
+
+                      {meals.length > 0 ? (
+                        /* Multi-day: show each meal slot for this date */
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {meals.map((meal, mi) => (
+                            <div key={mi} style={{ background: '#fff', borderRadius: 6, padding: '5px 8px', border: '0.5px solid #E5E5E0' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: eventColors[i % eventColors.length] }}>
+                                  {capitalize(meal.meal_type)}
+                                </span>
+                                {meal.time && (
+                                  <span style={{ fontSize: 11, color: '#888880' }}>{meal.time}</span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#666660', marginTop: 2 }}>
+                                {meal.guest_count} guests · ₹{meal.per_plate_amount}/plate
+                                {meal.subtotal > 0 && ` · ₹${meal.subtotal.toLocaleString('en-IN')}`}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        /* Single-day: show guest count + cost */
+                        <div style={{ fontSize: 11, color: '#666660', marginTop: 4 }}>
+                          {b.guest_count} guests · ₹{b.estimated_cost.toLocaleString()}
+                        </div>
+                      )}
+
+                      <div style={{ marginTop: 8 }}><StatusPill status={b.status} /></div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -121,7 +181,9 @@ const CalendarPage: React.FC = () => {
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.customer?.name}</div>
-                    <div style={{ fontSize: 11, color: '#888880' }}>{b.event_type}{b.end_date ? ` · to ${format(parseISO(b.end_date), 'MMM d')}` : ''} · {b.guest_count}g</div>
+                    <div style={{ fontSize: 11, color: '#888880' }}>
+                      {b.event_type}{b.end_date && b.end_date !== b.event_date ? ` · to ${format(parseISO(b.end_date), 'MMM d')}` : ''} · {b.guest_count}g
+                    </div>
                   </div>
                   <StatusPill status={b.status} />
                 </div>
