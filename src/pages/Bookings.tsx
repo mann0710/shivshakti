@@ -83,6 +83,10 @@ const Bookings: React.FC = () => {
     event_type: '', event_date: '', event_time: '', venue: '',
     guest_count: '', menu_id: '', special_instructions: '', status: 'inquiry',
   });
+  const [isMultiDayNew, setIsMultiDayNew] = useState(false);
+  const [newEndDate, setNewEndDate]       = useState('');
+  const [isMultiDayEdit, setIsMultiDayEdit] = useState(false);
+  const [editEndDate, setEditEndDate]       = useState('');
 
   useEffect(() => {
     if (eventTypes.length > 0 && !form.event_type) {
@@ -148,9 +152,11 @@ const Bookings: React.FC = () => {
         menu_id: form.menu_id || undefined,
         special_instructions: form.special_instructions,
         status: 'inquiry', estimated_cost: estimatedCost,
+        end_date: isMultiDayNew && newEndDate ? newEndDate : undefined,
       });
       toast.success('Booking created!');
       setShowForm(false);
+      setIsMultiDayNew(false); setNewEndDate('');
       setForm({ ...emptyForm, event_type: eventTypes[0] || 'Wedding' });
     } catch (e: any) { toast.error(e.message || 'Failed to create booking'); }
   };
@@ -169,6 +175,9 @@ const Bookings: React.FC = () => {
       guest_count: String(b.guest_count), menu_id: b.menu_id || '',
       special_instructions: b.special_instructions || '', status: b.status,
     });
+    const hasEndDate = !!(b.end_date && b.end_date !== b.event_date);
+    setIsMultiDayEdit(hasEndDate);
+    setEditEndDate(b.end_date || '');
     setShowForm(false);
   };
 
@@ -188,6 +197,7 @@ const Bookings: React.FC = () => {
         special_instructions: editForm.special_instructions,
         status: editForm.status as Booking['status'],
         estimated_cost: editEstimatedCost || booking.estimated_cost,
+        end_date: isMultiDayEdit && editEndDate ? editEndDate : undefined,
       });
       toast.success('Booking updated!');
       if (editForm.status === 'confirmed' && booking.status !== 'confirmed') {
@@ -249,7 +259,12 @@ const Bookings: React.FC = () => {
                       <div style={{ fontSize: 11, color: '#888880' }}>{b.customer?.phone}</div>
                     </td>
                     <td style={{ padding: '10px 12px' }}>{b.event_type}</td>
-                    <td style={{ padding: '10px 12px', color: '#666660' }}>{formatDateIST(b.event_date, 'MMM d, yyyy')}</td>
+                    <td style={{ padding: '10px 12px', color: '#666660' }}>
+                      {formatDateIST(b.event_date, 'MMM d, yyyy')}
+                      {b.end_date && b.end_date !== b.event_date && (
+                        <div style={{ fontSize: 11, color: '#E8750A', marginTop: 1 }}>to {formatDateIST(b.end_date, 'MMM d, yyyy')}</div>
+                      )}
+                    </td>
                     <td style={{ padding: '10px 12px', color: '#666660', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.venue || '—'}</td>
                     <td style={{ padding: '10px 12px' }}>{b.guest_count}</td>
                     <td style={{ padding: '10px 12px', fontWeight: 500 }}>₹{b.estimated_cost.toLocaleString()}</td>
@@ -296,6 +311,22 @@ const Bookings: React.FC = () => {
               <div>
                 <label style={lbl}>Event time</label>
                 <input type="time" style={inp} value={editForm.event_time} onChange={e => setEditForm({ ...editForm, event_time: e.target.value })} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', userSelect: 'none' as const, marginBottom: isMultiDayEdit ? 8 : 0 }}>
+                  <input type="checkbox" checked={isMultiDayEdit}
+                    onChange={e => { setIsMultiDayEdit(e.target.checked); if (!e.target.checked) setEditEndDate(''); }}
+                    style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
+                  <span style={{ fontWeight: 500 }}>Multi-day event</span>
+                </label>
+                {isMultiDayEdit && (
+                  <div style={{ maxWidth: 220 }}>
+                    <label style={lbl}>End date *</label>
+                    <input type="date" style={inp} value={editEndDate}
+                      min={editForm.event_date || undefined}
+                      onChange={e => setEditEndDate(e.target.value)} />
+                  </div>
+                )}
               </div>
               <div>
                 <label style={lbl}>Venue / Location</label>
@@ -375,6 +406,23 @@ const Bookings: React.FC = () => {
               <div>
                 <label style={lbl}>Event time</label>
                 <input type="time" style={inp} value={form.event_time} onChange={e => setForm(prev => ({ ...prev, event_time: e.target.value }))} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', userSelect: 'none' as const, marginBottom: isMultiDayNew ? 8 : 0 }}>
+                  <input type="checkbox" checked={isMultiDayNew}
+                    onChange={e => { setIsMultiDayNew(e.target.checked); if (!e.target.checked) setNewEndDate(''); }}
+                    style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
+                  <span style={{ fontWeight: 500 }}>Multi-day event</span>
+                  <span style={{ fontSize: 11, color: '#888880' }}>(spans more than one day)</span>
+                </label>
+                {isMultiDayNew && (
+                  <div style={{ maxWidth: 220 }}>
+                    <label style={lbl}>End date *</label>
+                    <input type="date" style={inp} value={newEndDate}
+                      min={form.event_date || undefined}
+                      onChange={e => setNewEndDate(e.target.value)} />
+                  </div>
+                )}
               </div>
               <div>
                 <label style={lbl}>Venue / Location</label>

@@ -28,6 +28,16 @@ const nextDateStr = (dateStr: string) => {
   return d.toISOString().split('T')[0];
 };
 
+// Day number = ordinal position of date among unique dates in first-appearance order
+const getDayNumber = (date: string, days: EventDay[]): number => {
+  const seen: string[] = [];
+  for (const d of days) {
+    if (d.date && !seen.includes(d.date)) seen.push(d.date);
+  }
+  const idx = seen.indexOf(date);
+  return idx >= 0 ? idx + 1 : 1;
+};
+
 // ─── PDF generator ────────────────────────────────────────────────────────────
 const downloadPDF = (q: Quotation) => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -203,6 +213,24 @@ const Quotations: React.FC = () => {
 
   useEffect(() => { setMealSearch(''); }, [activeMealKey]);
 
+  // Auto-enable multi-day when selected booking already has an end_date
+  useEffect(() => {
+    if (!selectedBookingId || editingId) return;
+    const booking = bookings.find(b => b.id === selectedBookingId);
+    if (booking?.end_date && booking.end_date !== booking.event_date) {
+      setIsMultiDay(true);
+      const sections: EventDay[] = [];
+      const start = new Date(booking.event_date + 'T00:00:00');
+      const end   = new Date(booking.end_date   + 'T00:00:00');
+      let cur = new Date(start); let idx = 0;
+      while (cur <= end && idx < 15) {
+        sections.push({ day_number: idx + 1, date: cur.toISOString().split('T')[0], meals: [], day_subtotal: 0 });
+        cur.setDate(cur.getDate() + 1); idx++;
+      }
+      setEventDays(sections);
+    }
+  }, [selectedBookingId]); // eslint-disable-line
+
   const dcGstRate = dc?.gst_rate ?? 18;
 
   const eligibleBookings = bookings.filter(b => b.status !== 'completed' && b.status !== 'cancelled');
@@ -311,15 +339,15 @@ const Quotations: React.FC = () => {
   };
 
   // ── multi-day helpers ─────────────────────────────────────────────────────
-  const addDay = () => {
+  const addOccasion = () => {
     const lastDate = eventDays.length > 0 ? eventDays[eventDays.length - 1].date : (selectedBooking?.event_date || '');
     setEventDays(prev => [...prev, {
-      day_number: prev.length + 1, date: nextDateStr(lastDate), meals: [], day_subtotal: 0,
+      day_number: 0, date: lastDate, meals: [], day_subtotal: 0,
     }]);
   };
 
   const removeDay = (idx: number) =>
-    setEventDays(prev => prev.filter((_, i) => i !== idx).map((d, i) => ({ ...d, day_number: i + 1 })));
+    setEventDays(prev => prev.filter((_, i) => i !== idx));
 
   const updateDayDate = (idx: number, date: string) =>
     setEventDays(prev => prev.map((d, i) => i === idx ? { ...d, date } : d));
@@ -477,10 +505,12 @@ const Quotations: React.FC = () => {
   const handleSave = async () => {
     if (!selectedBookingId) { toast.error('Please select a booking'); return; }
     if (isMultiDay) {
-      if (eventDays.length === 0) { toast.error('Add at least one day'); return; }
-      for (const day of eventDays) {
-        if (!day.date) { toast.error(`Day ${day.day_number}: select a date`); return; }
-        if (day.meals.length === 0) { toast.error(`Day ${day.day_number}: add at least one meal`); return; }
+      if (eventDays.length === 0) { toast.error('Add at least one occasion'); return; }
+      for (let i = 0; i < eventDays.length; i++) {
+        const day = eventDays[i];
+        const dayNum = getDayNumber(day.date, eventDays);
+        if (!day.date) { toast.error(`Occasion ${i + 1}: select a date`); return; }
+        if (day.meals.length === 0) { toast.error(`Day ${dayNum} occasion ${i + 1}: add at least one meal`); return; }
       }
     } else {
       if (selectedItems.length === 0) { toast.error('Please add at least one item'); return; }
@@ -504,7 +534,9 @@ const Quotations: React.FC = () => {
       notes:            notes || undefined,
       status:           'draft' as const,
       is_multi_day:     isMultiDay,
-      event_days:       isMultiDay ? eventDays : [],
+      event_days:       isMultiDay
+        ? eventDays.map(d => ({ ...d, day_number: getDayNumber(d.date, eventDays) }))
+        : [],
     };
 
     try {
@@ -515,11 +547,11 @@ const Quotations: React.FC = () => {
         await createQuotation.mutateAsync(payload);
         toast.success('Quotation saved');
       }
-      // Update booking end_date for multi-day events
+      // Update booking end_date to the latest date across all occasions
       if (isMultiDay && eventDays.length > 0) {
-        const lastDate = eventDays[eventDays.length - 1].date;
-        if (lastDate) {
-          try { await supabase.from('bookings').update({ end_date: lastDate }).eq('id', selectedBookingId); } catch (_) {}
+        const maxDate = eventDays.map(d => d.date).filter(Boolean).sort().pop() || '';
+        if (maxDate) {
+          try { await supabase.from('bookings').update({ end_date: maxDate }).eq('id', selectedBookingId); } catch (_) {}
         }
       }
       resetForm();
@@ -580,8 +612,15 @@ const Quotations: React.FC = () => {
             {/* Multi-day toggle */}
             <div style={{ marginBottom: 16 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', userSelect: 'none' }}>
-                <input type="checkbox" checked={isMultiDay} onChange={e => { setIsMultiDay(e.target.checked); setActiveMealKey(null); }}
-                  style={{ accentColor: '#E8750A', width: 15, height: 15 }} />
+                <input type="checkbox" checked={isMultiDay} onChange={e => {
+                  const checked = e.target.checked;
+                  setIsMultiDay(checked);
+                  setActiveMealKey(null);
+                  if (checked && eventDays.length === 0) {
+                    setEventDays([{ day_number: 1, date: selectedBooking?.event_date || '', meals: [], day_subtotal: 0 }]);
+                  }
+                  if (!checked) { setEventDays([]); }
+                }} style={{ accentColor: '#E8750A', width: 15, height: 15 }} />
                 <span style={{ fontWeight: 600 }}>Multi-day / Multi-meal event</span>
                 <span style={{ fontSize: 11, color: '#888880' }}>(e.g. 2–3 day function with breakfast, lunch, dinner)</span>
               </label>
@@ -590,22 +629,13 @@ const Quotations: React.FC = () => {
             {isMultiDay ? (
               /* ── MULTI-DAY SECTION ── */
               <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#444' }}>EVENT DAYS ({eventDays.length})</span>
-                  <button onClick={addDay} style={{ ...btnPrimary, fontSize: 12, padding: '5px 12px' }}>+ Add Day</button>
-                </div>
-
-                {eventDays.length === 0 && (
-                  <div style={{ border: '1px dashed #E5E5E0', borderRadius: 8, padding: '32px', textAlign: 'center', color: '#AAAAAA', fontSize: 13 }}>
-                    Click "+ Add Day" to start planning your multi-day event
-                  </div>
-                )}
-
-                {eventDays.map((day, dayIdx) => (
+                {eventDays.map((day, dayIdx) => {
+                  const dayNum = getDayNumber(day.date, eventDays);
+                  return (
                   <div key={dayIdx} style={{ border: '0.5px solid #E5E5E0', borderRadius: 10, marginBottom: 14, overflow: 'hidden' }}>
                     {/* Day header */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#F9F8F5', borderBottom: '0.5px solid #E5E5E0' }}>
-                      <span style={{ fontWeight: 700, color: '#E8750A', fontSize: 13, minWidth: 50 }}>Day {day.day_number}</span>
+                      <span style={{ fontWeight: 700, color: '#E8750A', fontSize: 13, minWidth: 50 }}>Day {dayNum}</span>
                       <input type="date" value={day.date} onChange={e => updateDayDate(dayIdx, e.target.value)}
                         style={{ border: '1px solid #E5E5E0', borderRadius: 7, padding: '5px 8px', fontSize: 13, background: '#fff' }} />
                       <div style={{ flex: 1 }} />
@@ -744,17 +774,23 @@ const Quotations: React.FC = () => {
                       })}
                       <button onClick={() => addMeal(dayIdx)}
                         style={{ fontSize: 12, color: '#378ADD', background: 'none', border: '1px solid #378ADD', borderRadius: 6, padding: '4px 12px', cursor: 'pointer' }}>
-                        + Add Meal for Day {day.day_number}
+                        + Add Meal for Day {dayNum}
                       </button>
                     </div>
 
                     {day.meals.length > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 14px', background: '#F9F8F5', borderTop: '0.5px solid #E5E5E0', fontSize: 13, fontWeight: 600, color: '#1A1A18' }}>
-                        Day {day.day_number} Total: <span style={{ color: '#E8750A', marginLeft: 8 }}>₹{day.day_subtotal.toLocaleString('en-IN')}</span>
+                        Day {dayNum} Total: <span style={{ color: '#E8750A', marginLeft: 8 }}>₹{day.day_subtotal.toLocaleString('en-IN')}</span>
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
+
+                <button onClick={addOccasion}
+                  style={{ ...btnPrimary, fontSize: 12, padding: '6px 16px', marginTop: 4, background: '#fff', color: '#E8750A', border: '1px dashed #E8750A' }}>
+                  + Add Occasion
+                </button>
               </div>
             ) : (
               /* ── SINGLE-DAY SECTION ── */
