@@ -57,26 +57,46 @@ const DataCenter: React.FC = () => {
     } catch (e: any) { toast.error(e?.message || 'Failed to save'); }
   };
 
+  const extractStoragePath = (url: string) => {
+    const m = url.match(/\/documents\/(.+?)(\?|$)/);
+    return m?.[1] ? decodeURIComponent(m[1]) : null;
+  };
+
   const handleFssaiUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      // Auto-create public bucket if it doesn't exist yet
       await supabase.storage.createBucket('documents', { public: true }).catch(() => {});
+      // Delete old file from storage before replacing
+      if (fssaiUrl) {
+        const oldPath = extractStoragePath(fssaiUrl);
+        if (oldPath) await supabase.storage.from('documents').remove([oldPath]).catch(() => {});
+      }
       const path = `fssai/${Date.now()}_${file.name}`;
       const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path);
       setFssaiUrl(publicUrl);
       await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: publicUrl });
-      toast.success('Certificate uploaded!');
+      toast.success(fssaiUrl ? 'Certificate replaced!' : 'Certificate uploaded!');
     } catch (e: any) {
       toast.error(e?.message || 'Upload failed');
     } finally {
       setUploading(false);
       e.target.value = '';
     }
+  };
+
+  const handleDeleteFssai = async () => {
+    if (!fssaiUrl || !window.confirm('Remove the FSSAI certificate? This cannot be undone.')) return;
+    try {
+      const oldPath = extractStoragePath(fssaiUrl);
+      if (oldPath) await supabase.storage.from('documents').remove([oldPath]).catch(() => {});
+      setFssaiUrl('');
+      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: '' });
+      toast.success('Certificate removed');
+    } catch (e: any) { toast.error(e?.message || 'Failed to remove'); }
   };
 
   const handleDownloadFssai = async () => {
@@ -180,19 +200,31 @@ const DataCenter: React.FC = () => {
             </div>
             <div>
               <label style={lbl}>FSSAI Certificate</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {fssaiUrl ? (
+                <>
+                  <div style={{ background: '#EAF3DE', border: '0.5px solid #B6D98E', borderRadius: 8, padding: '8px 12px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>📄</span>
+                    <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 500, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {decodeURIComponent(fssaiUrl.split('/').pop()?.split('?')[0] || '').replace(/^\d+_/, '') || 'Certificate'}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#3B6D11' }}>✓ Uploaded</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <a href={fssaiUrl} target="_blank" rel="noreferrer" style={{ ...btnGhost, fontSize: 12, textDecoration: 'none', display: 'inline-block' }}>👁 View</a>
+                    <button onClick={handleDownloadFssai} style={{ ...btnGhost, fontSize: 12 }}>⬇ Download</button>
+                    <label style={{ ...btnGhost, fontSize: 12, cursor: 'pointer', display: 'inline-block', textAlign: 'center' }}>
+                      {uploading ? 'Uploading...' : '🔄 Replace'}
+                      <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFssaiUpload} style={{ display: 'none' }} disabled={uploading} />
+                    </label>
+                    <button onClick={handleDeleteFssai} style={{ ...btnGhost, fontSize: 12, color: '#CC4444', borderColor: '#CC4444' }}>🗑 Delete</button>
+                  </div>
+                </>
+              ) : (
                 <label style={{ ...btnGhost, fontSize: 12, cursor: 'pointer', display: 'inline-block', textAlign: 'center', minWidth: 100 }}>
                   {uploading ? 'Uploading...' : '📎 Upload'}
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFssaiUpload} style={{ display: 'none' }} disabled={uploading} />
                 </label>
-                {fssaiUrl && (
-                  <>
-                    <a href={fssaiUrl} target="_blank" rel="noreferrer" style={{ ...btnGhost, fontSize: 12, textDecoration: 'none', display: 'inline-block' }}>👁 View</a>
-                    <button onClick={handleDownloadFssai} style={{ ...btnGhost, fontSize: 12 }}>⬇ Download</button>
-                  </>
-                )}
-              </div>
-              {fssaiUrl && <div style={{ fontSize: 10, color: '#3B6D11', marginTop: 4 }}>Certificate uploaded ✓</div>}
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
