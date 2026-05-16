@@ -21,13 +21,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 const genId = () => Math.random().toString(36).slice(2, 10);
 
-const nextDateStr = (dateStr: string) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
-};
-
 // Day number = ordinal position of date among unique dates in first-appearance order
 const getDayNumber = (date: string, days: EventDay[]): number => {
   const seen: string[] = [];
