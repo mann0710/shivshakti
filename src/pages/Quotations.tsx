@@ -89,10 +89,10 @@ const downloadPDF = (q: Quotation) => {
         const mealLabel = `  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)}${meal.time ? ` · ${meal.time}` : ''} · ${meal.guest_count} guests · ₹${meal.per_plate_amount}/plate`;
         doc.text(mealLabel, margin, y); y += 4;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 100, 98);
-        (meal.items || []).forEach(it => {
+        for (const it of (meal.items || [])) {
           if (y > 260) { doc.addPage(); y = 20; }
           doc.text(`    · ${it.item_name}`, margin, y); y += 4;
-        });
+        }
         doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28); doc.setFontSize(9);
         doc.text(`  Subtotal:`, margin + 4, y);
         doc.text(`Rs.${meal.subtotal.toLocaleString('en-IN')}`, W - margin - 2, y, { align: 'right' });
