@@ -5,7 +5,7 @@ import html2canvas from 'html2canvas';
 import {
   useInvoices, useCreateInvoice, useRecordPayment,
   useUpdatePayment, useDeletePayment, usePaymentHistory,
-  useUpdateInvoiceDiscount,
+  useRecalculateTotals,
 } from '../hooks/useInvoices';
 import { useBookings } from '../hooks/useBookings';
 import { useDataCenter } from '../hooks/useDataCenter';
@@ -21,7 +21,7 @@ const Billing: React.FC = () => {
   const recordPayment = useRecordPayment();
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
-  const updateDiscount = useUpdateInvoiceDiscount();
+  const recalcTotals = useRecalculateTotals();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -65,14 +65,11 @@ const Billing: React.FC = () => {
 
   const { data: paymentHistory = [] } = usePaymentHistory(selected?.id);
 
-  // Sync GST checkbox with DataCenter
-  useEffect(() => {
-    if (dc?.gst_number) setShowGST(true);
-  }, [dc]);
-
-  // Sync discount form when switching invoices
+  // Sync checkbox + discount form when switching invoices
   useEffect(() => {
     if (!selected) return;
+    // GST checkbox: on = invoice has gst_rate > 0; off = gst_rate is 0
+    setShowGST(selected.gst_rate > 0);
     setDiscountForm({
       type: (selected.discount_type as 'amount' | 'percentage') || 'amount',
       value: selected.discount_amount > 0
@@ -161,13 +158,28 @@ const Billing: React.FC = () => {
     } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
   };
 
-  const handleApplyDiscount = async () => {
+  const handleGSTToggle = async (checked: boolean) => {
     if (!selected) return;
+    setShowGST(checked);
     try {
-      await updateDiscount.mutateAsync({
+      await recalcTotals.mutateAsync({
         invoiceId: selected.id,
         discount_amount: parseFloat(discountForm.value) || 0,
         discount_type: discountForm.type,
+        apply_gst: checked,
+      });
+      toast.success(checked ? 'GST added to bill' : 'GST removed from bill');
+    } catch (e: any) { toast.error(e?.message || 'Failed to update GST'); }
+  };
+
+  const handleApplyDiscount = async () => {
+    if (!selected) return;
+    try {
+      await recalcTotals.mutateAsync({
+        invoiceId: selected.id,
+        discount_amount: parseFloat(discountForm.value) || 0,
+        discount_type: discountForm.type,
+        apply_gst: showGST,
       });
       toast.success('Discount applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply discount'); }
@@ -357,8 +369,8 @@ const Billing: React.FC = () => {
               {/* GST checkbox */}
               {dc?.gst_number && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666660', marginBottom: 10, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={showGST} onChange={e => setShowGST(e.target.checked)} style={{ accentColor: '#E8750A' }} />
-                  Show GST Number ({dc.gst_number})
+                  <input type="checkbox" checked={showGST} onChange={e => handleGSTToggle(e.target.checked)} style={{ accentColor: '#E8750A' }} />
+                  Include GST @18% in bill ({dc.gst_number})
                 </label>
               )}
 
@@ -471,8 +483,8 @@ const Billing: React.FC = () => {
                     value={discountForm.value}
                     onChange={e => setDiscountForm(f => ({ ...f, value: e.target.value }))} />
                   <button onClick={handleApplyDiscount} style={{ ...btnPrimary, fontSize: 12, whiteSpace: 'nowrap' }}
-                    disabled={updateDiscount.isPending}>
-                    {updateDiscount.isPending ? '...' : 'Apply'}
+                    disabled={recalcTotals.isPending}>
+                    {recalcTotals.isPending ? '...' : 'Apply'}
                   </button>
                 </div>
                 {selected.discount_amount > 0 && (
