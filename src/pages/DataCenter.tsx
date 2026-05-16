@@ -62,6 +62,8 @@ const DataCenter: React.FC = () => {
     if (!file) return;
     setUploading(true);
     try {
+      // Auto-create public bucket if it doesn't exist yet
+      await supabase.storage.createBucket('documents', { public: true }).catch(() => {});
       const path = `fssai/${Date.now()}_${file.name}`;
       const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
@@ -70,8 +72,28 @@ const DataCenter: React.FC = () => {
       await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: publicUrl });
       toast.success('Certificate uploaded!');
     } catch (e: any) {
-      toast.error(e?.message || 'Upload failed — create a public "documents" bucket in Supabase Storage first.');
-    } finally { setUploading(false); }
+      toast.error(e?.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDownloadFssai = async () => {
+    if (!fssaiUrl) return;
+    try {
+      const res = await fetch(fssaiUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const ext = fssaiUrl.split('.').pop()?.split('?')[0] || 'pdf';
+      a.download = `fssai_certificate.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { window.open(fssaiUrl, '_blank'); }
   };
 
   // ── Team member handlers ──────────────────────────────────────────────────
@@ -158,12 +180,17 @@ const DataCenter: React.FC = () => {
             </div>
             <div>
               <label style={lbl}>FSSAI Certificate</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <label style={{ ...btnGhost, fontSize: 12, cursor: 'pointer', display: 'inline-block', textAlign: 'center', minWidth: 100 }}>
                   {uploading ? 'Uploading...' : '📎 Upload'}
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFssaiUpload} style={{ display: 'none' }} disabled={uploading} />
                 </label>
-                {fssaiUrl && <a href={fssaiUrl} target="_blank" rel="noreferrer" style={{ ...btnGhost, fontSize: 12, textDecoration: 'none', display: 'inline-block' }}>👁 View</a>}
+                {fssaiUrl && (
+                  <>
+                    <a href={fssaiUrl} target="_blank" rel="noreferrer" style={{ ...btnGhost, fontSize: 12, textDecoration: 'none', display: 'inline-block' }}>👁 View</a>
+                    <button onClick={handleDownloadFssai} style={{ ...btnGhost, fontSize: 12 }}>⬇ Download</button>
+                  </>
+                )}
               </div>
               {fssaiUrl && <div style={{ fontSize: 10, color: '#3B6D11', marginTop: 4 }}>Certificate uploaded ✓</div>}
             </div>
@@ -290,8 +317,11 @@ const DataCenter: React.FC = () => {
           )}
         </div>
 
-        <div style={{ marginTop: 16, padding: '10px 14px', background: '#FFF8EE', border: '0.5px solid #FAC775', borderRadius: 8, fontSize: 12, color: '#854F0B' }}>
-          💡 For FSSAI uploads, create a public storage bucket named <strong>documents</strong> in Supabase → Storage.
+        <div style={{ marginTop: 16, padding: '10px 14px', background: '#FFF8EE', border: '0.5px solid #FAC775', borderRadius: 8, fontSize: 12, color: '#854F0B', lineHeight: 1.8 }}>
+          💡 If "Save Information" shows a <strong>gst_rate column not found</strong> error, run this in Supabase SQL Editor:<br />
+          <code style={{ background: '#FFF0CC', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>
+            ALTER TABLE data_center ADD COLUMN IF NOT EXISTS gst_rate numeric DEFAULT 18;
+          </code>
         </div>
       </div>
     </div>
