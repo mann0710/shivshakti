@@ -41,9 +41,11 @@ export const useCreateInvoice = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (invoice: Partial<Invoice>) => {
-      const { count } = await supabase
-        .from('invoices').select('*', { count: 'exact', head: true });
-      const invoiceNumber = `INV-${String((count || 0) + 1).padStart(4, '0')}`;
+      const { data: latest } = await supabase
+        .from('invoices').select('invoice_number').order('invoice_number', { ascending: false }).limit(1).maybeSingle();
+      const nextNum = latest?.invoice_number
+        ? (parseInt(latest.invoice_number.replace('INV-', ''), 10) || 0) + 1 : 1;
+      const invoiceNumber = `INV-${String(nextNum).padStart(4, '0')}`;
 
       const subtotal = invoice.subtotal || 0;
       const discount_amount = invoice.discount_amount || 0;

@@ -65,9 +65,11 @@ export const useCreateQuotation = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (q: QuotationPayload) => {
-      const { count } = await supabase
-        .from('quotations').select('*', { count: 'exact', head: true });
-      const quotation_number = `QTN-${String((count || 0) + 1).padStart(4, '0')}`;
+      const { data: latest } = await supabase
+        .from('quotations').select('quotation_number').order('quotation_number', { ascending: false }).limit(1).maybeSingle();
+      const nextNum = latest?.quotation_number
+        ? (parseInt(latest.quotation_number.replace('QTN-', ''), 10) || 0) + 1 : 1;
+      const quotation_number = `QTN-${String(nextNum).padStart(4, '0')}`;
       const { data, error } = await supabase
         .from('quotations')
         .insert({ ...q, quotation_number, issue_date: todayIST() })
