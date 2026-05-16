@@ -67,7 +67,6 @@ const DataCenter: React.FC = () => {
     if (!file) return;
     setUploading(true);
     try {
-      await supabase.storage.createBucket('documents', { public: true }).catch(() => {});
       // Delete old file from storage before replacing
       if (fssaiUrl) {
         const oldPath = extractStoragePath(fssaiUrl);
@@ -75,7 +74,14 @@ const DataCenter: React.FC = () => {
       }
       const path = `fssai/${Date.now()}_${file.name}`;
       const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
-      if (upErr) throw upErr;
+      if (upErr) {
+        if (upErr.message?.toLowerCase().includes('bucket')) {
+          toast.error('Storage bucket missing. See setup instructions below.', { duration: 6000 });
+        } else {
+          toast.error(upErr.message || 'Upload failed');
+        }
+        return;
+      }
       const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path);
       setFssaiUrl(publicUrl);
       await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: publicUrl });
@@ -349,9 +355,11 @@ const DataCenter: React.FC = () => {
           )}
         </div>
 
-        <div style={{ marginTop: 16, padding: '10px 14px', background: '#FFF8EE', border: '0.5px solid #FAC775', borderRadius: 8, fontSize: 12, color: '#854F0B', lineHeight: 1.8 }}>
-          💡 If "Save Information" shows a <strong>gst_rate column not found</strong> error, run this in Supabase SQL Editor:<br />
-          <code style={{ background: '#FFF0CC', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>
+        <div style={{ marginTop: 16, padding: '12px 16px', background: '#FFF8EE', border: '0.5px solid #FAC775', borderRadius: 8, fontSize: 12, color: '#854F0B', lineHeight: 2 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>📋 One-time Supabase setup required</div>
+          <div><strong>1. Storage bucket</strong> (needed for FSSAI upload) — Supabase Dashboard → Storage → New bucket → Name: <code style={{ background: '#FFF0CC', padding: '1px 5px', borderRadius: 3 }}>documents</code> → enable <strong>Public bucket</strong> → Create</div>
+          <div style={{ marginTop: 4 }}><strong>2. GST Rate column</strong> (if "Save Information" fails) — Supabase Dashboard → SQL Editor → run:</div>
+          <code style={{ display: 'block', background: '#FFF0CC', padding: '4px 8px', borderRadius: 4, fontSize: 11, marginTop: 2 }}>
             ALTER TABLE data_center ADD COLUMN IF NOT EXISTS gst_rate numeric DEFAULT 18;
           </code>
         </div>
