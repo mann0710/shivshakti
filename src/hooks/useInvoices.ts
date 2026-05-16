@@ -153,6 +153,33 @@ export const usePaymentHistory = (invoiceId: string | undefined) =>
     },
   });
 
+export const useUpdateInvoiceDiscount = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ invoiceId, discount_amount, discount_type }: {
+      invoiceId: string; discount_amount: number; discount_type: 'amount' | 'percentage';
+    }) => {
+      const { data: inv } = await supabase
+        .from('invoices').select('subtotal, gst_rate, advance_paid').eq('id', invoiceId).single();
+      if (!inv) throw new Error('Invoice not found');
+      const discAmt = discount_type === 'percentage'
+        ? Math.round((inv.subtotal * discount_amount) / 100)
+        : discount_amount;
+      const discountedSubtotal = Math.max(0, inv.subtotal - discAmt);
+      const gst_amount = Math.round((discountedSubtotal * inv.gst_rate) / 100);
+      const total_amount = discountedSubtotal + gst_amount;
+      const balance_due = Math.max(0, total_amount - (inv.advance_paid || 0));
+      const status = balance_due <= 0 ? 'paid' : inv.advance_paid > 0 ? 'sent' : 'draft';
+      const { error } = await supabase.from('invoices').update({
+        discount_amount: discAmt, discount_type,
+        gst_amount, total_amount, balance_due, status,
+      }).eq('id', invoiceId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+  });
+};
+
 export const useAllPayments = () =>
   useQuery({
     queryKey: ['all_payments'],

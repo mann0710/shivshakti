@@ -5,6 +5,7 @@ import html2canvas from 'html2canvas';
 import {
   useInvoices, useCreateInvoice, useRecordPayment,
   useUpdatePayment, useDeletePayment, usePaymentHistory,
+  useUpdateInvoiceDiscount,
 } from '../hooks/useInvoices';
 import { useBookings } from '../hooks/useBookings';
 import { useDataCenter } from '../hooks/useDataCenter';
@@ -20,6 +21,7 @@ const Billing: React.FC = () => {
   const recordPayment = useRecordPayment();
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
+  const updateDiscount = useUpdateInvoiceDiscount();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -35,6 +37,10 @@ const Billing: React.FC = () => {
     amount: '', payment_type: 'advance' as 'advance' | 'partial',
     payment_mode: 'upi', notes: '', payment_date: todayIST(),
   });
+
+  // Discount edit state
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [discountForm, setDiscountForm] = useState({ type: 'amount' as 'amount' | 'percentage', value: '' });
 
   // Edit payment state
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
@@ -160,6 +166,32 @@ const Billing: React.FC = () => {
       await deletePayment.mutateAsync({ id: p.id, invoiceId: p.invoice_id });
       toast.success('Payment deleted');
     } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
+  };
+
+  const openDiscountEdit = () => {
+    if (!selected) return;
+    setDiscountForm({
+      type: (selected.discount_type as 'amount' | 'percentage') || 'amount',
+      value: selected.discount_amount ? String(
+        selected.discount_type === 'percentage'
+          ? Math.round((selected.discount_amount / selected.subtotal) * 100)
+          : selected.discount_amount
+      ) : '',
+    });
+    setEditingDiscount(true);
+  };
+
+  const handleSaveDiscount = async () => {
+    if (!selected) return;
+    try {
+      await updateDiscount.mutateAsync({
+        invoiceId: selected.id,
+        discount_amount: parseFloat(discountForm.value) || 0,
+        discount_type: discountForm.type,
+      });
+      toast.success('Discount updated!');
+      setEditingDiscount(false);
+    } catch (e: any) { toast.error(e?.message || 'Failed to update discount'); }
   };
 
   const downloadPDF = async () => {
@@ -403,10 +435,41 @@ const Billing: React.FC = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#666660' }}>
                     <span>Subtotal</span><span>₹{selected.subtotal.toLocaleString()}</span>
                   </div>
-                  {selected.discount_amount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#3B6D11' }}>
-                      <span>Discount {selected.discount_type === 'percentage' ? `(${Math.round((selected.discount_amount / selected.subtotal) * 100)}%)` : ''}</span>
-                      <span>-₹{selected.discount_amount.toLocaleString()}</span>
+                  {/* Discount row — always visible so user can edit */}
+                  {editingDiscount ? (
+                    <div style={{ padding: '6px 0', borderBottom: '0.5px solid #E5E5E0' }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                        <select style={{ ...inp, width: 130, fontSize: 11 }} value={discountForm.type}
+                          onChange={e => setDiscountForm(f => ({ ...f, type: e.target.value as 'amount' | 'percentage' }))}>
+                          <option value="amount">Amount (₹)</option>
+                          <option value="percentage">Percentage (%)</option>
+                        </select>
+                        <input type="number" style={{ ...inp, flex: 1, fontSize: 11 }} placeholder="0"
+                          value={discountForm.value}
+                          onChange={e => setDiscountForm(f => ({ ...f, value: e.target.value }))} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => setEditingDiscount(false)} style={{ ...btnGhost, fontSize: 11, padding: '3px 10px', flex: 1 }}>Cancel</button>
+                        <button onClick={handleSaveDiscount} style={{ ...btnPrimary, fontSize: 11, padding: '3px 10px', flex: 1 }}
+                          disabled={updateDiscount.isPending}>Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0', fontSize: 12 }}>
+                      <span style={{ color: selected.discount_amount > 0 ? '#3B6D11' : '#AAAAAA' }}>
+                        Discount {selected.discount_amount > 0 && selected.discount_type === 'percentage'
+                          ? `(${Math.round((selected.discount_amount / selected.subtotal) * 100)}%)`
+                          : ''}
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ color: selected.discount_amount > 0 ? '#3B6D11' : '#AAAAAA' }}>
+                          {selected.discount_amount > 0 ? `-₹${selected.discount_amount.toLocaleString()}` : '—'}
+                        </span>
+                        <button onClick={openDiscountEdit}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#378ADD', fontSize: 11, padding: 0 }}>
+                          ✏ Edit
+                        </button>
+                      </span>
                     </div>
                   )}
                   {showGST && (
