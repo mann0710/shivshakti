@@ -49,10 +49,11 @@ export const useCreateInvoice = () => {
       const discount_amount = invoice.discount_amount || 0;
       const discount_type = invoice.discount_type || 'amount';
       const discountedSubtotal = Math.max(0, subtotal - discount_amount);
-      // GST is OFF by default; user enables it via checkbox in invoice preview
-      const gst_rate = 0;
-      const gst_amount = 0;
-      const total_amount = discountedSubtotal;
+      // Preserve GST from quotation if passed; default off
+      const gst_rate = invoice.gst_rate || 0;
+      const gst_amount = invoice.gst_amount || 0;
+      const transportation_charge = invoice.transportation_charge || 0;
+      const total_amount = discountedSubtotal + gst_amount + transportation_charge;
       const balance_due = Math.max(0, total_amount - (invoice.advance_paid || 0));
 
       const { data, error } = await supabase
@@ -64,6 +65,7 @@ export const useCreateInvoice = () => {
           discount_type,
           gst_rate,
           gst_amount,
+          transportation_charge,
           total_amount,
           balance_due,
           issue_date: invoice.issue_date || todayIST(),
@@ -158,12 +160,13 @@ export const usePaymentHistory = (invoiceId: string | undefined) =>
 export const useRecalculateTotals = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ invoiceId, discount_amount, discount_type, apply_gst, gst_rate: customGstRate }: {
+    mutationFn: async ({ invoiceId, discount_amount, discount_type, apply_gst, gst_rate: customGstRate, transportation_charge = 0 }: {
       invoiceId: string;
       discount_amount: number;
       discount_type: 'amount' | 'percentage';
       apply_gst: boolean;
       gst_rate?: number;
+      transportation_charge?: number;
     }) => {
       const { data: inv } = await supabase
         .from('invoices').select('subtotal, advance_paid').eq('id', invoiceId).single();
@@ -175,13 +178,13 @@ export const useRecalculateTotals = () => {
       const appliedRate = customGstRate ?? 18;
       const gst_rate = apply_gst ? appliedRate : 0;
       const gst_amount = apply_gst ? Math.round((discountedSubtotal * appliedRate) / 100) : 0;
-      const total_amount = discountedSubtotal + gst_amount;
+      const total_amount = discountedSubtotal + gst_amount + (transportation_charge || 0);
       const advance_paid = inv.advance_paid || 0;
       const balance_due = Math.max(0, total_amount - advance_paid);
       const status = balance_due <= 0 ? 'paid' : advance_paid > 0 ? 'sent' : 'draft';
       const { error } = await supabase.from('invoices').update({
         discount_amount: discAmt, discount_type,
-        gst_rate, gst_amount, total_amount, balance_due, status,
+        gst_rate, gst_amount, transportation_charge, total_amount, balance_due, status,
       }).eq('id', invoiceId);
       if (error) throw error;
     },

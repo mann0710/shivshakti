@@ -40,12 +40,14 @@ export interface Invoice {
   id: string;
   booking_id: string;
   booking?: Booking;
+  quotation_id?: string;
   invoice_number: string;
   subtotal: number;
   discount_amount: number;
   discount_type: 'amount' | 'percentage';
   gst_rate: number;
   gst_amount: number;
+  transportation_charge: number;
   total_amount: number;
   advance_paid: number;
   balance_due: number;

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -9,9 +9,10 @@ import {
 } from '../hooks/useInvoices';
 import { useBookings } from '../hooks/useBookings';
 import { useDataCenter } from '../hooks/useDataCenter';
+import { useQuotations } from '../hooks/useQuotations';
 import StatusPill from '../components/StatusPill';
 import { formatDateIST, todayIST } from '../lib/ist';
-import { Payment } from '../types';
+import { Payment, LineItem } from '../types';
 
 const Billing: React.FC = () => {
   const { data: invoices = [], isLoading } = useInvoices();
@@ -22,6 +23,7 @@ const Billing: React.FC = () => {
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
   const recalcTotals = useRecalculateTotals();
+  const { data: quotations = [] } = useQuotations();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -35,6 +37,7 @@ const Billing: React.FC = () => {
 
   // Discount form — always visible in preview, synced to selected invoice
   const [discountForm, setDiscountForm] = useState({ type: 'amount' as 'amount' | 'percentage', value: '' });
+  const [transportCharge, setTransportCharge] = useState('');
 
   // Payment form
   const [payForm, setPayForm] = useState({
@@ -54,6 +57,10 @@ const Billing: React.FC = () => {
   const selected = invoices.find(i => i.id === selectedId) || invoices[0];
   const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
   const selectedCreateBooking = bookings.find(b => b.id === createBookingId);
+  const quotationForBooking = useMemo(
+    () => quotations.find(q => q.booking_id === createBookingId),
+    [quotations, createBookingId]
+  );
 
   const outstanding = invoices.filter(i => i.balance_due > 0);
   const advanceTotal = invoices.reduce((s, i) => s + (i.advance_paid || 0), 0);
@@ -65,10 +72,9 @@ const Billing: React.FC = () => {
 
   const { data: paymentHistory = [] } = usePaymentHistory(selected?.id);
 
-  // Sync checkbox + discount form when switching invoices
+  // Sync checkbox + discount form + transport when switching invoices
   useEffect(() => {
     if (!selected) return;
-    // GST checkbox: on = invoice has gst_rate > 0; off = gst_rate is 0
     setShowGST(selected.gst_rate > 0);
     setDiscountForm({
       type: (selected.discount_type as 'amount' | 'percentage') || 'amount',
@@ -78,24 +84,54 @@ const Billing: React.FC = () => {
             : selected.discount_amount)
         : '',
     });
+    setTransportCharge(selected.transportation_charge > 0 ? String(selected.transportation_charge) : '');
   }, [selected?.id]); // eslint-disable-line
 
   const handleCreate = async () => {
     if (!createBookingId) { toast.error('Select a booking'); return; }
     const booking = bookings.find(b => b.id === createBookingId);
     if (!booking) return;
-    const lineItems = [{
-      description: `${booking.menu?.name || 'Catering'} × ${booking.guest_count} guests`,
-      quantity: booking.guest_count,
-      unit_price: booking.menu?.price_per_plate || 0,
-      total: booking.estimated_cost,
-    }];
+
+    let subtotal: number;
+    let lineItems: LineItem[];
+    let gst_rate = 0;
+    let gst_amount = 0;
+    let discount_amount = 0;
+    let discount_type: 'amount' | 'percentage' = 'amount';
+    let quotation_id: string | undefined;
+
+    if (quotationForBooking) {
+      subtotal = quotationForBooking.subtotal;
+      gst_rate = quotationForBooking.gst_rate;
+      gst_amount = quotationForBooking.gst_amount;
+      discount_amount = quotationForBooking.discount_amount;
+      discount_type = quotationForBooking.discount_type;
+      quotation_id = quotationForBooking.id;
+      lineItems = quotationForBooking.items.map(item => ({
+        description: `${item.category_name} › ${item.subcategory_name} › ${item.item_name}`,
+        quantity: 1,
+        unit_price: item.amount,
+        total: item.amount,
+      }));
+    } else {
+      subtotal = booking.estimated_cost;
+      lineItems = [{
+        description: `${booking.menu?.name || 'Catering'} × ${booking.guest_count} guests`,
+        quantity: booking.guest_count,
+        unit_price: booking.menu?.price_per_plate || 0,
+        total: booking.estimated_cost,
+      }];
+    }
+
     try {
       const inv = await createInvoice.mutateAsync({
         booking_id: createBookingId,
-        subtotal: booking.estimated_cost,
-        discount_amount: 0,
-        discount_type: 'amount',
+        quotation_id,
+        subtotal,
+        discount_amount,
+        discount_type,
+        gst_rate,
+        gst_amount,
         advance_paid: parseFloat(createAdvance) || 0,
         line_items: lineItems,
         status: 'draft',
@@ -168,6 +204,7 @@ const Billing: React.FC = () => {
         discount_type: discountForm.type,
         apply_gst: checked,
         gst_rate: dc?.gst_rate ?? 18,
+        transportation_charge: parseFloat(transportCharge) || 0,
       });
       toast.success(checked ? `GST @${dc?.gst_rate ?? 18}% added to bill` : 'GST removed from bill');
     } catch (e: any) { toast.error(e?.message || 'Failed to update GST'); }
@@ -182,9 +219,25 @@ const Billing: React.FC = () => {
         discount_type: discountForm.type,
         apply_gst: showGST,
         gst_rate: dc?.gst_rate ?? 18,
+        transportation_charge: parseFloat(transportCharge) || 0,
       });
       toast.success('Discount applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply discount'); }
+  };
+
+  const handleApplyTransportation = async () => {
+    if (!selected) return;
+    try {
+      await recalcTotals.mutateAsync({
+        invoiceId: selected.id,
+        discount_amount: parseFloat(discountForm.value) || 0,
+        discount_type: discountForm.type,
+        apply_gst: showGST,
+        gst_rate: dc?.gst_rate ?? 18,
+        transportation_charge: parseFloat(transportCharge) || 0,
+      });
+      toast.success('Transportation charge applied!');
+    } catch (e: any) { toast.error(e?.message || 'Failed to apply transportation charge'); }
   };
 
   const downloadPDF = async () => {
@@ -306,9 +359,21 @@ const Billing: React.FC = () => {
                   </div>
                 </div>
 
-                <div style={{ background: '#EAF3DE', borderRadius: 8, padding: '8px 12px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, color: '#3B6D11' }}>Estimated Total</span>
-                  <span style={{ fontSize: 16, fontWeight: 700, color: '#3B6D11' }}>₹{selectedCreateBooking.estimated_cost.toLocaleString()}</span>
+                <div style={{ background: '#EAF3DE', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, color: '#3B6D11' }}>
+                      {quotationForBooking ? 'Quotation Total' : 'Estimated Total'}
+                    </span>
+                    <span style={{ fontSize: 16, fontWeight: 700, color: '#3B6D11' }}>
+                      ₹{(quotationForBooking?.total_amount ?? selectedCreateBooking.estimated_cost).toLocaleString()}
+                    </span>
+                  </div>
+                  {quotationForBooking && (
+                    <div style={{ fontSize: 10, color: '#639922', marginTop: 3 }}>
+                      From {quotationForBooking.quotation_number} · {quotationForBooking.items.length} items
+                      {quotationForBooking.gst_rate > 0 && ` · GST @${quotationForBooking.gst_rate}% included`}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -441,6 +506,11 @@ const Billing: React.FC = () => {
                       <span>GST @{selected.gst_rate}%</span><span>₹{selected.gst_amount.toLocaleString()}</span>
                     </div>
                   )}
+                  {(selected.transportation_charge || 0) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#666660' }}>
+                      <span>Transportation</span><span>+₹{selected.transportation_charge.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 13, fontWeight: 600, borderTop: '0.5px solid #E5E5E0', marginTop: 4 }}>
                     <span>Total</span><span>₹{selected.total_amount.toLocaleString()}</span>
                   </div>
@@ -493,6 +563,25 @@ const Billing: React.FC = () => {
                   <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 6 }}>
                     Applied: -₹{selected.discount_amount.toLocaleString()}
                     {selected.discount_type === 'percentage' && ` (${Math.round((selected.discount_amount / selected.subtotal) * 100)}%)`}
+                  </div>
+                )}
+              </div>
+
+              {/* Transportation charge section */}
+              <div style={{ background: '#FAFAF8', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#444440' }}>Transportation Charge</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="number" style={{ ...inp, flex: 1, fontSize: 12 }} placeholder="₹ 0"
+                    value={transportCharge}
+                    onChange={e => setTransportCharge(e.target.value)} />
+                  <button onClick={handleApplyTransportation} style={{ ...btnPrimary, fontSize: 12, whiteSpace: 'nowrap' }}
+                    disabled={recalcTotals.isPending}>
+                    {recalcTotals.isPending ? '...' : 'Apply'}
+                  </button>
+                </div>
+                {(selected.transportation_charge || 0) > 0 && (
+                  <div style={{ fontSize: 11, color: '#666660', marginTop: 6 }}>
+                    Applied: +₹{selected.transportation_charge.toLocaleString()}
                   </div>
                 )}
               </div>

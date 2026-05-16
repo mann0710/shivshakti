@@ -18,12 +18,35 @@ export interface Quotation {
   booking?: any;
   quotation_number: string;
   items: QuotationLineItem[];
+  per_plate_amount: number;
+  guest_count: number;
+  subtotal: number;
+  discount_amount: number;
+  discount_type: 'amount' | 'percentage';
+  gst_rate: number;
+  gst_amount: number;
   total_amount: number;
   notes?: string;
   status: 'draft' | 'sent' | 'accepted' | 'rejected';
   issue_date: string;
   created_at: string;
 }
+
+type QuotationPayload = {
+  customer_id: string;
+  booking_id?: string;
+  items: QuotationLineItem[];
+  per_plate_amount: number;
+  guest_count: number;
+  subtotal: number;
+  discount_amount: number;
+  discount_type: 'amount' | 'percentage';
+  gst_rate: number;
+  gst_amount: number;
+  total_amount: number;
+  notes?: string;
+  status: string;
+};
 
 export const useQuotations = () =>
   useQuery({
@@ -41,14 +64,7 @@ export const useQuotations = () =>
 export const useCreateQuotation = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (q: {
-      customer_id: string;
-      booking_id?: string;
-      items: QuotationLineItem[];
-      total_amount: number;
-      notes?: string;
-      status: string;
-    }) => {
+    mutationFn: async (q: QuotationPayload) => {
       const { count } = await supabase
         .from('quotations').select('*', { count: 'exact', head: true });
       const quotation_number = `QTN-${String((count || 0) + 1).padStart(4, '0')}`;
@@ -67,15 +83,7 @@ export const useCreateQuotation = () => {
 export const useUpdateQuotation = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (q: {
-      id: string;
-      customer_id: string;
-      booking_id?: string;
-      items: QuotationLineItem[];
-      total_amount: number;
-      notes?: string;
-      status: string;
-    }) => {
+    mutationFn: async (q: QuotationPayload & { id: string }) => {
       const { id, ...updates } = q;
       const { data, error } = await supabase
         .from('quotations')
