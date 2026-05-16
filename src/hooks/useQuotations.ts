@@ -27,6 +27,7 @@ export interface Quotation {
   gst_amount: number;
   total_amount: number;
   extra_charges: { description: string; amount: number }[];
+  transportation_charges: { description: string; amount: number }[];
   notes?: string;
   status: 'draft' | 'sent' | 'accepted' | 'rejected';
   issue_date: string;
@@ -46,6 +47,7 @@ type QuotationPayload = {
   gst_amount: number;
   total_amount: number;
   extra_charges: { description: string; amount: number }[];
+  transportation_charges: { description: string; amount: number }[];
   notes?: string;
   status: string;
 };

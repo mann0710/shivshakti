@@ -48,6 +48,7 @@ export interface Invoice {
   gst_rate: number;
   gst_amount: number;
   transportation_charge: number;
+  transportation_charges?: { description: string; amount: number }[];
   total_amount: number;
   advance_paid: number;
   balance_due: number;

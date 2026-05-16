@@ -144,6 +144,15 @@ const downloadPDF = (q: Quotation) => {
     doc.text(`Rs.${(ec.amount || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
     y += 5;
   });
+  (q.transportation_charges || []).forEach(tc => {
+    if (!tc.description && !tc.amount) return;
+    if (y > 240) { doc.addPage(); y = 20; }
+    doc.setTextColor(100, 100, 98);
+    doc.text(`${tc.description || 'Transportation'}:`, margin, y);
+    doc.setTextColor(30, 30, 28);
+    doc.text(`Rs.${(tc.amount || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
+    y += 5;
+  });
 
   y += 2; hline(y, '#E8750A'); y += 7;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(30, 30, 28);
@@ -185,7 +194,8 @@ const Quotations: React.FC = () => {
   const [perPlate, setPerPlate]               = useState('');
   const [gstChecked, setGstChecked]           = useState(false);
   const [discountForm, setDiscountForm]       = useState({ type: 'amount' as 'amount' | 'percentage', value: '' });
-  const [extraCharges, setExtraCharges]       = useState<{ description: string; amount: number }[]>([]);
+  const [extraCharges, setExtraCharges]             = useState<{ description: string; amount: number }[]>([]);
+  const [transportationCharges, setTransportationCharges] = useState<{ description: string; amount: number }[]>([]);
   const perPlateAutoRef = useRef(true);
 
   const dcGstRate = dc?.gst_rate ?? 18;
@@ -209,7 +219,8 @@ const Quotations: React.FC = () => {
   const discountedSubtotal = Math.max(0, subtotal - discountAmt);
   const gstAmount  = gstChecked ? Math.round((discountedSubtotal * dcGstRate) / 100) : 0;
   const extraChargesTotal = extraCharges.reduce((s, c) => s + (c.amount || 0), 0);
-  const finalTotal = discountedSubtotal + gstAmount + extraChargesTotal;
+  const transportationChargesTotal = transportationCharges.reduce((s, c) => s + (c.amount || 0), 0);
+  const finalTotal = discountedSubtotal + gstAmount + extraChargesTotal + transportationChargesTotal;
 
   const activeItems = menuItems.filter(
     it => it.is_active && it.subcategory?.is_active && it.subcategory?.category?.is_active,
@@ -265,6 +276,7 @@ const Quotations: React.FC = () => {
     setNotes(''); setSearchLeft(''); setPerPlate('');
     setGstChecked(false); setDiscountForm({ type: 'amount', value: '' });
     setExtraCharges([]);
+    setTransportationCharges([]);
     perPlateAutoRef.current = true;
     setShowForm(true);
   };
@@ -282,6 +294,7 @@ const Quotations: React.FC = () => {
         ? Math.round((q.discount_amount / q.subtotal) * 100) : q.discount_amount) : '',
     });
     setExtraCharges(q.extra_charges || []);
+    setTransportationCharges(q.transportation_charges || []);
     perPlateAutoRef.current = false;
     setSearchLeft('');
     setShowForm(true);
@@ -292,6 +305,7 @@ const Quotations: React.FC = () => {
     setNotes(''); setSearchLeft(''); setPerPlate('');
     setGstChecked(false); setDiscountForm({ type: 'amount', value: '' });
     setExtraCharges([]);
+    setTransportationCharges([]);
     perPlateAutoRef.current = true;
     setShowForm(false);
   };
@@ -327,6 +341,7 @@ const Quotations: React.FC = () => {
       gst_rate:        gstChecked ? dcGstRate : 0,
       gst_amount:      gstAmount,
       extra_charges:   extraCharges.filter(c => c.description.trim() || c.amount > 0),
+      transportation_charges: transportationCharges.filter(c => c.description.trim() || c.amount > 0),
       total_amount:    finalTotal,
       notes:           notes || undefined,
       status:          'draft' as const,
@@ -537,6 +552,39 @@ const Quotations: React.FC = () => {
                 {extraChargesTotal > 0 && (
                   <div style={{ fontSize: 12, color: '#444', textAlign: 'right', fontWeight: 600 }}>
                     Extra Charges Total: +₹{extraChargesTotal.toLocaleString('en-IN')}
+                  </div>
+                )}
+              </div>
+
+              {/* Transportation Charges */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#888880' }}>TRANSPORTATION CHARGES</span>
+                  <button onClick={() => setTransportationCharges(prev => [...prev, { description: '', amount: 0 }])}
+                    style={{ fontSize: 11, color: '#E8750A', background: 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>
+                    + Add Charge
+                  </button>
+                </div>
+                {transportationCharges.length === 0 && (
+                  <div style={{ fontSize: 11, color: '#AAAAAA' }}>No transportation charges added</div>
+                )}
+                {transportationCharges.map((tc, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                    <input placeholder="Description (e.g. Vehicle, Distance)"
+                      value={tc.description}
+                      onChange={e => setTransportationCharges(prev => prev.map((c, j) => j === i ? { ...c, description: e.target.value } : c))}
+                      style={{ flex: 1, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 12, background: '#fff' }} />
+                    <input type="number" min="0" placeholder="₹ Amount"
+                      value={tc.amount || ''}
+                      onChange={e => setTransportationCharges(prev => prev.map((c, j) => j === i ? { ...c, amount: parseFloat(e.target.value) || 0 } : c))}
+                      style={{ width: 110, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, background: '#fff', textAlign: 'right' as const }} />
+                    <button onClick={() => setTransportationCharges(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+                {transportationChargesTotal > 0 && (
+                  <div style={{ fontSize: 12, color: '#444', textAlign: 'right', fontWeight: 600 }}>
+                    Transportation Total: +₹{transportationChargesTotal.toLocaleString('en-IN')}
                   </div>
                 )}
               </div>

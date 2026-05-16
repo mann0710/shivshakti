@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import {
   useInvoices, useCreateInvoice, useRecordPayment,
   useUpdatePayment, useDeletePayment, usePaymentHistory,
-  useRecalculateTotals,
+  useRecalculateTotals, useDeleteInvoice,
 } from '../hooks/useInvoices';
 import { useBookings } from '../hooks/useBookings';
 import { useDataCenter } from '../hooks/useDataCenter';
@@ -154,6 +154,7 @@ const Billing: React.FC = () => {
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
   const recalcTotals = useRecalculateTotals();
+  const deleteInvoice = useDeleteInvoice();
   const { data: quotations = [] } = useQuotations();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -166,7 +167,7 @@ const Billing: React.FC = () => {
   const [createAdvance, setCreateAdvance] = useState('');
 
   const [discountForm, setDiscountForm] = useState({ type: 'amount' as 'amount' | 'percentage', value: '' });
-  const [transportCharge, setTransportCharge] = useState('');
+  const [transportItems, setTransportItems] = useState<{ description: string; amount: number }[]>([]);
 
   const [payForm, setPayForm] = useState({
     amount: '', payment_type: 'advance' as 'advance' | 'partial',
@@ -210,7 +211,13 @@ const Billing: React.FC = () => {
             : selected.discount_amount)
         : '',
     });
-    setTransportCharge(selected.transportation_charge > 0 ? String(selected.transportation_charge) : '');
+    setTransportItems(
+      selected.transportation_charges?.length
+        ? selected.transportation_charges
+        : selected.transportation_charge > 0
+          ? [{ description: 'Transportation', amount: selected.transportation_charge }]
+          : []
+    );
   }, [selected?.id]); // eslint-disable-line
 
   const handleCreate = async () => {
@@ -224,6 +231,7 @@ const Billing: React.FC = () => {
     let discount_type: 'amount' | 'percentage' = 'amount';
     let quotation_id: string | undefined;
     let extra_charges: { description: string; amount: number }[] = [];
+    let transportation_charges: { description: string; amount: number }[] = [];
 
     if (quotationForBooking) {
       subtotal = quotationForBooking.subtotal;
@@ -233,6 +241,7 @@ const Billing: React.FC = () => {
       discount_type = quotationForBooking.discount_type;
       quotation_id = quotationForBooking.id;
       extra_charges = quotationForBooking.extra_charges || [];
+      transportation_charges = quotationForBooking.transportation_charges || [];
       lineItems = quotationForBooking.items.map(item => ({
         description: `${item.category_name} › ${item.subcategory_name} › ${item.item_name}`,
         quantity: 1, unit_price: item.amount, total: item.amount,
@@ -250,7 +259,7 @@ const Billing: React.FC = () => {
     try {
       const inv = await createInvoice.mutateAsync({
         booking_id: createBookingId, quotation_id, subtotal,
-        discount_amount, discount_type, gst_rate, gst_amount, extra_charges,
+        discount_amount, discount_type, gst_rate, gst_amount, extra_charges, transportation_charges,
         advance_paid: parseFloat(createAdvance) || 0,
         line_items: lineItems, status: 'draft', issue_date: todayIST(),
       });
@@ -313,7 +322,7 @@ const Billing: React.FC = () => {
         discount_amount: parseFloat(discountForm.value) || 0,
         discount_type: discountForm.type,
         apply_gst: checked, gst_rate: dc?.gst_rate ?? 18,
-        transportation_charge: parseFloat(transportCharge) || 0,
+        transportation_charges: transportItems,
       });
       toast.success(checked ? `GST @${dc?.gst_rate ?? 18}% added` : 'GST removed');
     } catch (e: any) { toast.error(e?.message || 'Failed to update GST'); }
@@ -327,7 +336,7 @@ const Billing: React.FC = () => {
         discount_amount: parseFloat(discountForm.value) || 0,
         discount_type: discountForm.type,
         apply_gst: showGST, gst_rate: dc?.gst_rate ?? 18,
-        transportation_charge: parseFloat(transportCharge) || 0,
+        transportation_charges: transportItems,
       });
       toast.success('Discount applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply discount'); }
@@ -341,10 +350,20 @@ const Billing: React.FC = () => {
         discount_amount: parseFloat(discountForm.value) || 0,
         discount_type: discountForm.type,
         apply_gst: showGST, gst_rate: dc?.gst_rate ?? 18,
-        transportation_charge: parseFloat(transportCharge) || 0,
+        transportation_charges: transportItems,
       });
       toast.success('Transportation charge applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply transport'); }
+  };
+
+  const handleDeleteInvoice = async (inv: Invoice, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete invoice ${inv.invoice_number}?`)) return;
+    try {
+      await deleteInvoice.mutateAsync(inv.id);
+      if (selectedId === inv.id) setSelectedId(null);
+      toast.success('Invoice deleted');
+    } catch (err: any) { toast.error(err?.message || 'Failed to delete invoice'); }
   };
 
   const downloadPDF = () => {
@@ -476,7 +495,7 @@ const Billing: React.FC = () => {
                 : (
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead><tr style={{ background: '#FAFAF8' }}>
-                      {['Invoice #', 'Customer', 'Amount', 'Balance', 'Status'].map(h => (
+                      {['Invoice #', 'Customer', 'Amount', 'Balance', 'Status', ''].map(h => (
                         <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 500, color: '#888880', fontSize: 12 }}>{h}</th>
                       ))}
                     </tr></thead>
@@ -490,6 +509,9 @@ const Billing: React.FC = () => {
                           <td style={{ padding: '9px 8px', fontWeight: 500 }}>₹{inv.total_amount.toLocaleString()}</td>
                           <td style={{ padding: '9px 8px', color: inv.balance_due > 0 ? '#A32D2D' : '#3B6D11', fontWeight: 500 }}>₹{inv.balance_due.toLocaleString()}</td>
                           <td style={{ padding: '9px 12px' }}><StatusPill status={inv.status} /></td>
+                          <td style={{ padding: '9px 8px' }} onClick={e => e.stopPropagation()}>
+                            <button onClick={e => handleDeleteInvoice(inv, e)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#CC4444', fontSize: 16, padding: '0 4px', lineHeight: 1 }}>×</button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -593,16 +615,37 @@ const Billing: React.FC = () => {
                 )}
               </div>
 
-              {/* ── Transportation Charge ── */}
+              {/* ── Transportation Charges ── */}
               <div style={{ background: '#FAFAF8', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#444440' }}>Transportation Charge</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="number" style={{ ...inp, flex: 1, fontSize: 12 }} placeholder="₹ 0"
-                    value={transportCharge} onChange={e => setTransportCharge(e.target.value)} />
-                  <button onClick={handleApplyTransportation} style={{ ...btnPrimary, fontSize: 12, whiteSpace: 'nowrap' }} disabled={recalcTotals.isPending}>
-                    {recalcTotals.isPending ? '...' : 'Apply'}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#444440' }}>Transportation Charges</div>
+                  <button onClick={() => setTransportItems(prev => [...prev, { description: '', amount: 0 }])}
+                    style={{ fontSize: 11, color: '#E8750A', background: 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>
+                    + Add
                   </button>
                 </div>
+                {transportItems.length === 0 && (
+                  <div style={{ fontSize: 11, color: '#AAAAAA', marginBottom: 6 }}>No transportation charges</div>
+                )}
+                {transportItems.map((tc, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                    <input placeholder="Description"
+                      value={tc.description}
+                      onChange={e => setTransportItems(prev => prev.map((c, j) => j === i ? { ...c, description: e.target.value } : c))}
+                      style={{ ...inp, flex: 1, fontSize: 12 }} />
+                    <input type="number" placeholder="₹ 0"
+                      value={tc.amount || ''}
+                      onChange={e => setTransportItems(prev => prev.map((c, j) => j === i ? { ...c, amount: parseFloat(e.target.value) || 0 } : c))}
+                      style={{ ...inp, width: 90, fontSize: 12, textAlign: 'right' as const }} />
+                    <button onClick={() => setTransportItems(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}>×</button>
+                  </div>
+                ))}
+                {transportItems.length > 0 && (
+                  <button onClick={handleApplyTransportation} style={{ ...btnPrimary, fontSize: 12, width: '100%', marginTop: 4 }} disabled={recalcTotals.isPending}>
+                    {recalcTotals.isPending ? '...' : 'Apply Transportation'}
+                  </button>
+                )}
                 {(selected.transportation_charge || 0) > 0 && (
                   <div style={{ fontSize: 11, color: '#666660', marginTop: 6 }}>Applied: +₹{selected.transportation_charge.toLocaleString()}</div>
                 )}
