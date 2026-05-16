@@ -64,6 +64,32 @@ export const useCreateQuotation = () => {
   });
 };
 
+export const useUpdateQuotation = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (q: {
+      id: string;
+      customer_id: string;
+      booking_id?: string;
+      items: QuotationLineItem[];
+      total_amount: number;
+      notes?: string;
+      status: string;
+    }) => {
+      const { id, ...updates } = q;
+      const { data, error } = await supabase
+        .from('quotations')
+        .update(updates)
+        .eq('id', id)
+        .select('*, customer:customers(*), booking:bookings(*)')
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['quotations'] }),
+  });
+};
+
 export const useUpdateQuotationStatus = () => {
   const qc = useQueryClient();
   return useMutation({
