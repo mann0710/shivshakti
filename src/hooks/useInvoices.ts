@@ -171,7 +171,7 @@ export const useRecalculateTotals = () => {
       transportation_charge?: number;
     }) => {
       const { data: inv } = await supabase
-        .from('invoices').select('subtotal, advance_paid').eq('id', invoiceId).single();
+        .from('invoices').select('subtotal, advance_paid, extra_charges').eq('id', invoiceId).single();
       if (!inv) throw new Error('Invoice not found');
       const discAmt = discount_type === 'percentage'
         ? Math.round((inv.subtotal * discount_amount) / 100)
@@ -180,7 +180,8 @@ export const useRecalculateTotals = () => {
       const appliedRate = customGstRate ?? 18;
       const gst_rate = apply_gst ? appliedRate : 0;
       const gst_amount = apply_gst ? Math.round((discountedSubtotal * appliedRate) / 100) : 0;
-      const total_amount = discountedSubtotal + gst_amount + (transportation_charge || 0);
+      const extraChargesTotal = ((inv.extra_charges || []) as { amount: number }[]).reduce((s, c) => s + (c.amount || 0), 0);
+      const total_amount = discountedSubtotal + gst_amount + (transportation_charge || 0) + extraChargesTotal;
       const advance_paid = inv.advance_paid || 0;
       const balance_due = Math.max(0, total_amount - advance_paid);
       const status = balance_due <= 0 ? 'paid' : advance_paid > 0 ? 'sent' : 'draft';

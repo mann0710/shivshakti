@@ -61,6 +61,10 @@ const Billing: React.FC = () => {
     () => quotations.find(q => q.booking_id === createBookingId),
     [quotations, createBookingId]
   );
+  const selectedInvoiceQuotation = useMemo(
+    () => quotations.find(q => q.id === selected?.quotation_id),
+    [quotations, selected?.quotation_id]
+  );
 
   const outstanding = invoices.filter(i => i.balance_due > 0);
   const advanceTotal = invoices.reduce((s, i) => s + (i.advance_paid || 0), 0);
@@ -99,6 +103,7 @@ const Billing: React.FC = () => {
     let discount_amount = 0;
     let discount_type: 'amount' | 'percentage' = 'amount';
     let quotation_id: string | undefined;
+    let extra_charges: { description: string; amount: number }[] = [];
 
     if (quotationForBooking) {
       subtotal = quotationForBooking.subtotal;
@@ -107,6 +112,7 @@ const Billing: React.FC = () => {
       discount_amount = quotationForBooking.discount_amount;
       discount_type = quotationForBooking.discount_type;
       quotation_id = quotationForBooking.id;
+      extra_charges = quotationForBooking.extra_charges || [];
       lineItems = quotationForBooking.items.map(item => ({
         description: `${item.category_name} › ${item.subcategory_name} › ${item.item_name}`,
         quantity: 1,
@@ -132,6 +138,7 @@ const Billing: React.FC = () => {
         discount_type,
         gst_rate,
         gst_amount,
+        extra_charges,
         advance_paid: parseFloat(createAdvance) || 0,
         line_items: lineItems,
         status: 'draft',
@@ -455,55 +462,52 @@ const Billing: React.FC = () => {
                   </div>
                 </div>
 
-                <div style={{ background: '#FAFAF8', padding: '8px 12px', borderRadius: 8, marginBottom: 14 }}>
-                  <div style={{ fontWeight: 500 }}>Bill to: {selected.booking?.customer?.name}</div>
-                  <div style={{ color: '#888880', fontSize: 11, marginTop: 2 }}>
-                    {selected.booking?.customer?.address && <span>{selected.booking.customer.address} · </span>}
-                    {selected.booking?.customer?.phone}
-                  </div>
-                  <div style={{ color: '#888880', fontSize: 11 }}>
-                    {selected.booking?.event_type} · {formatDateIST(selected.booking?.event_date, 'MMM d, yyyy')}
-                    {selected.booking?.venue && ` · ${selected.booking.venue}`}
-                    {` · ${selected.booking?.guest_count} guests`}
+                <div style={{ background: '#FAFAF8', padding: '10px 12px', borderRadius: 8, marginBottom: 14 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 5 }}>{selected.booking?.customer?.name}</div>
+                  <div style={{ fontSize: 11, color: '#555552', lineHeight: 1.8 }}>
+                    <div><span style={{ color: '#AAAAAA', minWidth: 50, display: 'inline-block' }}>Event</span>{selected.booking?.event_type}</div>
+                    <div><span style={{ color: '#AAAAAA', minWidth: 50, display: 'inline-block' }}>Venue</span>{selected.booking?.venue || selected.booking?.customer?.address || '—'}</div>
+                    <div><span style={{ color: '#AAAAAA', minWidth: 50, display: 'inline-block' }}>Guests</span>{selected.booking?.guest_count}</div>
                   </div>
                 </div>
 
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4, fontSize: 12 }}>
-                  <thead><tr style={{ borderBottom: '0.5px solid #E5E5E0' }}>
-                    <th style={{ textAlign: 'left', padding: '4px 0', color: '#888880', fontWeight: 500 }}>Description</th>
-                    <th style={{ textAlign: 'right', padding: '4px 0', color: '#888880', fontWeight: 500 }}>Amount</th>
-                  </tr></thead>
-                  <tbody>
-                    {(selected.line_items || []).map((item, i) => (
-                      <tr key={i} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
-                        <td style={{ padding: '5px 0', color: '#333' }}>{item.description}</td>
-                        <td style={{ padding: '5px 0', textAlign: 'right' }}>₹{item.total.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {(selected.line_items || []).length > 0 && (
+                  <>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 4, fontSize: 12 }}>
+                      <thead><tr style={{ borderBottom: '0.5px solid #E5E5E0' }}>
+                        <th style={{ textAlign: 'left', padding: '4px 0', color: '#888880', fontWeight: 500 }}>Menu Items</th>
+                      </tr></thead>
+                      <tbody>
+                        {(selected.line_items || []).map((item, i) => (
+                          <tr key={i} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
+                            <td style={{ padding: '5px 0', color: '#333' }}>{item.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {(selectedInvoiceQuotation?.per_plate_amount ?? 0) > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666660', paddingTop: 6, marginBottom: 4 }}>
+                        <span>Per Plate Rate</span>
+                        <span>₹{(selectedInvoiceQuotation?.per_plate_amount ?? 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                  </>
+                )}
 
-                {selected.booking?.menu?.items?.length ? (
-                  <div style={{ marginBottom: 10, paddingLeft: 8 }}>
-                    {(selected.booking.menu.items as string[]).map((item, i) => (
-                      <div key={i} style={{ fontSize: 11, color: '#666660', lineHeight: 1.6 }}>· {item}</div>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div style={{ borderTop: '0.5px solid #E5E5E0', paddingTop: 8, marginBottom: 12 }}>
+                <div style={{ borderTop: '0.5px solid #E5E5E0', paddingTop: 8, marginBottom: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#666660' }}>
-                    <span>Subtotal</span><span>₹{selected.subtotal.toLocaleString()}</span>
+                    <span>Subtotal {(selectedInvoiceQuotation?.per_plate_amount ?? 0) > 0 ? `(₹${selectedInvoiceQuotation?.per_plate_amount}/plate × ${selectedInvoiceQuotation?.guest_count})` : ''}</span>
+                    <span>₹{selected.subtotal.toLocaleString()}</span>
                   </div>
-                  {selected.discount_amount > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#3B6D11' }}>
-                      <span>Discount {selected.discount_type === 'percentage' ? `(${Math.round((selected.discount_amount / selected.subtotal) * 100)}%)` : ''}</span>
-                      <span>-₹{selected.discount_amount.toLocaleString()}</span>
+                  {/* Extra charges from quotation */}
+                  {(selected.extra_charges || []).map((ec, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#666660' }}>
+                      <span>{ec.description || 'Extra Charge'}</span><span>+₹{(ec.amount || 0).toLocaleString()}</span>
                     </div>
-                  )}
+                  ))}
                   {showGST && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#666660' }}>
-                      <span>GST @{selected.gst_rate}%</span><span>₹{selected.gst_amount.toLocaleString()}</span>
+                      <span>GST @{selected.gst_rate}%</span><span>+₹{selected.gst_amount.toLocaleString()}</span>
                     </div>
                   )}
                   {(selected.transportation_charge || 0) > 0 && (
@@ -511,20 +515,25 @@ const Billing: React.FC = () => {
                       <span>Transportation</span><span>+₹{selected.transportation_charge.toLocaleString()}</span>
                     </div>
                   )}
+                  {selected.discount_amount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: 12, color: '#3B6D11' }}>
+                      <span>Discount {selected.discount_type === 'percentage' ? `(${Math.round((selected.discount_amount / selected.subtotal) * 100)}%)` : ''}</span>
+                      <span>-₹{selected.discount_amount.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 13, fontWeight: 600, borderTop: '0.5px solid #E5E5E0', marginTop: 4 }}>
                     <span>Total</span><span>₹{selected.total_amount.toLocaleString()}</span>
                   </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                  <div style={{ background: '#EAF3DE', padding: '8px 12px', borderRadius: 8 }}>
-                    <div style={{ fontSize: 11, color: '#3B6D11' }}>Amount paid</div>
-                    <div style={{ fontWeight: 600, color: '#3B6D11', fontSize: 14, marginTop: 2 }}>₹{selected.advance_paid.toLocaleString()}</div>
-                  </div>
-                  <div style={{ background: selected.balance_due > 0 ? '#FCEBEB' : '#EAF3DE', padding: '8px 12px', borderRadius: 8 }}>
-                    <div style={{ fontSize: 11, color: selected.balance_due > 0 ? '#A32D2D' : '#3B6D11' }}>Balance due</div>
-                    <div style={{ fontWeight: 600, color: selected.balance_due > 0 ? '#A32D2D' : '#3B6D11', fontSize: 14, marginTop: 2 }}>
-                      {selected.balance_due <= 0 ? '✓ Fully paid' : `₹${selected.balance_due.toLocaleString()}`}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+                    <div style={{ background: '#EAF3DE', padding: '8px 12px', borderRadius: 8 }}>
+                      <div style={{ fontSize: 11, color: '#3B6D11' }}>Amount paid</div>
+                      <div style={{ fontWeight: 600, color: '#3B6D11', fontSize: 14, marginTop: 2 }}>₹{selected.advance_paid.toLocaleString()}</div>
+                    </div>
+                    <div style={{ background: selected.balance_due > 0 ? '#FCEBEB' : '#EAF3DE', padding: '8px 12px', borderRadius: 8 }}>
+                      <div style={{ fontSize: 11, color: selected.balance_due > 0 ? '#A32D2D' : '#3B6D11' }}>Balance due</div>
+                      <div style={{ fontWeight: 600, color: selected.balance_due > 0 ? '#A32D2D' : '#3B6D11', fontSize: 14, marginTop: 2 }}>
+                        {selected.balance_due <= 0 ? '✓ Fully paid' : `₹${selected.balance_due.toLocaleString()}`}
+                      </div>
                     </div>
                   </div>
                 </div>

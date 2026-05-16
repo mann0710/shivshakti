@@ -54,6 +54,7 @@ export interface Invoice {
   status: 'draft' | 'sent' | 'paid' | 'overdue';
   issue_date: string;
   line_items?: LineItem[];
+  extra_charges?: { description: string; amount: number }[];
   created_at: string;
 }
 

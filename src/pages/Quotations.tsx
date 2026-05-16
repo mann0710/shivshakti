@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
 import toast from 'react-hot-toast';
 import { useBookings } from '../hooks/useBookings';
@@ -135,6 +135,15 @@ const downloadPDF = (q: Quotation) => {
     doc.text(`Rs.${q.gst_amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
     y += 5;
   }
+  (q.extra_charges || []).forEach(ec => {
+    if (!ec.description && !ec.amount) return;
+    if (y > 240) { doc.addPage(); y = 20; }
+    doc.setTextColor(100, 100, 98);
+    doc.text(`${ec.description || 'Extra Charge'}:`, margin, y);
+    doc.setTextColor(30, 30, 28);
+    doc.text(`Rs.${(ec.amount || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
+    y += 5;
+  });
 
   y += 2; hline(y, '#E8750A'); y += 7;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(30, 30, 28);
@@ -176,6 +185,8 @@ const Quotations: React.FC = () => {
   const [perPlate, setPerPlate]               = useState('');
   const [gstChecked, setGstChecked]           = useState(false);
   const [discountForm, setDiscountForm]       = useState({ type: 'amount' as 'amount' | 'percentage', value: '' });
+  const [extraCharges, setExtraCharges]       = useState<{ description: string; amount: number }[]>([]);
+  const perPlateAutoRef = useRef(true);
 
   const dcGstRate = dc?.gst_rate ?? 18;
 
@@ -197,7 +208,8 @@ const Quotations: React.FC = () => {
 
   const discountedSubtotal = Math.max(0, subtotal - discountAmt);
   const gstAmount  = gstChecked ? Math.round((discountedSubtotal * dcGstRate) / 100) : 0;
-  const finalTotal = discountedSubtotal + gstAmount;
+  const extraChargesTotal = extraCharges.reduce((s, c) => s + (c.amount || 0), 0);
+  const finalTotal = discountedSubtotal + gstAmount + extraChargesTotal;
 
   const activeItems = menuItems.filter(
     it => it.is_active && it.subcategory?.is_active && it.subcategory?.category?.is_active,
@@ -241,10 +253,19 @@ const Quotations: React.FC = () => {
 
   const itemsTotal = selectedItems.reduce((s, i) => s + (i.amount || 0), 0);
 
+  // Auto-fill perPlate from items total when not manually overridden
+  useEffect(() => {
+    if (perPlateAutoRef.current) {
+      setPerPlate(itemsTotal > 0 ? String(itemsTotal) : '');
+    }
+  }, [itemsTotal]);
+
   const openCreate = () => {
     setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
     setNotes(''); setSearchLeft(''); setPerPlate('');
     setGstChecked(false); setDiscountForm({ type: 'amount', value: '' });
+    setExtraCharges([]);
+    perPlateAutoRef.current = true;
     setShowForm(true);
   };
 
@@ -260,6 +281,8 @@ const Quotations: React.FC = () => {
       value: q.discount_amount > 0 ? String(q.discount_type === 'percentage'
         ? Math.round((q.discount_amount / q.subtotal) * 100) : q.discount_amount) : '',
     });
+    setExtraCharges(q.extra_charges || []);
+    perPlateAutoRef.current = false;
     setSearchLeft('');
     setShowForm(true);
   };
@@ -268,6 +291,8 @@ const Quotations: React.FC = () => {
     setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
     setNotes(''); setSearchLeft(''); setPerPlate('');
     setGstChecked(false); setDiscountForm({ type: 'amount', value: '' });
+    setExtraCharges([]);
+    perPlateAutoRef.current = true;
     setShowForm(false);
   };
 
@@ -301,6 +326,7 @@ const Quotations: React.FC = () => {
       discount_type:   discountForm.type,
       gst_rate:        gstChecked ? dcGstRate : 0,
       gst_amount:      gstAmount,
+      extra_charges:   extraCharges.filter(c => c.description.trim() || c.amount > 0),
       total_amount:    finalTotal,
       notes:           notes || undefined,
       status:          'draft' as const,
@@ -450,7 +476,8 @@ const Quotations: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: '#666', whiteSpace: 'nowrap' }}>Per Plate (₹)</label>
-                  <input type="number" min="0" value={perPlate} onChange={e => setPerPlate(e.target.value)}
+                  <input type="number" min="0" value={perPlate}
+                    onChange={e => { perPlateAutoRef.current = false; setPerPlate(e.target.value); }}
                     placeholder="0" style={{ width: 100, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, textAlign: 'right', background: '#fff' }} />
                 </div>
                 <span style={{ fontSize: 13, color: '#888880' }}>×</span>
@@ -479,6 +506,39 @@ const Quotations: React.FC = () => {
                     <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 600 }}>-₹{discountAmt.toLocaleString('en-IN')}</span>
                   )}
                 </div>
+              </div>
+
+              {/* Extra Charges */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#888880' }}>EXTRA CHARGES</span>
+                  <button onClick={() => setExtraCharges(prev => [...prev, { description: '', amount: 0 }])}
+                    style={{ fontSize: 11, color: '#E8750A', background: 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>
+                    + Add Charge
+                  </button>
+                </div>
+                {extraCharges.length === 0 && (
+                  <div style={{ fontSize: 11, color: '#AAAAAA' }}>No extra charges added</div>
+                )}
+                {extraCharges.map((ec, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                    <input placeholder="Description (e.g. Venue setup, Decoration)"
+                      value={ec.description}
+                      onChange={e => setExtraCharges(prev => prev.map((c, j) => j === i ? { ...c, description: e.target.value } : c))}
+                      style={{ flex: 1, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 12, background: '#fff' }} />
+                    <input type="number" min="0" placeholder="₹ Amount"
+                      value={ec.amount || ''}
+                      onChange={e => setExtraCharges(prev => prev.map((c, j) => j === i ? { ...c, amount: parseFloat(e.target.value) || 0 } : c))}
+                      style={{ width: 110, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, background: '#fff', textAlign: 'right' as const }} />
+                    <button onClick={() => setExtraCharges(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+                {extraChargesTotal > 0 && (
+                  <div style={{ fontSize: 12, color: '#444', textAlign: 'right', fontWeight: 600 }}>
+                    Extra Charges Total: +₹{extraChargesTotal.toLocaleString('en-IN')}
+                  </div>
+                )}
               </div>
 
               {/* GST checkbox */}
