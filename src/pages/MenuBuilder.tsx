@@ -169,29 +169,39 @@ const MenuBuilder: React.FC = () => {
     <div>
       <div className="page-topbar">
         <div style={{ fontSize: 16, fontWeight: 600 }}>Menu Builder</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ position: 'relative' }}>
-            <input
-              placeholder="Search categories, subcategories, items…"
-              value={globalSearch}
-              onChange={e => setGlobalSearch(e.target.value)}
-              style={{ ...srchInp, width: 300, paddingRight: globalSearch ? 28 : 10 }}
-            />
-            {globalSearch && (
-              <button onClick={() => setGlobalSearch('')}
-                style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#888880', fontSize: 16, lineHeight: 1, padding: 0 }}>
-                ×
-              </button>
-            )}
-          </div>
-          {searchMode && (
-            <span style={{ fontSize: 11, color: '#888880', whiteSpace: 'nowrap' }}>
-              {displayedCats.length} cat · {displayedSubs.length} sub · {displayedItems.length} items
-            </span>
-          )}
-        </div>
+        <div style={{ fontSize: 11, color: '#888880' }}>Manage categories, subcategories & items</div>
       </div>
       <div className="page-content">
+
+        {/* ── GLOBAL SEARCH ─────────────────────────────────────────── */}
+        <div style={{ marginBottom: 14, background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: '12px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18, lineHeight: 1, color: '#888880', flexShrink: 0 }}>🔍</span>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <input
+                placeholder="Search categories, subcategories or items…"
+                value={globalSearch}
+                onChange={e => setGlobalSearch(e.target.value)}
+                autoComplete="off"
+                style={{ width: '100%', padding: '9px 36px 9px 12px', borderRadius: 8, border: '0.5px solid #D0D0CC', fontSize: 14, background: '#FAFAF8', color: '#1A1A18', boxSizing: 'border-box', outline: 'none' }}
+              />
+              {globalSearch && (
+                <button onClick={() => setGlobalSearch('')}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#888880', fontSize: 20, lineHeight: 1, padding: 0 }}>
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+          {searchMode && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#888880', display: 'flex', gap: 12 }}>
+              <span style={{ color: '#E8750A', fontWeight: 600 }}>{displayedCats.length}</span> categories &nbsp;·&nbsp;
+              <span style={{ color: '#7F77DD', fontWeight: 600 }}>{displayedSubs.length}</span> subcategories &nbsp;·&nbsp;
+              <span style={{ color: '#639922', fontWeight: 600 }}>{displayedItems.length}</span> items found for <em>"{globalSearch}"</em>
+            </div>
+          )}
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }} className="menu-builder-grid">
 
           {/* ── CATEGORIES ───────────────────────────────────────────── */}
@@ -404,6 +414,5 @@ const btnAdd: React.CSSProperties = { background: '#E8750A', color: '#fff', bord
 const btnSm: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' };
 const btnSmGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', color: '#666660', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' };
 const inp: React.CSSProperties = { width: '100%', padding: '6px 9px', borderRadius: 6, border: '0.5px solid #D0D0CC', fontSize: 12, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
-const srchInp: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
 
 export default MenuBuilder;
