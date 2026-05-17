@@ -24,7 +24,11 @@ const MenuBuilder: React.FC = () => {
 
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
-  const [globalSearch, setGlobalSearch] = useState('');
+
+  // Per-column search state
+  const [catSearch, setCatSearch] = useState('');
+  const [subSearch, setSubSearch] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
 
   // Add form state
   const [newCatName, setNewCatName] = useState('');
@@ -41,43 +45,34 @@ const MenuBuilder: React.FC = () => {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editItemName, setEditItemName] = useState('');
 
-  const q = globalSearch.trim().toLowerCase();
-  const searchMode = q.length > 0;
+  // ── Per-column filtered lists ────────────────────────────────────────────
+  const cq = catSearch.trim().toLowerCase();
+  const sq = subSearch.trim().toLowerCase();
+  const iq = itemSearch.trim().toLowerCase();
 
-  // ── Filtered lists (search overrides category/sub selection) ────────────
-  const displayedItems = searchMode
-    ? items.filter(it =>
-        it.name.toLowerCase().includes(q) ||
-        it.subcategory?.name.toLowerCase().includes(q) ||
-        it.subcategory?.category?.name.toLowerCase().includes(q)
-      )
-    : selectedSubId
-      ? items.filter(i => i.subcategory_id === selectedSubId)
-      : selectedCatId
-        ? items.filter(i => i.subcategory?.category_id === selectedCatId)
-        : items;
-
-  const displayedSubs = searchMode
-    ? subcategories.filter(sub =>
-        sub.name.toLowerCase().includes(q) ||
-        sub.category?.name.toLowerCase().includes(q) ||
-        items.some(i => i.subcategory_id === sub.id && i.name.toLowerCase().includes(q))
-      )
-    : selectedCatId
-      ? subcategories.filter(s => s.category_id === selectedCatId)
-      : subcategories;
-
-  const displayedCats = searchMode
-    ? categories.filter(cat =>
-        cat.name.toLowerCase().includes(q) ||
-        subcategories.some(s =>
-          s.category_id === cat.id && (
-            s.name.toLowerCase().includes(q) ||
-            items.some(i => i.subcategory_id === s.id && i.name.toLowerCase().includes(q))
-          )
-        )
-      )
+  const displayedCats = cq
+    ? categories.filter(c => c.name.toLowerCase().includes(cq))
     : categories;
+
+  const baseSubs = selectedCatId
+    ? subcategories.filter(s => s.category_id === selectedCatId)
+    : subcategories;
+  const displayedSubs = sq
+    ? baseSubs.filter(s => s.name.toLowerCase().includes(sq) || s.category?.name.toLowerCase().includes(sq))
+    : baseSubs;
+
+  const baseItems = selectedSubId
+    ? items.filter(i => i.subcategory_id === selectedSubId)
+    : selectedCatId
+      ? items.filter(i => i.subcategory?.category_id === selectedCatId)
+      : items;
+  const displayedItems = iq
+    ? baseItems.filter(i =>
+        i.name.toLowerCase().includes(iq) ||
+        i.subcategory?.name.toLowerCase().includes(iq) ||
+        i.subcategory?.category?.name.toLowerCase().includes(iq)
+      )
+    : baseItems;
 
   // ── Category handlers ────────────────────────────────────────────────────
   const handleAddCat = async () => {
@@ -152,15 +147,15 @@ const MenuBuilder: React.FC = () => {
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
 
-  const highlight = (text: string) => {
-    if (!q) return <>{text}</>;
-    const idx = text.toLowerCase().indexOf(q);
+  const highlight = (text: string, query: string) => {
+    if (!query) return <>{text}</>;
+    const idx = text.toLowerCase().indexOf(query);
     if (idx === -1) return <>{text}</>;
     return (
       <>
         {text.slice(0, idx)}
-        <mark style={{ background: '#FFE082', padding: 0, borderRadius: 2 }}>{text.slice(idx, idx + q.length)}</mark>
-        {text.slice(idx + q.length)}
+        <mark style={{ background: '#FFE082', padding: 0, borderRadius: 2 }}>{text.slice(idx, idx + query.length)}</mark>
+        {text.slice(idx + query.length)}
       </>
     );
   };
@@ -172,36 +167,6 @@ const MenuBuilder: React.FC = () => {
         <div style={{ fontSize: 11, color: '#888880' }}>Manage categories, subcategories & items</div>
       </div>
       <div className="page-content">
-
-        {/* ── GLOBAL SEARCH ─────────────────────────────────────────── */}
-        <div style={{ marginBottom: 14, background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: '12px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 18, lineHeight: 1, color: '#888880', flexShrink: 0 }}>🔍</span>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <input
-                placeholder="Search categories, subcategories or items…"
-                value={globalSearch}
-                onChange={e => setGlobalSearch(e.target.value)}
-                autoComplete="off"
-                style={{ width: '100%', padding: '9px 36px 9px 12px', borderRadius: 8, border: '0.5px solid #D0D0CC', fontSize: 14, background: '#FAFAF8', color: '#1A1A18', boxSizing: 'border-box', outline: 'none' }}
-              />
-              {globalSearch && (
-                <button onClick={() => setGlobalSearch('')}
-                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#888880', fontSize: 20, lineHeight: 1, padding: 0 }}>
-                  ×
-                </button>
-              )}
-            </div>
-          </div>
-          {searchMode && (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#888880', display: 'flex', gap: 12 }}>
-              <span style={{ color: '#E8750A', fontWeight: 600 }}>{displayedCats.length}</span> categories &nbsp;·&nbsp;
-              <span style={{ color: '#7F77DD', fontWeight: 600 }}>{displayedSubs.length}</span> subcategories &nbsp;·&nbsp;
-              <span style={{ color: '#639922', fontWeight: 600 }}>{displayedItems.length}</span> items found for <em>"{globalSearch}"</em>
-            </div>
-          )}
-        </div>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }} className="menu-builder-grid">
 
           {/* ── CATEGORIES ───────────────────────────────────────────── */}
@@ -209,25 +174,38 @@ const MenuBuilder: React.FC = () => {
             <div style={colHeader}>
               <span style={colTitle}>Categories</span>
               <span style={{ fontSize: 11, color: '#AAAAAA' }}>
-                {searchMode ? `${displayedCats.length} match` : `${categories.length} total`}
+                {cq ? `${displayedCats.length} / ${categories.length}` : `${categories.length} total`}
               </span>
             </div>
-            <div style={{ padding: '10px 12px', borderBottom: '0.5px solid #F0F0EC', display: 'flex', gap: 6 }}>
+
+            {/* Category search */}
+            <div style={searchBar}>
+              <span style={searchIcon}>🔍</span>
+              <input
+                placeholder="Search categories…"
+                value={catSearch}
+                onChange={e => setCatSearch(e.target.value)}
+                style={searchInput}
+              />
+              {catSearch && <button onClick={() => setCatSearch('')} style={clearBtn}>×</button>}
+            </div>
+
+            {/* Add form */}
+            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC', display: 'flex', gap: 6 }}>
               <input style={{ ...inp, flex: 1 }} placeholder="New category…" value={newCatName}
                 onChange={e => setNewCatName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleAddCat()} />
               <button style={btnAdd} onClick={handleAddCat}>+</button>
             </div>
-            <div style={{ overflowY: 'auto', maxHeight: 480 }}>
+
+            <div style={{ overflowY: 'auto', maxHeight: 440 }}>
               {displayedCats.length === 0 && (
-                <Empty text={searchMode ? `No categories match "${globalSearch}"` : 'No categories yet'} />
+                <Empty text={cq ? `No categories match "${catSearch}"` : 'No categories yet'} />
               )}
               {displayedCats.map(cat => (
                 <div key={cat.id}
-                  onClick={() => { if (!searchMode) { setSelectedCatId(selectedCatId === cat.id ? null : cat.id); setSelectedSubId(null); } }}
-                  style={{ ...row, background: selectedCatId === cat.id && !searchMode ? '#FFFBF5' : 'transparent',
-                    borderLeft: selectedCatId === cat.id && !searchMode ? '3px solid #E8750A' : '3px solid transparent',
-                    cursor: searchMode ? 'default' : 'pointer' }}>
+                  onClick={() => { setSelectedCatId(selectedCatId === cat.id ? null : cat.id); setSelectedSubId(null); }}
+                  style={{ ...row, background: selectedCatId === cat.id ? '#FFFBF5' : 'transparent', borderLeft: selectedCatId === cat.id ? '3px solid #E8750A' : '3px solid transparent' }}>
                   {editingCatId === cat.id ? (
                     <div style={{ display: 'flex', gap: 6, flex: 1 }} onClick={e => e.stopPropagation()}>
                       <input style={{ ...inp, flex: 1 }} value={editCatName} onChange={e => setEditCatName(e.target.value)}
@@ -239,7 +217,7 @@ const MenuBuilder: React.FC = () => {
                     <>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: cat.is_active ? '#1A1A18' : '#AAAAAA', textDecoration: cat.is_active ? 'none' : 'line-through' }}>
-                          {highlight(cat.name)}
+                          {highlight(cat.name, cq)}
                         </div>
                         <div style={{ fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
                           {subcategories.filter(s => s.category_id === cat.id).length} subcategories
@@ -264,12 +242,26 @@ const MenuBuilder: React.FC = () => {
             <div style={colHeader}>
               <span style={colTitle}>Subcategories</span>
               <span style={{ fontSize: 11, color: '#AAAAAA' }}>
-                {searchMode
-                  ? `${displayedSubs.length} match`
-                  : selectedCatId ? `of "${categories.find(c => c.id === selectedCatId)?.name}"` : 'all'}
+                {sq
+                  ? `${displayedSubs.length} / ${baseSubs.length}`
+                  : selectedCatId ? `of "${categories.find(c => c.id === selectedCatId)?.name}"` : `${subcategories.length} total`}
               </span>
             </div>
-            <div style={{ padding: '10px 12px', borderBottom: '0.5px solid #F0F0EC' }}>
+
+            {/* Subcategory search */}
+            <div style={searchBar}>
+              <span style={searchIcon}>🔍</span>
+              <input
+                placeholder="Search subcategories…"
+                value={subSearch}
+                onChange={e => setSubSearch(e.target.value)}
+                style={searchInput}
+              />
+              {subSearch && <button onClick={() => setSubSearch('')} style={clearBtn}>×</button>}
+            </div>
+
+            {/* Add form */}
+            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC' }}>
               {!selectedCatId && (
                 <select style={{ ...inp, marginBottom: 6 }} value={newSubCatId} onChange={e => setNewSubCatId(e.target.value)}>
                   <option value="">Select category…</option>
@@ -283,16 +275,15 @@ const MenuBuilder: React.FC = () => {
                 <button style={btnAdd} onClick={handleAddSub}>+</button>
               </div>
             </div>
-            <div style={{ overflowY: 'auto', maxHeight: 480 }}>
+
+            <div style={{ overflowY: 'auto', maxHeight: 440 }}>
               {displayedSubs.length === 0 && (
-                <Empty text={searchMode ? `No subcategories match "${globalSearch}"` : selectedCatId ? 'No subcategories in this category' : 'No subcategories yet'} />
+                <Empty text={sq ? `No subcategories match "${subSearch}"` : selectedCatId ? 'No subcategories in this category' : 'No subcategories yet'} />
               )}
               {displayedSubs.map(sub => (
                 <div key={sub.id}
-                  onClick={() => { if (!searchMode) setSelectedSubId(selectedSubId === sub.id ? null : sub.id); }}
-                  style={{ ...row, background: selectedSubId === sub.id && !searchMode ? '#F5F0FF' : 'transparent',
-                    borderLeft: selectedSubId === sub.id && !searchMode ? '3px solid #7F77DD' : '3px solid transparent',
-                    cursor: searchMode ? 'default' : 'pointer' }}>
+                  onClick={() => setSelectedSubId(selectedSubId === sub.id ? null : sub.id)}
+                  style={{ ...row, background: selectedSubId === sub.id ? '#F5F0FF' : 'transparent', borderLeft: selectedSubId === sub.id ? '3px solid #7F77DD' : '3px solid transparent' }}>
                   {editingSubId === sub.id ? (
                     <div style={{ display: 'flex', gap: 6, flex: 1 }} onClick={e => e.stopPropagation()}>
                       <input style={{ ...inp, flex: 1 }} value={editSubName} onChange={e => setEditSubName(e.target.value)}
@@ -304,11 +295,11 @@ const MenuBuilder: React.FC = () => {
                     <>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: sub.is_active ? '#1A1A18' : '#AAAAAA', textDecoration: sub.is_active ? 'none' : 'line-through' }}>
-                          {highlight(sub.name)}
+                          {highlight(sub.name, sq)}
                         </div>
                         <div style={{ fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
-                          {searchMode && sub.category?.name ? <span style={{ color: '#E8750A' }}>{highlight(sub.category.name)} · </span> : null}
-                          {items.filter(i => i.subcategory_id === sub.id).length} items
+                          <span style={{ color: '#E8750A' }}>{sub.category?.name}</span>
+                          {' · '}{items.filter(i => i.subcategory_id === sub.id).length} items
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
@@ -330,16 +321,32 @@ const MenuBuilder: React.FC = () => {
             <div style={colHeader}>
               <span style={colTitle}>Items</span>
               <span style={{ fontSize: 11, color: '#AAAAAA' }}>
-                {searchMode
-                  ? `${displayedItems.length} match`
-                  : selectedSubId ? `of "${subcategories.find(s => s.id === selectedSubId)?.name}"` : selectedCatId ? `of "${categories.find(c => c.id === selectedCatId)?.name}"` : 'all'}
+                {iq
+                  ? `${displayedItems.length} / ${baseItems.length}`
+                  : selectedSubId ? `of "${subcategories.find(s => s.id === selectedSubId)?.name}"`
+                  : selectedCatId ? `of "${categories.find(c => c.id === selectedCatId)?.name}"`
+                  : `${items.length} total`}
               </span>
             </div>
-            <div style={{ padding: '10px 12px', borderBottom: '0.5px solid #F0F0EC' }}>
+
+            {/* Item search */}
+            <div style={searchBar}>
+              <span style={searchIcon}>🔍</span>
+              <input
+                placeholder="Search items…"
+                value={itemSearch}
+                onChange={e => setItemSearch(e.target.value)}
+                style={searchInput}
+              />
+              {itemSearch && <button onClick={() => setItemSearch('')} style={clearBtn}>×</button>}
+            </div>
+
+            {/* Add form */}
+            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC' }}>
               {!selectedSubId && (
                 <select style={{ ...inp, marginBottom: 6 }} value={newItemSubId} onChange={e => setNewItemSubId(e.target.value)}>
                   <option value="">Select subcategory…</option>
-                  {(selectedCatId ? displayedSubs : subcategories).map(s => (
+                  {(selectedCatId ? baseSubs : subcategories).map(s => (
                     <option key={s.id} value={s.id}>{s.category?.name} / {s.name}</option>
                   ))}
                 </select>
@@ -351,9 +358,10 @@ const MenuBuilder: React.FC = () => {
                 <button style={btnAdd} onClick={handleAddItem}>+</button>
               </div>
             </div>
-            <div style={{ overflowY: 'auto', maxHeight: 480 }}>
+
+            <div style={{ overflowY: 'auto', maxHeight: 440 }}>
               {displayedItems.length === 0 && (
-                <Empty text={searchMode ? `No items match "${globalSearch}"` : selectedSubId ? 'No items in this subcategory' : 'No items yet'} />
+                <Empty text={iq ? `No items match "${itemSearch}"` : selectedSubId ? 'No items in this subcategory' : 'No items yet'} />
               )}
               {displayedItems.map(item => (
                 <div key={item.id} style={{ ...row, borderLeft: '3px solid transparent', cursor: 'default' }}>
@@ -368,13 +376,11 @@ const MenuBuilder: React.FC = () => {
                     <>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 500, color: item.is_active ? '#1A1A18' : '#AAAAAA', textDecoration: item.is_active ? 'none' : 'line-through' }}>
-                          {highlight(item.name)}
+                          {highlight(item.name, iq)}
                         </div>
                         <div style={{ fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
-                          {searchMode
-                            ? <>{highlight(item.subcategory?.category?.name || '')} / {highlight(item.subcategory?.name || '')}</>
-                            : <>{item.subcategory?.category?.name} / {item.subcategory?.name}</>
-                          }
+                          <span style={{ color: '#E8750A' }}>{item.subcategory?.category?.name}</span>
+                          {' / '}{item.subcategory?.name}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -393,7 +399,7 @@ const MenuBuilder: React.FC = () => {
         </div>
 
         <div style={{ marginTop: 14, padding: '10px 14px', background: '#F0F4FF', border: '0.5px solid #B8C8F4', borderRadius: 8, fontSize: 12, color: '#3353A4' }}>
-          💡 Use the <strong>search bar</strong> above to find anything across all columns. Or click a <strong>category</strong> to filter subcategories, click a <strong>subcategory</strong> to filter items. Inactive items are hidden in Quotations.
+          💡 Each column has its own search. Click a <strong>category</strong> to filter subcategories & items by that category. Click a <strong>subcategory</strong> to filter items. Inactive items are hidden in Quotations.
         </div>
       </div>
     </div>
@@ -414,5 +420,9 @@ const btnAdd: React.CSSProperties = { background: '#E8750A', color: '#fff', bord
 const btnSm: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' };
 const btnSmGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', color: '#666660', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' };
 const inp: React.CSSProperties = { width: '100%', padding: '6px 9px', borderRadius: 6, border: '0.5px solid #D0D0CC', fontSize: 12, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
+const searchBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC', background: '#FAFAF8' };
+const searchIcon: React.CSSProperties = { fontSize: 13, flexShrink: 0, color: '#888880' };
+const searchInput: React.CSSProperties = { flex: 1, border: '0.5px solid #D0D0CC', borderRadius: 6, padding: '5px 8px', fontSize: 12, background: '#fff', color: '#1A1A18', outline: 'none', minWidth: 0 };
+const clearBtn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', color: '#888880', fontSize: 16, lineHeight: 1, padding: '0 2px', flexShrink: 0 };
 
 export default MenuBuilder;
