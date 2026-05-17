@@ -35,7 +35,9 @@ const MenuBuilder: React.FC = () => {
   const [newSubName, setNewSubName] = useState('');
   const [newSubCatId, setNewSubCatId] = useState('');
   const [newItemName, setNewItemName] = useState('');
-  const [newItemSubId, setNewItemSubId] = useState('');
+  // Items add form has its own independent category+subcategory selection
+  const [addItemCatId, setAddItemCatId] = useState('');
+  const [addItemSubId, setAddItemSubId] = useState('');
 
   // Inline edit state
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
@@ -45,16 +47,9 @@ const MenuBuilder: React.FC = () => {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editItemName, setEditItemName] = useState('');
 
-  // Reset subcategory/item form dropdowns when category selection changes
-  useEffect(() => {
-    setNewSubCatId('');
-    setNewItemSubId('');
-  }, [selectedCatId]);
-
-  // Reset item form dropdown when subcategory selection changes
-  useEffect(() => {
-    setNewItemSubId('');
-  }, [selectedSubId]);
+  // Reset sub selection in add form when category changes
+  useEffect(() => { setNewSubCatId(''); }, [selectedCatId]);
+  useEffect(() => { setAddItemSubId(''); }, [addItemCatId]);
 
   // ── Per-column filtered lists ────────────────────────────────────────────
   const cq = catSearch.trim().toLowerCase();
@@ -84,6 +79,11 @@ const MenuBuilder: React.FC = () => {
         i.subcategory?.category?.name.toLowerCase().includes(iq)
       )
     : baseItems;
+
+  // Subcategories available in the item add form (filtered by chosen category)
+  const addFormSubs = addItemCatId
+    ? subcategories.filter(s => s.category_id === addItemCatId)
+    : subcategories;
 
   // ── Category handlers ────────────────────────────────────────────────────
   const handleAddCat = async () => {
@@ -136,9 +136,14 @@ const MenuBuilder: React.FC = () => {
 
   // ── Item handlers ────────────────────────────────────────────────────────
   const handleAddItem = async () => {
-    const subId = newItemSubId || selectedSubId;
-    if (!newItemName.trim() || !subId) { toast.error('Select a subcategory and enter item name'); return; }
-    try { await createItem.mutateAsync({ name: newItemName.trim(), subcategory_id: subId }); toast.success('Item added!'); setNewItemName(''); if (!selectedSubId) setNewItemSubId(''); }
+    if (!newItemName.trim()) { toast.error('Enter item name'); return; }
+    if (!addItemSubId) { toast.error('Select a subcategory'); return; }
+    try {
+      await createItem.mutateAsync({ name: newItemName.trim(), subcategory_id: addItemSubId });
+      toast.success('Item added!');
+      setNewItemName('');
+      // keep addItemCatId and addItemSubId so the user can add more items to the same sub
+    }
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
 
@@ -352,18 +357,19 @@ const MenuBuilder: React.FC = () => {
               {itemSearch && <button onClick={() => setItemSearch('')} style={clearBtn}>×</button>}
             </div>
 
-            {/* Add form */}
+            {/* Add form — own category+subcategory dropdowns, independent of filter */}
             <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC' }}>
-              {!selectedSubId && (
-                <select style={{ ...inp, marginBottom: 6 }} value={newItemSubId} onChange={e => setNewItemSubId(e.target.value)}>
-                  <option value="">Select subcategory…</option>
-                  {(selectedCatId ? baseSubs : subcategories).map(s => (
-                    <option key={s.id} value={s.id}>{s.category?.name} / {s.name}</option>
-                  ))}
-                </select>
-              )}
+              <select style={{ ...inp, marginBottom: 6 }} value={addItemCatId} onChange={e => setAddItemCatId(e.target.value)}>
+                <option value="">— Select category —</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <select style={{ ...inp, marginBottom: 6 }} value={addItemSubId} onChange={e => setAddItemSubId(e.target.value)}
+                disabled={!addItemCatId}>
+                <option value="">{addItemCatId ? '— Select subcategory —' : '— Pick category first —'}</option>
+                {addFormSubs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
               <div style={{ display: 'flex', gap: 6 }}>
-                <input style={{ ...inp, flex: 1 }} placeholder="New item…" value={newItemName}
+                <input style={{ ...inp, flex: 1 }} placeholder="New item name…" value={newItemName}
                   onChange={e => setNewItemName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddItem()} />
                 <button style={btnAdd} onClick={handleAddItem}>+</button>
