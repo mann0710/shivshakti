@@ -43,7 +43,7 @@ export const useCreateCategory = () => {
   return useMutation({
     mutationFn: async (name: string) => {
       const { data, error } = await supabase
-        .from('menu_categories').insert({ name }).select().single();
+        .from('menu_categories').insert({ name, is_active: true }).select().single();
       if (error) throw error;
       return data;
     },
@@ -102,7 +102,7 @@ export const useCreateSubcategory = () => {
   return useMutation({
     mutationFn: async ({ name, category_id }: { name: string; category_id: string }) => {
       const { data, error } = await supabase
-        .from('menu_subcategories').insert({ name, category_id }).select().single();
+        .from('menu_subcategories').insert({ name, category_id, is_active: true }).select().single();
       if (error) throw error;
       return data;
     },
@@ -159,7 +159,7 @@ export const useCreateMenuItem = () => {
   return useMutation({
     mutationFn: async ({ name, subcategory_id }: { name: string; subcategory_id: string }) => {
       const { data, error } = await supabase
-        .from('menu_items').insert({ name, subcategory_id }).select().single();
+        .from('menu_items').insert({ name, subcategory_id, is_active: true }).select().single();
       if (error) throw error;
       return data;
     },

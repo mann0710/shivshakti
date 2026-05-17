@@ -253,7 +253,7 @@ const Quotations: React.FC = () => {
 
   // ── menu items helpers ────────────────────────────────────────────────────
   const activeItems = menuItems.filter(
-    it => it.is_active && it.subcategory?.is_active && it.subcategory?.category?.is_active,
+    it => it.is_active !== false && it.subcategory?.is_active !== false && it.subcategory?.category?.is_active !== false,
   );
 
   const leftItems = useMemo(() => {
