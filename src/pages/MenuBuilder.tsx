@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   useMenuCategories, useCreateCategory, useUpdateCategory, useDeleteCategory,
@@ -44,6 +44,17 @@ const MenuBuilder: React.FC = () => {
   const [editSubName, setEditSubName] = useState('');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editItemName, setEditItemName] = useState('');
+
+  // Reset subcategory/item form dropdowns when category selection changes
+  useEffect(() => {
+    setNewSubCatId('');
+    setNewItemSubId('');
+  }, [selectedCatId]);
+
+  // Reset item form dropdown when subcategory selection changes
+  useEffect(() => {
+    setNewItemSubId('');
+  }, [selectedSubId]);
 
   // ── Per-column filtered lists ────────────────────────────────────────────
   const cq = catSearch.trim().toLowerCase();
@@ -127,7 +138,7 @@ const MenuBuilder: React.FC = () => {
   const handleAddItem = async () => {
     const subId = newItemSubId || selectedSubId;
     if (!newItemName.trim() || !subId) { toast.error('Select a subcategory and enter item name'); return; }
-    try { await createItem.mutateAsync({ name: newItemName.trim(), subcategory_id: subId }); toast.success('Item added!'); setNewItemName(''); }
+    try { await createItem.mutateAsync({ name: newItemName.trim(), subcategory_id: subId }); toast.success('Item added!'); setNewItemName(''); if (!selectedSubId) setNewItemSubId(''); }
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
 
