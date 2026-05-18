@@ -184,8 +184,8 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
 
   // ── Billing Summary ──────────────────────────────────────────────────────────
   y += 2;
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 148);
-  doc.text('BILLING SUMMARY', margin, y); y += 6;
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+  doc.text('BILLING SUMMARY', margin, y); y += 7;
   doc.setFont('helvetica', 'normal');
 
   let qrIdx = 0;
