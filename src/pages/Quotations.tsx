@@ -54,15 +54,15 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   y += 6; hline(y); y += 7;
 
   const customer = q.customer; const booking = q.booking;
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 148);
-  doc.text('CUSTOMER', margin, y); y += 4;
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28); doc.setFontSize(11);
-  doc.text(customer?.name || '—', margin, y); y += 5;
-  if (customer?.phone) { doc.setFontSize(9); doc.setTextColor(100, 100, 98); doc.text(customer.phone, margin, y); y += 4; }
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+  doc.text('CUSTOMER', margin, y); y += 6;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 98);
+  doc.text(customer?.name || '—', margin, y); y += 4;
+  if (customer?.phone) { doc.text(customer.phone, margin, y); y += 4; }
 
   if (booking) {
     y += 3; hline(y); y += 6;
-    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 148); doc.text('EVENT DETAILS', margin, y); y += 4;
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28); doc.text('EVENT DETAILS', margin, y); y += 6;
     doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
     const details: [string, string][] = [['Event', booking.event_type || '—'], ['Date', formatDateIST(booking.event_date, 'dd-MM-yyyy')]];
     if (booking.end_date && booking.end_date !== booking.event_date) details.push(['End Date', formatDateIST(booking.end_date, 'dd-MM-yyyy')]);
@@ -77,6 +77,8 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   y += 3; hline(y); y += 6;
 
   if (q.is_multi_day && q.event_days?.length) {
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+    doc.text('EVENT SCHEDULE', margin, y); y += 7;
     for (const day of q.event_days) {
       if (y > 240) { doc.addPage(); y = 20; }
       // Day header bar
@@ -240,7 +242,8 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   }
   doc.setFontSize(7); doc.setTextColor(180, 180, 178);
   doc.text('Thank you for considering Shiv Shakti Catering & Events', W / 2, 285, { align: 'center' });
-  doc.save(`${q.quotation_number}.pdf`);
+  const qName = (q.customer?.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
+  doc.save(`${qName}_${q.quotation_number}.pdf`);
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────

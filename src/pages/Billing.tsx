@@ -64,13 +64,29 @@ const generateInvoicePDF = (
   const customer = booking?.customer;
   doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
   doc.text('BILL TO', margin, y); y += 6;
-  doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28); doc.setFontSize(12);
-  doc.text(customer?.name || '—', margin, y); y += 5;
-  doc.setFontSize(9); doc.setTextColor(100, 100, 98);
-  if (booking?.event_type) { doc.text(`Event: ${booking.event_type}`, margin, y); y += 4; }
-  if (booking?.venue)      { doc.text(`Venue: ${booking.venue}`, margin, y); y += 4; }
-  if (booking?.guest_count){ doc.text(`Guests: ${booking.guest_count}`, margin, y); y += 4; }
-  if (customer?.phone)     { doc.text(`Phone: ${customer.phone}`, margin, y); y += 4; }
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 98);
+  doc.text(customer?.name || '—', margin, y); y += 4;
+  if (customer?.phone) { doc.text(customer.phone, margin, y); y += 4; }
+
+  if (booking) {
+    y += 3; hline(y); y += 6;
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+    doc.text('EVENT DETAILS', margin, y); y += 6;
+    doc.setFont('helvetica', 'normal');
+    const invDetails: [string, string][] = [
+      ['Event', booking.event_type || '—'],
+      ['Date',  formatDateIST(booking.event_date, 'dd-MM-yyyy')],
+    ];
+    if (booking.end_date && booking.end_date !== booking.event_date)
+      invDetails.push(['End Date', formatDateIST(booking.end_date, 'dd-MM-yyyy')]);
+    if (booking.event_time) invDetails.push(['Time', booking.event_time]);
+    if (booking.venue)      invDetails.push(['Venue', booking.venue]);
+    if (booking.guest_count) invDetails.push(['Guests', String(booking.guest_count)]);
+    invDetails.forEach(([lbl, val]) => {
+      doc.setFontSize(9); doc.setTextColor(120, 120, 118); doc.text(`${lbl}:`, margin, y);
+      doc.setTextColor(30, 30, 28); doc.text(val, margin + 24, y); y += 5;
+    });
+  }
   y += 3; hline(y); y += 7;
 
   // Multi-day event schedule OR flat menu items
@@ -256,7 +272,8 @@ const generateInvoicePDF = (
 
   doc.setFontSize(7); doc.setTextColor(180, 180, 178);
   doc.text('Thank you for choosing Shiv Shakti Catering & Events', W / 2, 285, { align: 'center' });
-  doc.save(`${inv.invoice_number}.pdf`);
+  const invName = (customer?.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
+  doc.save(`${invName}_${inv.invoice_number}.pdf`);
 };
 
 const genBillingId = () => Math.random().toString(36).slice(2, 10);
