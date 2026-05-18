@@ -163,13 +163,14 @@ export const usePaymentHistory = (invoiceId: string | undefined) =>
 export const useRecalculateTotals = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ invoiceId, discount_amount, discount_type, apply_gst, gst_rate: customGstRate, transportation_charges = [] }: {
+    mutationFn: async ({ invoiceId, discount_amount, discount_type, apply_gst, gst_rate: customGstRate, transportation_charges = [], additional_discounts = [] }: {
       invoiceId: string;
       discount_amount: number;
       discount_type: 'amount' | 'percentage';
       apply_gst: boolean;
       gst_rate?: number;
       transportation_charges?: { description: string; amount: number }[];
+      additional_discounts?: { id: string; description: string; amount: number }[];
     }) => {
       const { data: inv } = await supabase
         .from('invoices').select('subtotal, advance_paid, extra_charges').eq('id', invoiceId).single();
@@ -190,6 +191,7 @@ export const useRecalculateTotals = () => {
       const { error } = await supabase.from('invoices').update({
         discount_amount: discAmt, discount_type,
         gst_rate, gst_amount, transportation_charge, transportation_charges,
+        additional_discounts,
         total_amount, balance_due, status,
       }).eq('id', invoiceId);
       if (error) throw error;

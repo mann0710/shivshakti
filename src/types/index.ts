@@ -57,6 +57,7 @@ export interface Invoice {
   issue_date: string;
   line_items?: LineItem[];
   extra_charges?: { description: string; amount: number }[];
+  additional_discounts?: { id: string; description: string; amount: number }[];
   is_multi_day?: boolean;
   event_days?: any[];
   created_at: string;

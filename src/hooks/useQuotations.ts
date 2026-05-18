@@ -46,6 +46,7 @@ export interface Quotation {
   total_amount: number;
   extra_charges: { description: string; amount: number }[];
   transportation_charges: { description: string; amount: number }[];
+  additional_discounts: { id: string; description: string; amount: number }[];
   notes?: string;
   status: 'draft' | 'sent' | 'accepted' | 'rejected';
   issue_date: string;
@@ -68,6 +69,7 @@ type QuotationPayload = {
   total_amount: number;
   extra_charges: { description: string; amount: number }[];
   transportation_charges: { description: string; amount: number }[];
+  additional_discounts: { id: string; description: string; amount: number }[];
   notes?: string;
   status: string;
   is_multi_day?: boolean;

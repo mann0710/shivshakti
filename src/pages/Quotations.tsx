@@ -182,10 +182,41 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
     }
   }
 
-  if (q.discount_amount > 0) {
-    doc.setTextColor(100, 100, 98); doc.setFontSize(9);
-    doc.text(`Discount:`, margin, y); doc.setTextColor(70, 140, 40);
-    doc.text(`-Rs.${q.discount_amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
+  // Discount section — with meal-wise breakdown for multi-day
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  if (q.is_multi_day && (q.event_days || []).length > 0) {
+    doc.setTextColor(100, 100, 98);
+    doc.text('Original Price:', margin, y);
+    doc.setTextColor(30, 30, 28);
+    doc.text(`Rs.${q.subtotal.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
+    for (const day of (q.event_days || [])) {
+      for (const meal of (day.meals || [])) {
+        const offer = meal.discount_amount || 0;
+        if (offer > 0 && meal.per_plate_amount > offer) {
+          const saving = (meal.per_plate_amount - offer) * meal.guest_count;
+          if (y > 268) { doc.addPage(); y = 20; }
+          doc.setTextColor(100, 100, 98);
+          doc.text(`  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} (Day ${day.day_number}):`, margin, y);
+          doc.setTextColor(70, 140, 40);
+          doc.text(`-Rs.${saving.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 4.5;
+        }
+      }
+    }
+    for (const ad of (q.additional_discounts || [])) {
+      if (!ad.amount) continue;
+      if (y > 268) { doc.addPage(); y = 20; }
+      doc.setTextColor(100, 100, 98);
+      doc.text(`  ${ad.description || 'Discount'}:`, margin, y);
+      doc.setTextColor(70, 140, 40);
+      doc.text(`-Rs.${ad.amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 4.5;
+    }
+    y += 1;
+  } else {
+    if (q.discount_amount > 0) {
+      doc.setTextColor(100, 100, 98);
+      doc.text('Discount:', margin, y); doc.setTextColor(70, 140, 40);
+      doc.text(`-Rs.${q.discount_amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
+    }
   }
   (q.extra_charges || []).forEach(ec => {
     if (!ec.description && !ec.amount) return;
@@ -206,7 +237,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
 
   y += 2; hline(y, '#E8750A'); y += 7;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(30, 30, 28);
-  doc.text('Grand Total', margin, y); doc.setTextColor(232, 117, 10);
+  doc.text('Payable Amount', margin, y); doc.setTextColor(232, 117, 10);
   doc.text(`Rs.${(q.total_amount || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 8;
 
   if (q.notes) {
@@ -240,7 +271,7 @@ const Quotations: React.FC = () => {
   const [searchLeft, setSearchLeft]         = useState('');
   const [perPlate, setPerPlate]             = useState('');
   const [gstChecked, setGstChecked]         = useState(false);
-  const [discountForm, setDiscountForm]     = useState({ type: 'amount' as 'amount' | 'percentage', value: '' });
+  const [additionalDiscounts, setAdditionalDiscounts] = useState<{ id: string; description: string; amount: number }[]>([]);
   const [extraCharges, setExtraCharges]     = useState<{ description: string; amount: number }[]>([]);
   const [transportationCharges, setTransportationCharges] = useState<{ description: string; amount: number }[]>([]);
   const perPlateAutoRef = useRef(true);
@@ -286,12 +317,6 @@ const Quotations: React.FC = () => {
   const multiDaySubtotal = eventDays.reduce((s, d) => s + d.day_subtotal, 0);
   const activeSubtotal   = isMultiDay ? multiDaySubtotal : subtotal;
 
-  const discountAmt = useMemo(() => {
-    const v = parseFloat(discountForm.value) || 0;
-    if (discountForm.type === 'percentage') return Math.round((activeSubtotal * v) / 100);
-    return Math.min(v, activeSubtotal);
-  }, [discountForm, activeSubtotal]);
-
   // Sum savings from all meal offer rates: (actual_rate - offer_rate) × guests
   const totalMealSavings = useMemo(() => {
     if (!isMultiDay) return 0;
@@ -305,11 +330,8 @@ const Quotations: React.FC = () => {
     , 0);
   }, [isMultiDay, eventDays]);
 
-  // Auto-populate main Discount field from meal offer-rate savings
-  useEffect(() => {
-    if (!isMultiDay) return;
-    setDiscountForm({ type: 'amount', value: totalMealSavings > 0 ? String(totalMealSavings) : '' });
-  }, [totalMealSavings, isMultiDay]); // eslint-disable-line
+  const additionalDiscountsTotal = additionalDiscounts.reduce((s, d) => s + (d.amount || 0), 0);
+  const discountAmt = totalMealSavings + additionalDiscountsTotal;
 
   const discountedSubtotal       = Math.max(0, activeSubtotal - discountAmt);
   const gstAmount                = gstChecked ? Math.round((discountedSubtotal * dcGstRate) / 100) : 0;
@@ -505,7 +527,7 @@ const Quotations: React.FC = () => {
   const openCreate = () => {
     setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
     setNotes(''); setSearchLeft(''); setPerPlate('');
-    setGstChecked(false); setDiscountForm({ type: 'amount', value: '' });
+    setGstChecked(false); setAdditionalDiscounts([]);
     setExtraCharges([]); setTransportationCharges([]);
     setIsMultiDay(false); setEventDays([]); setActiveMealKey(null);
     perPlateAutoRef.current = true;
@@ -518,17 +540,21 @@ const Quotations: React.FC = () => {
     setIsMultiDay(q.is_multi_day || false);
     if (q.is_multi_day && q.event_days?.length) {
       setEventDays(q.event_days.map((d, i) => ({ ...d, day_number: i + 1 })));
+      setAdditionalDiscounts(q.additional_discounts || []);
     } else {
       setSelectedItems(q.items || []);
       setPerPlate(q.per_plate_amount > 0 ? String(q.per_plate_amount) : '');
+      // Backward compat: if no stored additional_discounts but there's a discount, show it
+      if ((q.additional_discounts || []).length > 0) {
+        setAdditionalDiscounts(q.additional_discounts);
+      } else if (q.discount_amount > 0) {
+        setAdditionalDiscounts([{ id: genId(), description: 'Discount', amount: q.discount_amount }]);
+      } else {
+        setAdditionalDiscounts([]);
+      }
     }
     setNotes(q.notes || '');
     setGstChecked(q.gst_rate > 0);
-    setDiscountForm({
-      type: (q.discount_type as 'amount' | 'percentage') || 'amount',
-      value: q.discount_amount > 0 ? String(q.discount_type === 'percentage'
-        ? Math.round((q.discount_amount / q.subtotal) * 100) : q.discount_amount) : '',
-    });
     setExtraCharges(q.extra_charges || []);
     setTransportationCharges(q.transportation_charges || []);
     setActiveMealKey(null);
@@ -540,7 +566,7 @@ const Quotations: React.FC = () => {
   const resetForm = () => {
     setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
     setNotes(''); setSearchLeft(''); setPerPlate('');
-    setGstChecked(false); setDiscountForm({ type: 'amount', value: '' });
+    setGstChecked(false); setAdditionalDiscounts([]);
     setExtraCharges([]); setTransportationCharges([]);
     setIsMultiDay(false); setEventDays([]); setActiveMealKey(null);
     perPlateAutoRef.current = true;
@@ -586,11 +612,12 @@ const Quotations: React.FC = () => {
       guest_count:      isMultiDay ? 0 : guestCount,
       subtotal:         activeSubtotal,
       discount_amount:  discountAmt,
-      discount_type:    discountForm.type,
+      discount_type:    'amount' as const,
       gst_rate:         gstChecked ? dcGstRate : 0,
       gst_amount:       gstAmount,
       extra_charges:    extraCharges.filter(c => c.description.trim() || c.amount > 0),
       transportation_charges: transportationCharges.filter(c => c.description.trim() || c.amount > 0),
+      additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
       total_amount:     finalTotal,
       notes:            notes || undefined,
       status:           'draft' as const,
@@ -639,11 +666,12 @@ const Quotations: React.FC = () => {
     guest_count: isMultiDay ? 0 : guestCount,
     subtotal: activeSubtotal,
     discount_amount: discountAmt,
-    discount_type: discountForm.type,
+    discount_type: 'amount' as const,
     gst_rate: gstChecked ? dcGstRate : 0,
     gst_amount: gstAmount,
     extra_charges: extraCharges.filter(c => c.description.trim() || c.amount > 0),
     transportation_charges: transportationCharges.filter(c => c.description.trim() || c.amount > 0),
+    additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
     total_amount: finalTotal,
     notes: notes || undefined,
     status: 'draft',
@@ -997,16 +1025,59 @@ const Quotations: React.FC = () => {
               {/* Discount */}
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#888880', marginBottom: 6 }}>DISCOUNT</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <select value={discountForm.type} onChange={e => setDiscountForm(f => ({ ...f, type: e.target.value as 'amount' | 'percentage' }))}
-                    style={{ border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 12, background: '#fff' }}>
-                    <option value="amount">Amount (₹)</option>
-                    <option value="percentage">Percentage (%)</option>
-                  </select>
-                  <input type="number" min="0" value={discountForm.value} onChange={e => setDiscountForm(f => ({ ...f, value: e.target.value }))}
-                    placeholder="0" style={{ width: 100, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, background: '#fff', textAlign: 'right' }} />
-                  {discountAmt > 0 && <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 600 }}>-₹{discountAmt.toLocaleString('en-IN')}</span>}
+
+                {/* Meal savings breakdown — auto, read-only */}
+                {isMultiDay && totalMealSavings > 0 && (
+                  <div style={{ background: '#F2FBE9', border: '0.5px solid #B8DCA0', borderRadius: 7, padding: '8px 10px', marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', marginBottom: 5, letterSpacing: '0.04em' }}>MEAL OFFER SAVINGS (AUTO)</div>
+                    {eventDays.map((day, di) => {
+                      const dayNum = getDayNumber(day.date, eventDays);
+                      return day.meals.map((meal, mi) => {
+                        const offer = meal.discount_amount || 0;
+                        if (offer <= 0 || meal.per_plate_amount <= offer) return null;
+                        const saving = (meal.per_plate_amount - offer) * meal.guest_count;
+                        return (
+                          <div key={`${di}-${mi}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', color: '#3B6D11' }}>
+                            <span>{meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} — Day {dayNum}{day.date ? ` · ${formatDateIST(day.date, 'dd-MM')}` : ''}</span>
+                            <span style={{ fontWeight: 600 }}>-₹{saving.toLocaleString('en-IN')}</span>
+                          </div>
+                        );
+                      });
+                    })}
+                  </div>
+                )}
+
+                {/* Additional manual discounts */}
+                <div style={{ marginBottom: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: '#888880' }}>ADDITIONAL DISCOUNTS</span>
+                    <button onClick={() => setAdditionalDiscounts(prev => [...prev, { id: genId(), description: '', amount: 0 }])}
+                      style={{ fontSize: 11, color: '#3B6D11', background: 'none', border: '1px solid #3B6D11', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>
+                      + Add Discount
+                    </button>
+                  </div>
+                  {additionalDiscounts.length === 0 && (
+                    <div style={{ fontSize: 11, color: '#BBBBBB', marginBottom: 4 }}>No additional discounts</div>
+                  )}
+                  {additionalDiscounts.map((d, i) => (
+                    <div key={d.id} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                      <input placeholder="Reason (e.g. Festive Offer)" value={d.description}
+                        onChange={e => setAdditionalDiscounts(prev => prev.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
+                        style={{ flex: 1, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 12, background: '#fff' }} />
+                      <input type="number" min="0" placeholder="₹ Amount" value={d.amount || ''}
+                        onChange={e => setAdditionalDiscounts(prev => prev.map((x, j) => j === i ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))}
+                        style={{ width: 110, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, background: '#fff', textAlign: 'right' as const }} />
+                      <button onClick={() => setAdditionalDiscounts(prev => prev.filter((_, j) => j !== i))}
+                        style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
+                    </div>
+                  ))}
                 </div>
+
+                {discountAmt > 0 && (
+                  <div style={{ fontSize: 12, color: '#3B6D11', textAlign: 'right', fontWeight: 600 }}>
+                    Total Discount: -₹{discountAmt.toLocaleString('en-IN')}
+                  </div>
+                )}
               </div>
 
               {/* Extra Charges */}
@@ -1080,7 +1151,7 @@ const Quotations: React.FC = () => {
                   </div>
                 )}
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 11, color: '#888880' }}>Grand Total</div>
+                  <div style={{ fontSize: 11, color: '#888880' }}>Payable Amount</div>
                   <div style={{ fontSize: 20, fontWeight: 700, color: '#E8750A' }}>₹{finalTotal.toLocaleString('en-IN')}</div>
                 </div>
               </div>

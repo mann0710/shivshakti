@@ -136,17 +136,45 @@ const generateInvoicePDF = (
 
   // Totals
   doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-  row('Subtotal', `Rs.${inv.subtotal.toLocaleString('en-IN')}`);
+  if (inv.is_multi_day && (inv.event_days as any[] || []).length > 0) {
+    row('Original Price', `Rs.${inv.subtotal.toLocaleString('en-IN')}`);
+    for (const day of (inv.event_days as any[])) {
+      for (const meal of (day.meals as any[] || [])) {
+        const offer = meal.discount_amount || 0;
+        if (offer > 0 && meal.per_plate_amount > offer) {
+          const saving = (meal.per_plate_amount - offer) * meal.guest_count;
+          if (y > 268) { doc.addPage(); y = 20; }
+          doc.setFontSize(9); doc.setTextColor(100, 100, 98);
+          doc.text(`  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} (Day ${day.day_number}):`, margin, y);
+          doc.setTextColor(70, 140, 40);
+          doc.text(`-Rs.${saving.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
+          y += 4.5;
+        }
+      }
+    }
+    for (const ad of (inv.additional_discounts as any[] || [])) {
+      if (!ad.amount) continue;
+      if (y > 268) { doc.addPage(); y = 20; }
+      doc.setTextColor(100, 100, 98);
+      doc.text(`  ${ad.description || 'Discount'}:`, margin, y);
+      doc.setTextColor(70, 140, 40);
+      doc.text(`-Rs.${ad.amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
+      y += 4.5;
+    }
+    y += 1;
+  } else {
+    row('Subtotal', `Rs.${inv.subtotal.toLocaleString('en-IN')}`);
+    if (inv.discount_amount > 0)
+      row('Discount', `-Rs.${inv.discount_amount.toLocaleString('en-IN')}`, '#3B6D11');
+  }
   if (inv.gst_rate > 0)
     row(`GST @${inv.gst_rate}%`, `+Rs.${inv.gst_amount.toLocaleString('en-IN')}`);
   if ((inv.transportation_charge || 0) > 0)
     row('Transportation', `+Rs.${inv.transportation_charge.toLocaleString('en-IN')}`);
-  if (inv.discount_amount > 0)
-    row('Discount', `-Rs.${inv.discount_amount.toLocaleString('en-IN')}`, '#3B6D11');
 
   y += 2; hline(y, '#E8750A'); y += 7;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(30, 30, 28);
-  doc.text('Total', margin, y);
+  doc.text('Payable Amount', margin, y);
   doc.setTextColor(232, 117, 10);
   doc.text(`Rs.${inv.total_amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
   y += 8;
@@ -179,6 +207,8 @@ const generateInvoicePDF = (
   doc.save(`${inv.invoice_number}.pdf`);
 };
 
+const genBillingId = () => Math.random().toString(36).slice(2, 10);
+
 // ─── Component ────────────────────────────────────────────────────────────────
 const Billing: React.FC = () => {
   const { data: invoices = [], isLoading } = useInvoices();
@@ -200,7 +230,7 @@ const Billing: React.FC = () => {
   const [createBookingId, setCreateBookingId] = useState('');
   const [createAdvance, setCreateAdvance] = useState('');
 
-  const [discountForm, setDiscountForm] = useState({ type: 'amount' as 'amount' | 'percentage', value: '' });
+  const [additionalDiscounts, setAdditionalDiscounts] = useState<{ id: string; description: string; amount: number }[]>([]);
   const [transportItems, setTransportItems] = useState<{ description: string; amount: number }[]>([]);
 
   const [payForm, setPayForm] = useState({
@@ -214,6 +244,16 @@ const Billing: React.FC = () => {
   });
 
   const selected = invoices.find(i => i.id === selectedId) || invoices[0];
+
+  const billMealSavings = useMemo(() => {
+    if (!selected?.is_multi_day || !selected?.event_days) return 0;
+    return (selected.event_days as any[]).reduce((s: number, day: any) =>
+      s + ((day.meals as any[]) || []).reduce((ms: number, m: any) => {
+        const offer = m.discount_amount || 0;
+        return offer > 0 && m.per_plate_amount > offer ? ms + (m.per_plate_amount - offer) * m.guest_count : ms;
+      }, 0), 0);
+  }, [selected?.id]); // eslint-disable-line
+
   const confirmedBookings = bookings.filter(b => b.status === 'confirmed');
   const selectedCreateBooking = bookings.find(b => b.id === createBookingId);
   const quotationForBooking = useMemo(
@@ -237,14 +277,22 @@ const Billing: React.FC = () => {
   useEffect(() => {
     if (!selected) return;
     setShowGST(selected.gst_rate > 0);
-    setDiscountForm({
-      type: (selected.discount_type as 'amount' | 'percentage') || 'amount',
-      value: selected.discount_amount > 0
-        ? String(selected.discount_type === 'percentage'
-            ? Math.round((selected.discount_amount / selected.subtotal) * 100)
-            : selected.discount_amount)
-        : '',
-    });
+    if ((selected.additional_discounts || []).length > 0) {
+      setAdditionalDiscounts(selected.additional_discounts!);
+    } else if ((selected.discount_amount || 0) > 0) {
+      // Backward compat: compute meal savings to find manual portion
+      const mealSav = selected.is_multi_day ? (selected.event_days as any[] || []).reduce((s: number, day: any) =>
+        s + ((day.meals as any[]) || []).reduce((ms: number, m: any) => {
+          const offer = m.discount_amount || 0;
+          return offer > 0 && m.per_plate_amount > offer ? ms + (m.per_plate_amount - offer) * m.guest_count : ms;
+        }, 0), 0) : 0;
+      const additionalAmt = (selected.discount_amount || 0) - mealSav;
+      setAdditionalDiscounts(additionalAmt > 0
+        ? [{ id: genBillingId(), description: 'Discount', amount: additionalAmt }]
+        : []);
+    } else {
+      setAdditionalDiscounts([]);
+    }
     setTransportItems(
       selected.transportation_charges?.length
         ? selected.transportation_charges
@@ -365,16 +413,20 @@ const Billing: React.FC = () => {
     } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
   };
 
+  const computeTotalDiscount = () =>
+    billMealSavings + additionalDiscounts.reduce((s, d) => s + (d.amount || 0), 0);
+
   const handleGSTToggle = async (checked: boolean) => {
     if (!selected) return;
     setShowGST(checked);
     try {
       await recalcTotals.mutateAsync({
         invoiceId: selected.id,
-        discount_amount: parseFloat(discountForm.value) || 0,
-        discount_type: discountForm.type,
+        discount_amount: computeTotalDiscount(),
+        discount_type: 'amount',
         apply_gst: checked, gst_rate: dc?.gst_rate ?? 18,
         transportation_charges: transportItems,
+        additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
       });
       toast.success(checked ? `GST @${dc?.gst_rate ?? 18}% added` : 'GST removed');
     } catch (e: any) { toast.error(e?.message || 'Failed to update GST'); }
@@ -385,10 +437,11 @@ const Billing: React.FC = () => {
     try {
       await recalcTotals.mutateAsync({
         invoiceId: selected.id,
-        discount_amount: parseFloat(discountForm.value) || 0,
-        discount_type: discountForm.type,
+        discount_amount: computeTotalDiscount(),
+        discount_type: 'amount',
         apply_gst: showGST, gst_rate: dc?.gst_rate ?? 18,
         transportation_charges: transportItems,
+        additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
       });
       toast.success('Discount applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply discount'); }
@@ -399,10 +452,11 @@ const Billing: React.FC = () => {
     try {
       await recalcTotals.mutateAsync({
         invoiceId: selected.id,
-        discount_amount: parseFloat(discountForm.value) || 0,
-        discount_type: discountForm.type,
+        discount_amount: computeTotalDiscount(),
+        discount_type: 'amount',
         apply_gst: showGST, gst_rate: dc?.gst_rate ?? 18,
         transportation_charges: transportItems,
+        additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
       });
       toast.success('Transportation charge applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply transport'); }
@@ -683,22 +737,59 @@ const Billing: React.FC = () => {
               {/* ── Discount ── */}
               <div style={{ background: '#FAFAF8', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#444440' }}>Discount</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <select style={{ ...inp, width: 148, fontSize: 12 }} value={discountForm.type}
-                    onChange={e => setDiscountForm(f => ({ ...f, type: e.target.value as 'amount' | 'percentage' }))}>
-                    <option value="amount">Amount (₹)</option>
-                    <option value="percentage">Percentage (%)</option>
-                  </select>
-                  <input type="number" style={{ ...inp, flex: 1, fontSize: 12 }} placeholder="0"
-                    value={discountForm.value} onChange={e => setDiscountForm(f => ({ ...f, value: e.target.value }))} />
-                  <button onClick={handleApplyDiscount} style={{ ...btnPrimary, fontSize: 12, whiteSpace: 'nowrap' }} disabled={recalcTotals.isPending}>
-                    {recalcTotals.isPending ? '...' : 'Apply'}
-                  </button>
+
+                {/* Meal savings breakdown — read-only */}
+                {selected.is_multi_day && billMealSavings > 0 && (
+                  <div style={{ background: '#F2FBE9', border: '0.5px solid #B8DCA0', borderRadius: 6, padding: '7px 10px', marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', marginBottom: 4, letterSpacing: '0.04em' }}>MEAL OFFER SAVINGS (AUTO)</div>
+                    {(selected.event_days as any[] || []).map((day: any, di: number) =>
+                      (day.meals as any[] || []).map((m: any, mi: number) => {
+                        const offer = m.discount_amount || 0;
+                        if (offer <= 0 || m.per_plate_amount <= offer) return null;
+                        const saving = (m.per_plate_amount - offer) * m.guest_count;
+                        return (
+                          <div key={`${di}-${mi}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '1px 0', color: '#3B6D11' }}>
+                            <span>{m.meal_type.charAt(0).toUpperCase() + m.meal_type.slice(1)} — Day {day.day_number}</span>
+                            <span style={{ fontWeight: 600 }}>-₹{saving.toLocaleString('en-IN')}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {/* Additional manual discounts */}
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: '#888880' }}>ADDITIONAL DISCOUNTS</span>
+                    <button onClick={() => setAdditionalDiscounts(prev => [...prev, { id: genBillingId(), description: '', amount: 0 }])}
+                      style={{ fontSize: 11, color: '#3B6D11', background: 'none', border: '1px solid #3B6D11', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>
+                      + Add
+                    </button>
+                  </div>
+                  {additionalDiscounts.length === 0 && (
+                    <div style={{ fontSize: 11, color: '#BBBBBB', marginBottom: 4 }}>No additional discounts</div>
+                  )}
+                  {additionalDiscounts.map((d, i) => (
+                    <div key={d.id} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                      <input placeholder="Reason" value={d.description}
+                        onChange={e => setAdditionalDiscounts(prev => prev.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
+                        style={{ ...inp, flex: 1, fontSize: 12 }} />
+                      <input type="number" min="0" placeholder="₹ 0" value={d.amount || ''}
+                        onChange={e => setAdditionalDiscounts(prev => prev.map((x, j) => j === i ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))}
+                        style={{ ...inp, width: 90, fontSize: 12, textAlign: 'right' as const }} />
+                      <button onClick={() => setAdditionalDiscounts(prev => prev.filter((_, j) => j !== i))}
+                        style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}>×</button>
+                    </div>
+                  ))}
                 </div>
+
+                <button onClick={handleApplyDiscount} style={{ ...btnPrimary, fontSize: 12, width: '100%' }} disabled={recalcTotals.isPending}>
+                  {recalcTotals.isPending ? '...' : 'Apply Discount'}
+                </button>
                 {selected.discount_amount > 0 && (
                   <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 6 }}>
-                    Applied: -₹{selected.discount_amount.toLocaleString()}
-                    {selected.discount_type === 'percentage' && ` (${Math.round((selected.discount_amount / selected.subtotal) * 100)}%)`}
+                    Applied: -₹{selected.discount_amount.toLocaleString('en-IN')}
                   </div>
                 )}
               </div>
