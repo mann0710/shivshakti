@@ -170,7 +170,19 @@ const MenuBuilder: React.FC = () => {
 
   const handleSaveItem = async (id: string) => {
     if (!editItemName.trim()) { toast.error('Enter name'); return; }
-    try { await updateItem.mutateAsync({ id, name: editItemName.trim() }); toast.success('Updated!'); setEditingItemId(null); }
+    try {
+      const currentItem = items.find(i => i.id === id);
+      await updateItem.mutateAsync({ id, name: editItemName.trim() });
+      await refetchItems();
+      setEditingItemId(null);
+      if (currentItem) {
+        setSelectedCatId(currentItem.subcategory?.category_id ?? null);
+        setSelectedSubId(currentItem.subcategory_id);
+        setItemSearch('');
+      }
+      setLastAddedItemId(id);
+      toast.success('Updated!');
+    }
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
 
