@@ -284,6 +284,7 @@ const Quotations: React.FC = () => {
   const [pdfWithPrices, setPdfWithPrices]   = useState(true);
   const [draggedMeal, setDraggedMeal]       = useState<{ dayIdx: number; mealId: string } | null>(null);
   const [dragOverDayIdx, setDragOverDayIdx] = useState<number | null>(null);
+  const [dragOverMealId, setDragOverMealId] = useState<string | null>(null);
 
   useEffect(() => { setMealSearch(''); }, [activeMealKey]);
 
@@ -468,27 +469,63 @@ const Quotations: React.FC = () => {
     }));
   };
 
+  const resetDragState = () => {
+    setDraggedMeal(null); setDragOverDayIdx(null); setDragOverMealId(null);
+  };
+
   const handleMealDragStart = (e: React.DragEvent, dayIdx: number, mealId: string) => {
     setDraggedMeal({ dayIdx, mealId });
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleMealDragEnd = () => {
-    setDraggedMeal(null);
-    setDragOverDayIdx(null);
+  const handleMealDragEnd = () => resetDragState();
+
+  // Per-meal drag-over: fires when hovering over a specific meal card
+  const handleMealCardDragOver = (e: React.DragEvent, dayIdx: number, mealId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverMealId !== mealId) setDragOverMealId(mealId);
+    if (dragOverDayIdx !== dayIdx) setDragOverDayIdx(dayIdx);
   };
 
+  // Per-meal drop: insert dragged meal before the target meal (works within same day and across days)
+  const handleMealCardDrop = (e: React.DragEvent, targetDayIdx: number, targetMealId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedMeal || draggedMeal.mealId === targetMealId) { resetDragState(); return; }
+    const { dayIdx: srcIdx, mealId: srcMealId } = draggedMeal;
+    setEventDays(prev => {
+      const next = prev.map(d => ({ ...d, meals: [...d.meals] }));
+      const srcMeal = next[srcIdx].meals.find(m => m.id === srcMealId);
+      if (!srcMeal) return prev;
+      next[srcIdx].meals = next[srcIdx].meals.filter(m => m.id !== srcMealId);
+      next[srcIdx].day_subtotal = next[srcIdx].meals.reduce((s, m) => s + m.subtotal, 0);
+      const targetIdx = next[targetDayIdx].meals.findIndex(m => m.id === targetMealId);
+      const insertAt = targetIdx < 0 ? next[targetDayIdx].meals.length : targetIdx;
+      next[targetDayIdx].meals = [
+        ...next[targetDayIdx].meals.slice(0, insertAt),
+        srcMeal,
+        ...next[targetDayIdx].meals.slice(insertAt),
+      ];
+      next[targetDayIdx].day_subtotal = next[targetDayIdx].meals.reduce((s, m) => s + m.subtotal, 0);
+      return next;
+    });
+    if (activeMealKey === `${srcIdx}_${srcMealId}`) setActiveMealKey(`${targetDayIdx}_${srcMealId}`);
+    resetDragState();
+  };
+
+  // Day container drag-over: only for cross-day visual highlight (meal cards handle their own)
   const handleDayDragOver = (e: React.DragEvent, dayIdx: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (dragOverDayIdx !== dayIdx) setDragOverDayIdx(dayIdx);
   };
 
+  // Day container drop: append to end (fires only when dropped on empty space inside the day)
   const handleDayDrop = (e: React.DragEvent, targetDayIdx: number) => {
     e.preventDefault();
-    if (!draggedMeal || draggedMeal.dayIdx === targetDayIdx) {
-      setDraggedMeal(null); setDragOverDayIdx(null); return;
-    }
+    if (!draggedMeal) { resetDragState(); return; }
     const { dayIdx: srcIdx, mealId } = draggedMeal;
     setEventDays(prev => {
       const next = prev.map(d => ({ ...d, meals: [...d.meals] }));
@@ -501,7 +538,7 @@ const Quotations: React.FC = () => {
       return next;
     });
     if (activeMealKey === `${srcIdx}_${mealId}`) setActiveMealKey(`${targetDayIdx}_${mealId}`);
-    setDraggedMeal(null); setDragOverDayIdx(null);
+    resetDragState();
   };
 
   const updateMealField = (dayIdx: number, mealId: string, field: keyof MealSlot, value: any) => {
@@ -825,12 +862,15 @@ const Quotations: React.FC = () => {
                         const mealGroupedLeft  = isOpen ? getMealGroupedLeft(meal.items)  : {};
                         const mealGroupedRight = isOpen ? getMealGroupedRight(meal.items) : {};
                         const isBeingDragged = draggedMeal?.mealId === meal.id && draggedMeal?.dayIdx === dayIdx;
+                        const isDragTarget = dragOverMealId === meal.id && !isBeingDragged;
                         return (
                           <div key={meal.id}
                             draggable
                             onDragStart={e => handleMealDragStart(e, dayIdx, meal.id)}
                             onDragEnd={handleMealDragEnd}
-                            style={{ border: `0.5px solid ${isOpen ? '#E8750A' : '#E5E5E0'}`, borderRadius: 8, marginBottom: 10, overflow: 'hidden', opacity: isBeingDragged ? 0.45 : 1, transition: 'opacity 0.15s' }}>
+                            onDragOver={e => handleMealCardDragOver(e, dayIdx, meal.id)}
+                            onDrop={e => handleMealCardDrop(e, dayIdx, meal.id)}
+                            style={{ border: `0.5px solid ${isOpen ? '#E8750A' : '#E5E5E0'}`, borderRadius: 8, marginBottom: 10, overflow: 'hidden', opacity: isBeingDragged ? 0.45 : 1, transition: 'opacity 0.15s, border-top-color 0.1s', borderTop: isDragTarget ? '2.5px solid #E8750A' : undefined }}>
                             {/* Meal row */}
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', flexWrap: 'wrap', background: isOpen ? '#FFF8EE' : '#fff' }}>
                               {/* Drag handle */}
