@@ -16,6 +16,7 @@ export interface MealSlot {
   time: string;
   guest_count: number;
   per_plate_amount: number;
+  discount_amount: number;
   items: QuotationLineItem[];
   subtotal: number;
 }

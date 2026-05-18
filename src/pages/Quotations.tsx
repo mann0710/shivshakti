@@ -33,7 +33,7 @@ const getDayNumber = (date: string, days: EventDay[]): number => {
 };
 
 // ─── PDF generator ────────────────────────────────────────────────────────────
-const downloadPDF = (q: Quotation) => {
+const downloadPDF = (q: Quotation, withPrices = true) => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210; const margin = 18;
   let y = 18;
@@ -77,30 +77,67 @@ const downloadPDF = (q: Quotation) => {
   y += 3; hline(y); y += 6;
 
   if (q.is_multi_day && q.event_days?.length) {
-    // Multi-day PDF
     for (const day of q.event_days) {
       if (y > 240) { doc.addPage(); y = 20; }
+      // Day header bar
       doc.setFillColor(249, 248, 245); doc.rect(margin, y - 3, W - margin * 2, 8, 'F');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(232, 117, 10);
-      doc.text(`Day ${day.day_number}  —  ${formatDateIST(day.date, 'dd-MM-yyyy')}`, margin + 2, y + 1);
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
-      doc.text(`₹${day.day_subtotal.toLocaleString('en-IN')}`, W - margin - 2, y + 1, { align: 'right' });
-      y += 10;
+      doc.text(`Day ${day.day_number}  -  ${formatDateIST(day.date, 'dd-MM-yyyy')}`, margin + 2, y + 1);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 78);
+      doc.text(`Rs.${day.day_subtotal.toLocaleString('en-IN')}`, W - margin - 2, y + 1, { align: 'right' });
+      y += 11;
 
       for (const meal of day.meals) {
-        if (y > 250) { doc.addPage(); y = 20; }
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(60, 60, 58);
-        const mealLabel = `  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)}${meal.time ? ` · ${meal.time}` : ''} · ${meal.guest_count} guests · ₹${meal.per_plate_amount}/plate`;
-        doc.text(mealLabel, margin, y); y += 4;
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 100, 98);
-        for (const it of (meal.items || [])) {
-          if (y > 260) { doc.addPage(); y = 20; }
-          doc.text(`    · ${it.item_name}`, margin, y); y += 4;
+        if (y > 248) { doc.addPage(); y = 20; }
+        const mealDisc = meal.discount_amount || 0;
+        const mealNet = Math.max(0, meal.subtotal - mealDisc);
+
+        // Meal type header — warm background
+        doc.setFillColor(255, 248, 235);
+        doc.rect(margin + 2, y - 2, W - margin * 2 - 4, 7, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(180, 90, 0);
+        doc.text(meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1), margin + 6, y + 2);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 130, 128);
+        const mealMeta = [meal.time, `${meal.guest_count} guests`].filter(Boolean).join('  .  ');
+        doc.text(mealMeta, W - margin - 4, y + 2, { align: 'right' });
+        y += 9;
+
+        // Items list — Times Italic for a distinct feel
+        if ((meal.items || []).length > 0) {
+          doc.setFont('times', 'italic'); doc.setFontSize(9); doc.setTextColor(50, 50, 48);
+          const itemLine = (meal.items || []).map((it: any) => it.item_name).join('  .  ');
+          const lines: string[] = doc.splitTextToSize(itemLine, W - margin * 2 - 14);
+          lines.forEach((line: string) => {
+            if (y > 262) { doc.addPage(); y = 20; }
+            doc.text(line, margin + 6, y); y += 4.5;
+          });
+          y += 2;
         }
-        doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28); doc.setFontSize(9);
-        doc.text(`  Subtotal:`, margin + 4, y);
-        doc.text(`Rs.${meal.subtotal.toLocaleString('en-IN')}`, W - margin - 2, y, { align: 'right' });
-        y += 6;
+
+        // Pricing rows
+        if (withPrices) {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 118);
+          doc.text(`Rs.${meal.per_plate_amount.toLocaleString('en-IN')}/plate x ${meal.guest_count} pax`, margin + 6, y);
+          if (mealDisc > 0) {
+            doc.text(`Actual: Rs.${meal.subtotal.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
+            y += 4.5;
+            doc.setTextColor(50, 130, 40);
+            doc.text('Discount', margin + 6, y);
+            doc.text(`- Rs.${mealDisc.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
+            y += 4.5;
+          } else {
+            y += 4.5;
+          }
+        }
+        // Meal total line (always shown)
+        doc.setDrawColor(220, 218, 215);
+        doc.line(margin + 4, y, W - margin - 4, y); y += 3.5;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+        doc.setTextColor(40, 40, 38);
+        doc.text('Meal Total', margin + 6, y);
+        doc.setTextColor(mealDisc > 0 && withPrices ? 232 : 30, mealDisc > 0 && withPrices ? 117 : 30, mealDisc > 0 && withPrices ? 10 : 28);
+        doc.text(`Rs.${mealNet.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
+        y += 8;
       }
       hline(y, '#E5E5E0'); y += 5;
     }
@@ -109,7 +146,8 @@ const downloadPDF = (q: Quotation) => {
     doc.setFillColor(249, 248, 245); doc.rect(margin, y - 4, W - margin * 2, 8, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(120, 120, 118);
     doc.text('CATEGORY', margin + 2, y + 1); doc.text('SUBCATEGORY', margin + 48, y + 1);
-    doc.text('ITEM', margin + 90, y + 1); doc.text('AMOUNT', W - margin - 2, y + 1, { align: 'right' });
+    doc.text('ITEM', margin + 90, y + 1);
+    if (withPrices) doc.text('AMOUNT', W - margin - 2, y + 1, { align: 'right' });
     y += 9; hline(y); y += 5;
 
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); let lastCat = '';
@@ -121,17 +159,17 @@ const downloadPDF = (q: Quotation) => {
       }
       doc.setTextColor(100, 100, 98); doc.text(item.subcategory_name, margin + 48, y);
       doc.setTextColor(30, 30, 28); doc.text(item.item_name, margin + 90, y);
-      doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, W - margin - 2, y, { align: 'right' });
+      if (withPrices) doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, W - margin - 2, y, { align: 'right' });
       y += 5;
     });
 
     y += 3; hline(y); y += 6;
-    if (q.per_plate_amount > 0) {
+    if (withPrices && q.per_plate_amount > 0) {
       doc.setFontSize(9); doc.setTextColor(100, 100, 98);
       doc.text('Per Plate Rate:', margin, y); doc.setTextColor(30, 30, 28);
       doc.text(`Rs.${q.per_plate_amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
       doc.setTextColor(100, 100, 98);
-      doc.text(`Subtotal (${q.per_plate_amount} × ${q.guest_count} guests):`, margin, y); doc.setTextColor(30, 30, 28);
+      doc.text(`Subtotal (${q.per_plate_amount} x ${q.guest_count} guests):`, margin, y); doc.setTextColor(30, 30, 28);
       doc.text(`Rs.${q.subtotal.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
     }
   }
@@ -204,6 +242,7 @@ const Quotations: React.FC = () => {
   const [eventDays, setEventDays]           = useState<EventDay[]>([]);
   const [activeMealKey, setActiveMealKey]   = useState<string | null>(null);
   const [mealSearch, setMealSearch]         = useState('');
+  const [pdfWithPrices, setPdfWithPrices]   = useState(true);
 
   useEffect(() => { setMealSearch(''); }, [activeMealKey]);
 
@@ -338,6 +377,7 @@ const Quotations: React.FC = () => {
     setEventDays(prev => [...prev, {
       day_number: 0, date: lastDate, meals: [], day_subtotal: 0,
     }]);
+
   };
 
   const removeDay = (idx: number) =>
@@ -352,7 +392,7 @@ const Quotations: React.FC = () => {
       ...d,
       meals: [...d.meals, {
         id: mealId, meal_type: 'breakfast', time: '', guest_count: guestCount,
-        per_plate_amount: 0, items: [], subtotal: 0,
+        per_plate_amount: 0, discount_amount: 0, items: [], subtotal: 0,
       }],
     }));
     setActiveMealKey(`${dayIdx}_${mealId}`);
@@ -362,7 +402,7 @@ const Quotations: React.FC = () => {
     setEventDays(prev => prev.map((d, i) => {
       if (i !== dayIdx) return d;
       const meals = d.meals.filter(m => m.id !== mealId);
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
+      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + Math.max(0, m.subtotal - (m.discount_amount || 0)), 0) };
     }));
     if (activeMealKey === `${dayIdx}_${mealId}`) setActiveMealKey(null);
   };
@@ -376,7 +416,7 @@ const Quotations: React.FC = () => {
         updated.subtotal = updated.per_plate_amount * updated.guest_count;
         return updated;
       });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
+      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + Math.max(0, m.subtotal - (m.discount_amount || 0)), 0) };
     }));
   };
 
@@ -394,7 +434,7 @@ const Quotations: React.FC = () => {
         const per_plate_amount = itemsSum > 0 ? itemsSum : m.per_plate_amount;
         return { ...m, items, per_plate_amount, subtotal: per_plate_amount * m.guest_count };
       });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
+      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + Math.max(0, m.subtotal - (m.discount_amount || 0)), 0) };
     }));
   };
 
@@ -408,7 +448,7 @@ const Quotations: React.FC = () => {
         const per_plate_amount = itemsSum > 0 ? itemsSum : (items.length ? m.per_plate_amount : 0);
         return { ...m, items, per_plate_amount, subtotal: per_plate_amount * m.guest_count };
       });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
+      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + Math.max(0, m.subtotal - (m.discount_amount || 0)), 0) };
     }));
   };
 
@@ -422,7 +462,7 @@ const Quotations: React.FC = () => {
         const per_plate_amount = itemsSum > 0 ? itemsSum : m.per_plate_amount;
         return { ...m, items, per_plate_amount, subtotal: per_plate_amount * m.guest_count };
       });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
+      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + Math.max(0, m.subtotal - (m.discount_amount || 0)), 0) };
     }));
   };
 
@@ -430,7 +470,7 @@ const Quotations: React.FC = () => {
     setEventDays(prev => prev.map((d, i) => {
       if (i !== dayIdx) return d;
       const meals = d.meals.map(m => m.id !== mealId ? m : { ...m, items: [], per_plate_amount: 0, subtotal: 0 });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
+      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + Math.max(0, m.subtotal - (m.discount_amount || 0)), 0) };
     }));
   };
 
@@ -560,6 +600,32 @@ const Quotations: React.FC = () => {
 
   const isSaving = createQuotation.isPending || updateQuotation.isPending;
 
+  const buildDraftQuotation = (): Quotation => ({
+    id: editingId || 'draft',
+    quotation_number: editingId ? (quotations.find(q => q.id === editingId)?.quotation_number || 'DRAFT') : 'DRAFT',
+    customer_id: selectedBooking?.customer_id || '',
+    customer: selectedBooking?.customer || null,
+    booking: selectedBooking || null,
+    booking_id: selectedBookingId || undefined,
+    items: isMultiDay ? [] : selectedItems,
+    per_plate_amount: isMultiDay ? 0 : perPlateNum,
+    guest_count: isMultiDay ? 0 : guestCount,
+    subtotal: activeSubtotal,
+    discount_amount: discountAmt,
+    discount_type: discountForm.type,
+    gst_rate: gstChecked ? dcGstRate : 0,
+    gst_amount: gstAmount,
+    extra_charges: extraCharges.filter(c => c.description.trim() || c.amount > 0),
+    transportation_charges: transportationCharges.filter(c => c.description.trim() || c.amount > 0),
+    total_amount: finalTotal,
+    notes: notes || undefined,
+    status: 'draft',
+    issue_date: new Date().toISOString().split('T')[0],
+    is_multi_day: isMultiDay,
+    event_days: isMultiDay ? eventDays.map(d => ({ ...d, day_number: getDayNumber(d.date, eventDays) })) : [],
+    created_at: new Date().toISOString(),
+  });
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
@@ -672,7 +738,22 @@ const Quotations: React.FC = () => {
                                   onChange={e => updateMealField(dayIdx, meal.id, 'per_plate_amount', parseFloat(e.target.value) || 0)}
                                   placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' }} />
                               </div>
-                              {meal.subtotal > 0 && <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 600 }}>= ₹{meal.subtotal.toLocaleString('en-IN')}</span>}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontSize: 11, color: '#888880' }}>Disc ₹</span>
+                                <input type="number" min="0" value={meal.discount_amount || ''}
+                                  onChange={e => updateMealField(dayIdx, meal.id, 'discount_amount', parseFloat(e.target.value) || 0)}
+                                  placeholder="0" style={{ width: 72, border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right', background: '#FFFEF5' }} />
+                              </div>
+                              {meal.subtotal > 0 && (
+                                (meal.discount_amount || 0) > 0 ? (
+                                  <span style={{ fontSize: 12, fontWeight: 600, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.3 }}>
+                                    <span style={{ textDecoration: 'line-through', color: '#AAAAAA', fontSize: 11 }}>₹{meal.subtotal.toLocaleString('en-IN')}</span>
+                                    <span style={{ color: '#E8750A' }}>₹{Math.max(0, meal.subtotal - (meal.discount_amount || 0)).toLocaleString('en-IN')}</span>
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 600 }}>= ₹{meal.subtotal.toLocaleString('en-IN')}</span>
+                                )
+                              )}
                               <button onClick={() => { setActiveMealKey(isOpen ? null : mealKey); }}
                                 style={{ fontSize: 11, color: '#E8750A', background: isOpen ? '#FFF0E0' : 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', marginLeft: 'auto' }}>
                                 {meal.items.length > 0 ? `${meal.items.length} items ` : 'Add Items '}
@@ -985,7 +1066,24 @@ const Quotations: React.FC = () => {
                 placeholder="Add any notes…" style={{ width: '100%', border: '1px solid #E5E5E0', borderRadius: 8, padding: '8px 10px', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
             </div>
 
-            <div style={{ marginTop: 14, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            {/* Download PDF (draft preview) */}
+            <div style={{ marginTop: 14, padding: '10px 14px', background: '#F5F8FF', border: '0.5px solid #B8C8F4', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
+                <input type="checkbox" checked={pdfWithPrices} onChange={e => setPdfWithPrices(e.target.checked)}
+                  style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
+                <span>Include item prices in PDF</span>
+              </label>
+              <button
+                onClick={() => {
+                  if (!selectedBookingId) { toast.error('Select a booking first'); return; }
+                  downloadPDF(buildDraftQuotation(), pdfWithPrices);
+                }}
+                style={{ background: '#378ADD', color: '#fff', border: 'none', borderRadius: 7, padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                ⬇ Download PDF
+              </button>
+            </div>
+
+            <div style={{ marginTop: 10, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={resetForm} style={btnGhost}>Cancel</button>
               <button onClick={handleSave} disabled={isSaving} style={{ ...btnPrimary, opacity: isSaving ? 0.6 : 1 }}>
                 {isSaving ? 'Saving…' : editingId ? 'Update Quotation' : 'Save Quotation'}
