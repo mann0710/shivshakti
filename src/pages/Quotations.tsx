@@ -282,6 +282,8 @@ const Quotations: React.FC = () => {
   const [activeMealKey, setActiveMealKey]   = useState<string | null>(null);
   const [mealSearch, setMealSearch]         = useState('');
   const [pdfWithPrices, setPdfWithPrices]   = useState(true);
+  const [draggedMeal, setDraggedMeal]       = useState<{ dayIdx: number; mealId: string } | null>(null);
+  const [dragOverDayIdx, setDragOverDayIdx] = useState<number | null>(null);
 
   useEffect(() => { setMealSearch(''); }, [activeMealKey]);
 
@@ -454,6 +456,54 @@ const Quotations: React.FC = () => {
       return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
     }));
     if (activeMealKey === `${dayIdx}_${mealId}`) setActiveMealKey(null);
+  };
+
+  const cloneMeal = (dayIdx: number, mealId: string) => {
+    setEventDays(prev => prev.map((d, i) => {
+      if (i !== dayIdx) return d;
+      const mealIdx = d.meals.findIndex(m => m.id === mealId);
+      if (mealIdx < 0) return d;
+      const original = d.meals[mealIdx];
+      const cloned: MealSlot = { ...original, id: genId(), items: original.items.map(it => ({ ...it })) };
+      const meals = [...d.meals.slice(0, mealIdx + 1), cloned, ...d.meals.slice(mealIdx + 1)];
+      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
+    }));
+  };
+
+  const handleMealDragStart = (e: React.DragEvent, dayIdx: number, mealId: string) => {
+    setDraggedMeal({ dayIdx, mealId });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleMealDragEnd = () => {
+    setDraggedMeal(null);
+    setDragOverDayIdx(null);
+  };
+
+  const handleDayDragOver = (e: React.DragEvent, dayIdx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverDayIdx !== dayIdx) setDragOverDayIdx(dayIdx);
+  };
+
+  const handleDayDrop = (e: React.DragEvent, targetDayIdx: number) => {
+    e.preventDefault();
+    if (!draggedMeal || draggedMeal.dayIdx === targetDayIdx) {
+      setDraggedMeal(null); setDragOverDayIdx(null); return;
+    }
+    const { dayIdx: srcIdx, mealId } = draggedMeal;
+    setEventDays(prev => {
+      const next = prev.map(d => ({ ...d, meals: [...d.meals] }));
+      const meal = next[srcIdx].meals.find(m => m.id === mealId);
+      if (!meal) return prev;
+      next[srcIdx].meals = next[srcIdx].meals.filter(m => m.id !== mealId);
+      next[srcIdx].day_subtotal = next[srcIdx].meals.reduce((s, m) => s + m.subtotal, 0);
+      next[targetDayIdx].meals = [...next[targetDayIdx].meals, meal];
+      next[targetDayIdx].day_subtotal = next[targetDayIdx].meals.reduce((s, m) => s + m.subtotal, 0);
+      return next;
+    });
+    if (activeMealKey === `${srcIdx}_${mealId}`) setActiveMealKey(`${targetDayIdx}_${mealId}`);
+    setDraggedMeal(null); setDragOverDayIdx(null);
   };
 
   const updateMealField = (dayIdx: number, mealId: string, field: keyof MealSlot, value: any) => {
@@ -747,7 +797,7 @@ const Quotations: React.FC = () => {
                 {eventDays.map((day, dayIdx) => {
                   const dayNum = getDayNumber(day.date, eventDays);
                   return (
-                  <div key={dayIdx} style={{ border: '0.5px solid #E5E5E0', borderRadius: 10, marginBottom: 14, overflow: 'hidden' }}>
+                  <div key={dayIdx} style={{ border: `0.5px solid ${dragOverDayIdx === dayIdx && draggedMeal?.dayIdx !== dayIdx ? '#E8750A' : '#E5E5E0'}`, borderRadius: 10, marginBottom: 14, overflow: 'hidden', transition: 'border-color 0.15s' }}>
                     {/* Day header */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#F9F8F5', borderBottom: '0.5px solid #E5E5E0' }}>
                       <span style={{ fontWeight: 700, color: '#E8750A', fontSize: 13, minWidth: 50 }}>Day {dayNum}</span>
@@ -761,20 +811,32 @@ const Quotations: React.FC = () => {
                         style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 4px' }}>×</button>
                     </div>
 
-                    {/* Meals */}
-                    <div style={{ padding: '10px 14px' }}>
+                    {/* Meals — drop zone for drag-and-drop */}
+                    <div style={{ padding: '10px 14px', minHeight: draggedMeal && draggedMeal.dayIdx !== dayIdx ? 60 : undefined, transition: 'background 0.15s', background: dragOverDayIdx === dayIdx && draggedMeal?.dayIdx !== dayIdx ? '#FFF8EE' : 'transparent' }}
+                      onDragOver={e => handleDayDragOver(e, dayIdx)}
+                      onDragLeave={() => setDragOverDayIdx(null)}
+                      onDrop={e => handleDayDrop(e, dayIdx)}>
                       {day.meals.length === 0 && (
-                        <div style={{ fontSize: 12, color: '#AAAAAA', marginBottom: 8 }}>No meals added for this day</div>
+                        <div style={{ fontSize: 12, color: dragOverDayIdx === dayIdx ? '#E8750A' : '#AAAAAA', marginBottom: 8, fontStyle: dragOverDayIdx === dayIdx ? 'normal' : 'normal' }}>
+                          {dragOverDayIdx === dayIdx && draggedMeal ? 'Drop meal here' : 'No meals added for this day'}
+                        </div>
                       )}
                       {day.meals.map(meal => {
                         const mealKey = `${dayIdx}_${meal.id}`;
                         const isOpen  = activeMealKey === mealKey;
                         const mealGroupedLeft  = isOpen ? getMealGroupedLeft(meal.items)  : {};
                         const mealGroupedRight = isOpen ? getMealGroupedRight(meal.items) : {};
+                        const isBeingDragged = draggedMeal?.mealId === meal.id && draggedMeal?.dayIdx === dayIdx;
                         return (
-                          <div key={meal.id} style={{ border: `0.5px solid ${isOpen ? '#E8750A' : '#E5E5E0'}`, borderRadius: 8, marginBottom: 10, overflow: 'hidden' }}>
+                          <div key={meal.id}
+                            draggable
+                            onDragStart={e => handleMealDragStart(e, dayIdx, meal.id)}
+                            onDragEnd={handleMealDragEnd}
+                            style={{ border: `0.5px solid ${isOpen ? '#E8750A' : '#E5E5E0'}`, borderRadius: 8, marginBottom: 10, overflow: 'hidden', opacity: isBeingDragged ? 0.45 : 1, transition: 'opacity 0.15s' }}>
                             {/* Meal row */}
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', flexWrap: 'wrap', background: isOpen ? '#FFF8EE' : '#fff' }}>
+                              {/* Drag handle */}
+                              <span title="Drag to move meal" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, padding: '0 2px', flexShrink: 0, userSelect: 'none' }}>⠿</span>
                               <select value={meal.meal_type} onChange={e => updateMealField(dayIdx, meal.id, 'meal_type', e.target.value)}
                                 style={{ border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, background: '#fff', fontWeight: 600, color: '#E8750A' }}>
                                 {MEAL_TYPES.map(t => <option key={t} value={t.toLowerCase()}>{t}</option>)}
@@ -814,6 +876,9 @@ const Quotations: React.FC = () => {
                                 {meal.items.length > 0 ? `${meal.items.length} items ` : 'Add Items '}
                                 {isOpen ? '▲' : '▼'}
                               </button>
+                              <button onClick={() => cloneMeal(dayIdx, meal.id)}
+                                title="Clone this meal"
+                                style={{ background: 'none', border: '1px solid #888880', borderRadius: 5, color: '#555552', fontSize: 11, cursor: 'pointer', padding: '3px 7px' }}>⧉ Clone</button>
                               <button onClick={() => removeMeal(dayIdx, meal.id)}
                                 style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px' }}>×</button>
                             </div>
