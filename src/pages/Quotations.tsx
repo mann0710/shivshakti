@@ -90,8 +90,8 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
       for (const meal of day.meals) {
         if (y > 248) { doc.addPage(); y = 20; }
         const offerRate = meal.discount_amount || 0;
-        const mealNet = offerRate > 0 ? (meal.per_plate_amount - offerRate) * meal.guest_count : meal.subtotal;
-        const mealSaving = offerRate > 0 ? offerRate * meal.guest_count : 0;
+        const mealNet = offerRate > 0 ? offerRate * meal.guest_count : meal.subtotal;
+        const mealSaving = offerRate > 0 ? (meal.per_plate_amount - offerRate) * meal.guest_count : 0;
 
         // Meal type header — warm background
         doc.setFillColor(255, 248, 235);
@@ -129,7 +129,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
           // Line 2: left = "Offer: Rs.A/plate"   right = "Saving: - Rs.B"
           if (y > 268) { doc.addPage(); y = 20; }
           doc.setTextColor(34, 139, 34);
-          doc.text(`Discount: Rs.${offerRate.toLocaleString('en-IN')}/plate`, margin + 6, y);
+          doc.text(`Offer: Rs.${offerRate.toLocaleString('en-IN')}/plate`, margin + 6, y);
           doc.text(`Saving: - Rs.${mealSaving.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
           doc.setTextColor(90, 90, 88);
           y += 5;
@@ -192,8 +192,8 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
     for (const day of (q.event_days || [])) {
       for (const meal of (day.meals || [])) {
         const offer = meal.discount_amount || 0;
-        if (offer > 0) {
-          const saving = offer * meal.guest_count;
+        if (offer > 0 && meal.per_plate_amount > offer) {
+          const saving = (meal.per_plate_amount - offer) * meal.guest_count;
           if (y > 268) { doc.addPage(); y = 20; }
           doc.setTextColor(100, 100, 98);
           doc.text(`  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} (Day ${day.day_number}):`, margin, y);
@@ -320,13 +320,15 @@ const Quotations: React.FC = () => {
   const multiDaySubtotal = eventDays.reduce((s, d) => s + d.day_subtotal, 0);
   const activeSubtotal   = isMultiDay ? multiDaySubtotal : subtotal;
 
-  // Sum savings from all meal discount rates: discount_per_plate × guests
+  // Sum savings from all meal offer rates: (actual_rate - offer_rate) × guests
   const totalMealSavings = useMemo(() => {
     if (!isMultiDay) return 0;
     return eventDays.reduce((sum, day) =>
       sum + day.meals.reduce((ms, m) => {
-        const disc = m.discount_amount || 0;
-        return disc > 0 ? ms + disc * m.guest_count : ms;
+        const offer = m.discount_amount || 0;
+        return offer > 0 && m.per_plate_amount > offer
+          ? ms + (m.per_plate_amount - offer) * m.guest_count
+          : ms;
       }, 0)
     , 0);
   }, [isMultiDay, eventDays]);
@@ -894,16 +896,16 @@ const Quotations: React.FC = () => {
                                   placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' }} />
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: 11, color: '#888880' }}>Disc. ₹/pl</span>
+                                <span style={{ fontSize: 11, color: '#888880' }}>Offer ₹/pl</span>
                                 <input type="number" min="0" value={meal.discount_amount || ''}
                                   onChange={e => updateMealField(dayIdx, meal.id, 'discount_amount', parseFloat(e.target.value) || 0)}
-                                  placeholder="0" style={{ width: 72, border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right', background: '#FFFEF5' }} />
+                                  placeholder="same" style={{ width: 72, border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right', background: '#FFFEF5' }} />
                               </div>
                               {meal.subtotal > 0 && (
                                 (meal.discount_amount || 0) > 0 ? (
                                   <span style={{ fontSize: 12, fontWeight: 600, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.3 }}>
                                     <span style={{ textDecoration: 'line-through', color: '#AAAAAA', fontSize: 11 }}>₹{meal.subtotal.toLocaleString('en-IN')}</span>
-                                    <span style={{ color: '#E8750A' }}>₹{((meal.per_plate_amount - (meal.discount_amount || 0)) * meal.guest_count).toLocaleString('en-IN')}</span>
+                                    <span style={{ color: '#E8750A' }}>₹{((meal.discount_amount || 0) * meal.guest_count).toLocaleString('en-IN')}</span>
                                   </span>
                                 ) : (
                                   <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 600 }}>= ₹{meal.subtotal.toLocaleString('en-IN')}</span>
@@ -1137,8 +1139,8 @@ const Quotations: React.FC = () => {
                       const dayNum = getDayNumber(day.date, eventDays);
                       return day.meals.map((meal, mi) => {
                         const offer = meal.discount_amount || 0;
-                        if (offer <= 0) return null;
-                        const saving = offer * meal.guest_count;
+                        if (offer <= 0 || meal.per_plate_amount <= offer) return null;
+                        const saving = (meal.per_plate_amount - offer) * meal.guest_count;
                         return (
                           <div key={`${di}-${mi}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', color: '#3B6D11' }}>
                             <span>{meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} — Day {dayNum}{day.date ? ` · ${formatDateIST(day.date, 'dd-MM')}` : ''}</span>

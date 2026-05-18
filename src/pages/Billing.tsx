@@ -88,14 +88,14 @@ const generateInvoicePDF = (
           doc.text(`    · ${item.item_name}`, margin + 4, y); y += 4;
         }
         doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 58);
-        const mealNetBill = offerRateBill > 0 ? (meal.per_plate_amount - offerRateBill) * meal.guest_count : (meal.subtotal || 0);
+        const mealNetBill = offerRateBill > 0 ? offerRateBill * meal.guest_count : (meal.subtotal || 0);
         doc.text(`  ${meal.meal_type} subtotal:`, margin + 2, y);
         doc.text(`Rs.${mealNetBill.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
         y += 5;
       }
       const dayNetBill = (day.meals as any[]).reduce((s: number, m: any) => {
         const or = m.discount_amount || 0;
-        return s + (or > 0 ? (m.per_plate_amount - or) * m.guest_count : (m.subtotal || 0));
+        return s + (or > 0 ? or * m.guest_count : (m.subtotal || 0));
       }, 0);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 30, 28);
       doc.text(`  Day ${day.day_number} Subtotal`, margin, y);
@@ -141,8 +141,8 @@ const generateInvoicePDF = (
     for (const day of (inv.event_days as any[])) {
       for (const meal of (day.meals as any[] || [])) {
         const offer = meal.discount_amount || 0;
-        if (offer > 0) {
-          const saving = offer * meal.guest_count;
+        if (offer > 0 && meal.per_plate_amount > offer) {
+          const saving = (meal.per_plate_amount - offer) * meal.guest_count;
           if (y > 268) { doc.addPage(); y = 20; }
           doc.setFontSize(9); doc.setTextColor(100, 100, 98);
           doc.text(`  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} (Day ${day.day_number}):`, margin, y);
@@ -249,8 +249,8 @@ const Billing: React.FC = () => {
     if (!selected?.is_multi_day || !selected?.event_days) return 0;
     return (selected.event_days as any[]).reduce((s: number, day: any) =>
       s + ((day.meals as any[]) || []).reduce((ms: number, m: any) => {
-        const disc = m.discount_amount || 0;
-        return disc > 0 ? ms + disc * m.guest_count : ms;
+        const offer = m.discount_amount || 0;
+        return offer > 0 && m.per_plate_amount > offer ? ms + (m.per_plate_amount - offer) * m.guest_count : ms;
       }, 0), 0);
   }, [selected?.id]); // eslint-disable-line
 
@@ -283,8 +283,8 @@ const Billing: React.FC = () => {
       // Backward compat: compute meal savings to find manual portion
       const mealSav = selected.is_multi_day ? (selected.event_days as any[] || []).reduce((s: number, day: any) =>
         s + ((day.meals as any[]) || []).reduce((ms: number, m: any) => {
-          const disc = m.discount_amount || 0;
-          return disc > 0 ? ms + disc * m.guest_count : ms;
+          const offer = m.discount_amount || 0;
+          return offer > 0 && m.per_plate_amount > offer ? ms + (m.per_plate_amount - offer) * m.guest_count : ms;
         }, 0), 0) : 0;
       const additionalAmt = (selected.discount_amount || 0) - mealSav;
       setAdditionalDiscounts(additionalAmt > 0
@@ -745,8 +745,8 @@ const Billing: React.FC = () => {
                     {(selected.event_days as any[] || []).map((day: any, di: number) =>
                       (day.meals as any[] || []).map((m: any, mi: number) => {
                         const offer = m.discount_amount || 0;
-                        if (offer <= 0) return null;
-                        const saving = offer * m.guest_count;
+                        if (offer <= 0 || m.per_plate_amount <= offer) return null;
+                        const saving = (m.per_plate_amount - offer) * m.guest_count;
                         return (
                           <div key={`${di}-${mi}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '1px 0', color: '#3B6D11' }}>
                             <span>{m.meal_type.charAt(0).toUpperCase() + m.meal_type.slice(1)} — Day {day.day_number}</span>
