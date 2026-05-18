@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useMenuCategories, useCreateCategory, useUpdateCategory, useDeleteCategory,
   useMenuSubcategories, useCreateSubcategory, useUpdateSubcategory, useDeleteSubcategory,
@@ -8,9 +9,10 @@ import {
 } from '../hooks/useMenuBuilder';
 
 const MenuBuilder: React.FC = () => {
+  const qc = useQueryClient();
   const { data: categories = [] } = useMenuCategories();
   const { data: subcategories = [] } = useMenuSubcategories();
-  const { data: items = [] } = useMenuItemsFull();
+  const { data: items = [], refetch: refetchItems } = useMenuItemsFull();
 
   const createCat = useCreateCategory();
   const updateCat = useUpdateCategory();
@@ -38,6 +40,7 @@ const MenuBuilder: React.FC = () => {
   // Items add form has its own independent category+subcategory selection
   const [addItemCatId, setAddItemCatId] = useState('');
   const [addItemSubId, setAddItemSubId] = useState('');
+  const [lastAddedItemId, setLastAddedItemId] = useState<string | null>(null);
 
   // Inline edit state
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
@@ -50,6 +53,15 @@ const MenuBuilder: React.FC = () => {
   // Reset sub selection in add form when category changes
   useEffect(() => { setNewSubCatId(''); }, [selectedCatId]);
   useEffect(() => { setAddItemSubId(''); }, [addItemCatId]);
+
+  // Scroll newly added item into view and clear highlight after 3s
+  useEffect(() => {
+    if (!lastAddedItemId) return;
+    const el = document.getElementById(`item-${lastAddedItemId}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const t = setTimeout(() => setLastAddedItemId(null), 3000);
+    return () => clearTimeout(t);
+  }, [lastAddedItemId]);
 
   // ── Per-column filtered lists ────────────────────────────────────────────
   const cq = catSearch.trim().toLowerCase();
@@ -139,10 +151,16 @@ const MenuBuilder: React.FC = () => {
     if (!newItemName.trim()) { toast.error('Enter item name'); return; }
     if (!addItemSubId) { toast.error('Select a subcategory'); return; }
     try {
-      await createItem.mutateAsync({ name: newItemName.trim(), subcategory_id: addItemSubId });
-      toast.success('Item added!');
+      const result: any = await createItem.mutateAsync({ name: newItemName.trim(), subcategory_id: addItemSubId });
+      // Force-refetch so the new item appears immediately
+      await refetchItems();
       setNewItemName('');
-      // keep addItemCatId and addItemSubId so the user can add more items to the same sub
+      // Navigate the filter to show exactly where the new item was added
+      setSelectedCatId(addItemCatId);
+      setSelectedSubId(addItemSubId);
+      setItemSearch('');
+      if (result?.id) setLastAddedItemId(result.id);
+      toast.success(`"${result?.name ?? 'Item'}" added under ${subcategories.find(s => s.id === addItemSubId)?.name ?? ''}`);
     }
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
@@ -381,7 +399,9 @@ const MenuBuilder: React.FC = () => {
                 <Empty text={iq ? `No items match "${itemSearch}"` : selectedSubId ? 'No items in this subcategory' : 'No items yet'} />
               )}
               {displayedItems.map(item => (
-                <div key={item.id} style={{ ...row, borderLeft: '3px solid transparent', cursor: 'default' }}>
+                <div key={item.id} id={`item-${item.id}`}
+                  style={{ ...row, borderLeft: item.id === lastAddedItemId ? '3px solid #E8750A' : '3px solid transparent',
+                    background: item.id === lastAddedItemId ? '#FFFBF5' : 'transparent', cursor: 'default' }}>
                   {editingItemId === item.id ? (
                     <div style={{ display: 'flex', gap: 6, flex: 1 }}>
                       <input style={{ ...inp, flex: 1 }} value={editItemName} onChange={e => setEditItemName(e.target.value)}
