@@ -764,7 +764,7 @@ const Billing: React.FC = () => {
                         const saving = (m.per_plate_amount - offer) * m.guest_count;
                         return (
                           <div key={`${di}-${mi}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '1px 0', color: '#3B6D11' }}>
-                            <span>{m.meal_type.charAt(0).toUpperCase() + m.meal_type.slice(1)} — Day {day.day_number}</span>
+                            <span>{m.meal_type.charAt(0).toUpperCase() + m.meal_type.slice(1)} — Day {day.day_number}{day.date ? ` · ${formatDateIST(day.date, 'dd-MM')}` : ''}</span>
                             <span style={{ fontWeight: 600 }}>-₹{saving.toLocaleString('en-IN')}</span>
                           </div>
                         );
