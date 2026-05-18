@@ -107,10 +107,10 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
           doc.setFont('times', 'italic'); doc.setFontSize(9); doc.setTextColor(50, 50, 48);
           const itemLine = (meal.items || []).map((it: any) => it.item_name).join('  .  ');
           const lines: string[] = doc.splitTextToSize(itemLine, W - margin * 2 - 14);
-          lines.forEach((line: string) => {
+          for (const line of lines) {
             if (y > 262) { doc.addPage(); y = 20; }
             doc.text(line, margin + 6, y); y += 4.5;
-          });
+          }
           y += 2;
         }
 
