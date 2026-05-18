@@ -121,12 +121,18 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
         // Pricing summary — always shown regardless of withPrices checkbox
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90, 90, 88);
         if (offerRate > 0) {
-          const priceLine = `Rs.${meal.per_plate_amount.toLocaleString('en-IN')}/plate x ${meal.guest_count} pax = Actual: Rs.${meal.subtotal.toLocaleString('en-IN')}  &  Offer: Rs.${offerRate.toLocaleString('en-IN')}/plate = Saving: - Rs.${mealSaving.toLocaleString('en-IN')}`;
-          const priceLines: string[] = doc.splitTextToSize(priceLine, W - margin * 2 - 10);
-          for (const pl of priceLines) {
-            if (y > 268) { doc.addPage(); y = 20; }
-            doc.text(pl, margin + 6, y); y += 4;
-          }
+          // Line 1: left = "Rs.X/plate x Y pax"   right = "Actual: Rs.Z"
+          if (y > 268) { doc.addPage(); y = 20; }
+          doc.text(`Rs.${meal.per_plate_amount.toLocaleString('en-IN')}/plate x ${meal.guest_count} pax`, margin + 6, y);
+          doc.text(`Actual: Rs.${meal.subtotal.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
+          y += 4.5;
+          // Line 2: left = "Offer: Rs.A/plate"   right = "Saving: - Rs.B"
+          if (y > 268) { doc.addPage(); y = 20; }
+          doc.setTextColor(34, 139, 34);
+          doc.text(`Offer: Rs.${offerRate.toLocaleString('en-IN')}/plate`, margin + 6, y);
+          doc.text(`Saving: - Rs.${mealSaving.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
+          doc.setTextColor(90, 90, 88);
+          y += 5;
         } else {
           doc.text(`Rs.${meal.per_plate_amount.toLocaleString('en-IN')}/plate x ${meal.guest_count} pax = Rs.${meal.subtotal.toLocaleString('en-IN')}`, margin + 6, y);
           y += 4.5;
