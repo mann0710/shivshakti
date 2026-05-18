@@ -78,20 +78,28 @@ const generateInvoicePDF = (
       for (const meal of (day.meals as any[])) {
         if (y > 255) { doc.addPage(); y = 20; }
         doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(60, 60, 58);
-        doc.text(`  ${meal.meal_type}${meal.time ? ` (${meal.time})` : ''}  ·  ${meal.guest_count} guests  ·  Rs.${meal.per_plate_amount}/plate`, margin + 2, y); y += 4;
+        const offerRateBill = meal.discount_amount || 0;
+        let mealRateLine = `  ${meal.meal_type}${meal.time ? ` (${meal.time})` : ''}  ·  ${meal.guest_count} guests  ·  Rs.${meal.per_plate_amount}/plate`;
+        if (offerRateBill > 0) mealRateLine += `  (Offer: Rs.${offerRateBill}/pl)`;
+        doc.text(mealRateLine, margin + 2, y); y += 4;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(100, 100, 98);
         for (const item of (meal.items as any[])) {
           if (y > 255) { doc.addPage(); y = 20; }
           doc.text(`    · ${item.item_name}`, margin + 4, y); y += 4;
         }
         doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 58);
+        const mealNetBill = offerRateBill > 0 ? offerRateBill * meal.guest_count : (meal.subtotal || 0);
         doc.text(`  ${meal.meal_type} subtotal:`, margin + 2, y);
-        doc.text(`Rs.${(meal.subtotal || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
+        doc.text(`Rs.${mealNetBill.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
         y += 5;
       }
+      const dayNetBill = (day.meals as any[]).reduce((s: number, m: any) => {
+        const or = m.discount_amount || 0;
+        return s + (or > 0 ? or * m.guest_count : (m.subtotal || 0));
+      }, 0);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 30, 28);
       doc.text(`  Day ${day.day_number} Subtotal`, margin, y);
-      doc.text(`Rs.${(day.day_subtotal || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
+      doc.text(`Rs.${dayNetBill.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' });
       y += 5;
       doc.setDrawColor(220, 220, 218); doc.line(margin, y, W - margin, y); y += 5;
     }
