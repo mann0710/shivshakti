@@ -182,58 +182,50 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
     }
   }
 
-  // Discount section — with meal-wise breakdown for multi-day
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  // ── Billing Summary ──────────────────────────────────────────────────────────
+  y += 2;
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 148);
+  doc.text('BILLING SUMMARY', margin, y); y += 6;
+  doc.setFont('helvetica', 'normal');
+
+  let qrIdx = 0;
+  const qrow = (label: string, value: string, valRGB: [number, number, number] = [30, 30, 28]) => {
+    if (y > 268) { doc.addPage(); y = 20; }
+    if (qrIdx % 2 === 1) { doc.setFillColor(247, 246, 243); doc.rect(margin - 2, y - 4, W - margin * 2 + 4, 5.5, 'F'); }
+    doc.setFontSize(9); doc.setTextColor(100, 100, 98); doc.text(label, margin, y);
+    doc.setTextColor(valRGB[0], valRGB[1], valRGB[2]); doc.text(value, W - margin, y, { align: 'right' });
+    y += 5; qrIdx++;
+  };
+
   if (q.is_multi_day && (q.event_days || []).length > 0) {
-    doc.setTextColor(100, 100, 98);
-    doc.text('Original Price:', margin, y);
-    doc.setTextColor(30, 30, 28);
-    doc.text(`Rs.${q.subtotal.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
+    qrow('Original Price', `Rs.${q.subtotal.toLocaleString('en-IN')}`);
     for (const day of (q.event_days || [])) {
       for (const meal of (day.meals || [])) {
         const offer = meal.discount_amount || 0;
         if (offer > 0 && meal.per_plate_amount > offer) {
           const saving = (meal.per_plate_amount - offer) * meal.guest_count;
-          if (y > 268) { doc.addPage(); y = 20; }
-          doc.setTextColor(100, 100, 98);
-          doc.text(`  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} (Day ${day.day_number}):`, margin, y);
-          doc.setTextColor(70, 140, 40);
-          doc.text(`-Rs.${saving.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 4.5;
+          qrow(`  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} (Day ${day.day_number})`, `-Rs.${saving.toLocaleString('en-IN')}`, [70, 140, 40]);
         }
       }
     }
     for (const ad of (q.additional_discounts || [])) {
       if (!ad.amount) continue;
-      if (y > 268) { doc.addPage(); y = 20; }
-      doc.setTextColor(100, 100, 98);
-      doc.text(`  ${ad.description || 'Discount'}:`, margin, y);
-      doc.setTextColor(70, 140, 40);
-      doc.text(`-Rs.${ad.amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 4.5;
+      qrow(`  ${ad.description || 'Discount'}`, `-Rs.${ad.amount.toLocaleString('en-IN')}`, [70, 140, 40]);
     }
-    y += 1;
   } else {
-    if (q.discount_amount > 0) {
-      doc.setTextColor(100, 100, 98);
-      doc.text('Discount:', margin, y); doc.setTextColor(70, 140, 40);
-      doc.text(`-Rs.${q.discount_amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
-    }
+    if (q.discount_amount > 0)
+      qrow('Discount', `-Rs.${q.discount_amount.toLocaleString('en-IN')}`, [70, 140, 40]);
   }
   (q.extra_charges || []).forEach(ec => {
     if (!ec.description && !ec.amount) return;
-    if (y > 240) { doc.addPage(); y = 20; }
-    doc.setTextColor(100, 100, 98); doc.text(`${ec.description || 'Extra Charge'}:`, margin, y);
-    doc.setTextColor(30, 30, 28); doc.text(`Rs.${(ec.amount || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
+    qrow(ec.description || 'Extra Charge', `Rs.${(ec.amount || 0).toLocaleString('en-IN')}`);
   });
   (q.transportation_charges || []).forEach(tc => {
     if (!tc.description && !tc.amount) return;
-    if (y > 240) { doc.addPage(); y = 20; }
-    doc.setTextColor(100, 100, 98); doc.text(`${tc.description || 'Transportation'}:`, margin, y);
-    doc.setTextColor(30, 30, 28); doc.text(`Rs.${(tc.amount || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
+    qrow(tc.description || 'Transportation', `Rs.${(tc.amount || 0).toLocaleString('en-IN')}`);
   });
-  if (q.gst_rate > 0) {
-    doc.setTextColor(100, 100, 98); doc.text(`GST @${q.gst_rate}%:`, margin, y);
-    doc.setTextColor(30, 30, 28); doc.text(`Rs.${q.gst_amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
-  }
+  if (q.gst_rate > 0)
+    qrow(`GST @${q.gst_rate}%`, `Rs.${q.gst_amount.toLocaleString('en-IN')}`);
 
   y += 2; hline(y, '#E8750A'); y += 7;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(30, 30, 28);

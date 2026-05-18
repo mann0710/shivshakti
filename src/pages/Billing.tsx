@@ -29,7 +29,13 @@ const generateInvoicePDF = (
   const hline = (y1: number, color = '#E5E5E0') => {
     doc.setDrawColor(color); doc.line(margin, y1, W - margin, y1);
   };
+  let summaryActive = false, rowBgIdx = 0;
+  const rowBg = () => {
+    if (rowBgIdx % 2 === 1) { doc.setFillColor(247, 246, 243); doc.rect(margin - 2, y - 4, W - margin * 2 + 4, 5.5, 'F'); }
+    rowBgIdx++;
+  };
   const row = (label: string, value: string, color = '#666660') => {
+    if (summaryActive) rowBg();
     doc.setFontSize(9); doc.setTextColor(color);
     doc.text(label, margin, y);
     doc.setTextColor(30, 30, 28);
@@ -134,6 +140,13 @@ const generateInvoicePDF = (
     y += 2;
   }
 
+  // Billing Summary header
+  y += 2; hline(y); y += 5;
+  doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 148);
+  doc.text('BILLING SUMMARY', margin, y); y += 6;
+  doc.setFont('helvetica', 'normal');
+  summaryActive = true; rowBgIdx = 0;
+
   // Totals
   doc.setFontSize(9); doc.setFont('helvetica', 'normal');
   if (inv.is_multi_day && (inv.event_days as any[] || []).length > 0) {
@@ -144,6 +157,7 @@ const generateInvoicePDF = (
         if (offer > 0 && meal.per_plate_amount > offer) {
           const saving = (meal.per_plate_amount - offer) * meal.guest_count;
           if (y > 268) { doc.addPage(); y = 20; }
+          rowBg();
           doc.setFontSize(9); doc.setTextColor(100, 100, 98);
           doc.text(`  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} (Day ${day.day_number}):`, margin, y);
           doc.setTextColor(70, 140, 40);
@@ -155,6 +169,7 @@ const generateInvoicePDF = (
     for (const ad of (inv.additional_discounts as any[] || [])) {
       if (!ad.amount) continue;
       if (y > 268) { doc.addPage(); y = 20; }
+      rowBg();
       doc.setTextColor(100, 100, 98);
       doc.text(`  ${ad.description || 'Discount'}:`, margin, y);
       doc.setTextColor(70, 140, 40);
