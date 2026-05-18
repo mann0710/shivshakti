@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   useMenuCategories, useCreateCategory, useUpdateCategory, useDeleteCategory,
   useMenuSubcategories, useCreateSubcategory, useUpdateSubcategory, useDeleteSubcategory,
@@ -9,7 +8,6 @@ import {
 } from '../hooks/useMenuBuilder';
 
 const MenuBuilder: React.FC = () => {
-  const qc = useQueryClient();
   const { data: categories = [] } = useMenuCategories();
   const { data: subcategories = [] } = useMenuSubcategories();
   const { data: items = [], refetch: refetchItems } = useMenuItemsFull();
