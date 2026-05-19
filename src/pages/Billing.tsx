@@ -32,30 +32,19 @@ const generateInvoicePDF = (
   const hasLogo = _iPdfLogo.complete && _iPdfLogo.naturalWidth > 0;
 
   // ── Header bar ────────────────────────────────────────────────────────────
-  doc.setFillColor(232, 117, 10); doc.rect(0, 0, W, 32, 'F');
-  y = 7;
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, 36, 'F');
+  doc.setFillColor(26, 35, 126); doc.rect(0, 35.5, W, 0.5, 'F');
+  y = 4;
   if (hasLogo) {
-    try { doc.addImage(_iPdfLogo as any, 'PNG', M, y, 18, 18); } catch {}
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
-    doc.text('Shiv Shakti', M + 22, y + 7);
-    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
-    doc.text('Catering & Events', M + 22, y + 14);
-    if (gstNumber) doc.text(`GSTIN: ${gstNumber}`, M + 22, y + 20.5);
-  } else {
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-    doc.text('Shiv Shakti', M, y + 9);
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text('Catering & Events', M, y + 17);
-    if (gstNumber) doc.text(`GSTIN: ${gstNumber}`, M, y + 23.5);
+    try { doc.addImage(_iPdfLogo as any, 'PNG', M, y, 40, 29); } catch {}
   }
-  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-  doc.text('INVOICE', W - M, y + 7, { align: 'right' });
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-  doc.text(inv.invoice_number, W - M, y + 14, { align: 'right' });
-  doc.text(`Date: ${formatDateIST(inv.issue_date, 'dd-MM-yyyy')}`, W - M, y + 21, { align: 'right' });
-  y = 40;
+  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
+  doc.text('INVOICE', W - M, y + 11, { align: 'right' });
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
+  doc.text(inv.invoice_number, W - M, y + 18, { align: 'right' });
+  doc.text(`Date: ${formatDateIST(inv.issue_date, 'dd-MM-yyyy')}`, W - M, y + 25, { align: 'right' });
+  if (gstNumber) doc.text(`GSTIN: ${gstNumber}`, W - M, y + 32, { align: 'right' });
+  y = 43;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const infoRow = (label: string, value: string) => {
@@ -72,7 +61,7 @@ const generateInvoicePDF = (
   const MC = [20, 45, 20, 35, 60];
   const drawMealHeader = () => {
     if (y > 272) { doc.addPage(); y = 15; }
-    doc.setFillColor(232, 117, 10); doc.rect(M, y, CW, RH, 'F');
+    doc.setFillColor(26, 35, 126); doc.rect(M, y, CW, RH, 'F');
     doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
     const headers = ['Day', 'Meal Type', 'Guests', 'Rate/Plate', 'Amount'];
     let x = M;
@@ -133,9 +122,9 @@ const generateInvoicePDF = (
       }, 0);
 
       // Day separator row
-      doc.setFillColor(255, 247, 232); doc.rect(M, y, CW, RH, 'F');
+      doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, RH, 'F');
       doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
-      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(180, 90, 0);
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
       doc.text(`Day ${day.day_number}  —  ${formatDateIST(day.date, 'dd-MM-yyyy')}`, M + 3, y + RH - 2);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
       doc.text(`Rs.${dayNetBill.toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
@@ -202,7 +191,7 @@ const generateInvoicePDF = (
       doc.text('MENU ITEMS', M, y); y += 5;
 
       // Header: Description=100, Qty=20, Unit Price=30, Total=30
-      doc.setFillColor(232, 117, 10); doc.rect(M, y, CW, RH, 'F');
+      doc.setFillColor(26, 35, 126); doc.rect(M, y, CW, RH, 'F');
       doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
       doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
       doc.text('Description', M + 3, y + RH - 2);
@@ -287,7 +276,7 @@ const generateInvoicePDF = (
     summaryRow('Transportation', `Rs.${inv.transportation_charge.toLocaleString('en-IN')}`);
   if (inv.gst_rate > 0)
     summaryRow(`GST @${inv.gst_rate}%`, `Rs.${inv.gst_amount.toLocaleString('en-IN')}`);
-  summaryRow('Payable Amount', `Rs.${inv.total_amount.toLocaleString('en-IN')}`, true, [232, 117, 10]);
+  summaryRow('Payable Amount', `Rs.${inv.total_amount.toLocaleString('en-IN')}`, true, [26, 35, 126]);
   y += 3;
 
   summaryRow('Amount Paid', `Rs.${inv.advance_paid.toLocaleString('en-IN')}`, false, [34, 120, 34]);
@@ -306,7 +295,7 @@ const generateInvoicePDF = (
 
     // Payment table columns: Date=40, Type=40, Mode=50, Amount=50
     const PC = [40, 40, 50, 50];
-    doc.setFillColor(232, 117, 10); doc.rect(M, y, CW, RH, 'F');
+    doc.setFillColor(26, 35, 126); doc.rect(M, y, CW, RH, 'F');
     doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
     const pHeaders = ['Date', 'Type', 'Mode', 'Amount'];
     let px = M;
