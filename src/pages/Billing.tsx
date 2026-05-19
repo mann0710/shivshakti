@@ -156,6 +156,18 @@ const generateInvoicePDF = (
         }
         y += RH;
 
+        // Ceremony name sub-row
+        if (meal.ceremony_name) {
+          if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
+          const cereH = 6;
+          doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, cereH, 'F');
+          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, cereH);
+          doc.line(M + MC[0], y, M + MC[0], y + cereH);
+          doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(26, 35, 126);
+          doc.text(`  Ceremony: ${meal.ceremony_name}`, M + MC[0] + 2, y + cereH - 1.5);
+          y += cereH;
+        }
+
         // Item sub-rows
         for (const item of (meal.items as any[])) {
           if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }

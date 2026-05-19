@@ -13,6 +13,7 @@ export interface QuotationLineItem {
 export interface MealSlot {
   id: string;
   meal_type: string;
+  ceremony_name?: string;
   time: string;
   guest_count: number;
   per_plate_amount: number;

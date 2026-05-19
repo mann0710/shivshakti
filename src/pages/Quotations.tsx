@@ -161,6 +161,18 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
         }
         y += RH;
 
+        // Ceremony name sub-row
+        if (meal.ceremony_name) {
+          if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
+          const cereH = 6;
+          doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, cereH, 'F');
+          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, cereH);
+          doc.line(M + MC[0], y, M + MC[0], y + cereH);
+          doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(26, 35, 126);
+          doc.text(`  Ceremony: ${meal.ceremony_name}`, M + MC[0] + 2, y + cereH - 1.5);
+          y += cereH;
+        }
+
         // Item sub-rows
         for (const it of (meal.items || [])) {
           if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
@@ -484,7 +496,7 @@ const Quotations: React.FC = () => {
     setEventDays(prev => prev.map((d, i) => i !== dayIdx ? d : {
       ...d,
       meals: [...d.meals, {
-        id: mealId, meal_type: 'breakfast', time: '', guest_count: guestCount,
+        id: mealId, meal_type: 'breakfast', ceremony_name: '', time: '', guest_count: guestCount,
         per_plate_amount: 0, discount_amount: 0, items: [], subtotal: 0,
       }],
     }));
@@ -919,9 +931,16 @@ const Quotations: React.FC = () => {
                               {/* Drag handle */}
                               <span title="Drag to move meal" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, padding: '0 2px', flexShrink: 0, userSelect: 'none' }}>⠿</span>
                               <select value={meal.meal_type} onChange={e => updateMealField(dayIdx, meal.id, 'meal_type', e.target.value)}
-                                style={{ border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, background: '#fff', fontWeight: 600, color: '#E8750A' }}>
+                                style={{ border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, background: '#fff', fontWeight: 600, color: '#1A237E' }}>
                                 {MEAL_TYPES.map(t => <option key={t} value={t.toLowerCase()}>{t}</option>)}
                               </select>
+                              <input
+                                type="text"
+                                value={meal.ceremony_name || ''}
+                                onChange={e => updateMealField(dayIdx, meal.id, 'ceremony_name', e.target.value)}
+                                placeholder="Ceremony name (optional)"
+                                style={{ border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 180, color: '#444' }}
+                              />
                               <input type="time" value={meal.time} onChange={e => updateMealField(dayIdx, meal.id, 'time', e.target.value)}
                                 style={{ border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 110 }} />
                               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
