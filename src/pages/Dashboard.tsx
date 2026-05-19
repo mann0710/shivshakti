@@ -134,7 +134,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
         {/* Seasonal stats */}
         <div style={card}>
           <div style={cardTitle}>
-            Festival Business
+            Sessional Business
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <select
                 value={seasonalYear}
@@ -143,7 +143,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
               >
                 {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
-              <span style={cardLink} onClick={() => onNavigate('seasonal_billing')}>View →</span>
+              <span style={cardLink} onClick={() => onNavigate('seasonal_dashboard')}>View →</span>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>

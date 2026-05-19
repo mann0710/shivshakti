@@ -13,6 +13,7 @@ export interface SeasonalOrderItem {
 
 export interface SeasonalOrder {
   id: string;
+  occasion_id?: string;
   customer_name: string;
   phone: string;
   items: SeasonalOrderItem[];
