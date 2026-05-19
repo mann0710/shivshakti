@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { useBookings, useCreateBooking, useUpdateBooking, useDeleteBooking } from '../hooks/useBookings';
 import { useCustomers, useCreateCustomer } from '../hooks/useCustomers';
 import { useMenus } from '../hooks/useMenus';
-import { useTeamMembers, useEventTypes, DEFAULT_EVENTS } from '../hooks/useDataCenter';
+import { useTeamMembers, useEventTypes, useCreateEventType, DEFAULT_EVENTS } from '../hooks/useDataCenter';
 import StatusPill from '../components/StatusPill';
 import { Booking } from '../types';
 import { formatDateIST } from '../lib/ist';
@@ -70,6 +70,7 @@ const Bookings: React.FC = () => {
   const updateBooking = useUpdateBooking();
   const deleteBooking = useDeleteBooking();
   const createCustomer = useCreateCustomer();
+  const createEventType = useCreateEventType();
 
   const eventTypes = eventTypesList.length > 0 ? eventTypesList.map(e => e.name) : DEFAULT_EVENTS;
 
@@ -87,6 +88,8 @@ const Bookings: React.FC = () => {
   const [newEndDate, setNewEndDate]       = useState('');
   const [isMultiDayEdit, setIsMultiDayEdit] = useState(false);
   const [editEndDate, setEditEndDate]       = useState('');
+  const [customEventType, setCustomEventType] = useState('');
+  const [editCustomEventType, setEditCustomEventType] = useState('');
 
   useEffect(() => {
     if (eventTypes.length > 0 && !form.event_type) {
@@ -135,6 +138,12 @@ const Bookings: React.FC = () => {
     if (form.customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail)) {
       toast.error('Enter a valid email address'); return;
     }
+    const resolvedEventType = form.event_type === 'Other'
+      ? customEventType.trim()
+      : form.event_type;
+    if (form.event_type === 'Other' && !resolvedEventType) {
+      toast.error('Please enter a custom event name'); return;
+    }
     try {
       let customerId = form.customer_id;
       if (!customerId && form.newCustomerName) {
@@ -146,7 +155,7 @@ const Bookings: React.FC = () => {
       }
       if (!customerId) { toast.error('Select or add a customer'); return; }
       await createBooking.mutateAsync({
-        customer_id: customerId, event_type: form.event_type,
+        customer_id: customerId, event_type: resolvedEventType,
         event_date: form.event_date, event_time: form.event_time || undefined,
         venue: form.venue, guest_count: parseInt(form.guest_count) || 0,
         menu_id: form.menu_id || undefined,
@@ -154,9 +163,13 @@ const Bookings: React.FC = () => {
         status: 'inquiry', estimated_cost: estimatedCost,
         end_date: isMultiDayNew && newEndDate ? newEndDate : undefined,
       });
+      if (form.event_type === 'Other' && resolvedEventType) {
+        createEventType.mutateAsync(resolvedEventType).catch(() => {});
+      }
       toast.success('Booking created!');
       setShowForm(false);
       setIsMultiDayNew(false); setNewEndDate('');
+      setCustomEventType('');
       setForm({ ...emptyForm, event_type: eventTypes[0] || 'Wedding' });
     } catch (e: any) { toast.error(e.message || 'Failed to create booking'); }
   };
@@ -169,8 +182,10 @@ const Bookings: React.FC = () => {
 
   const startEdit = (b: Booking) => {
     setEditingId(b.id);
+    const isKnownType = eventTypes.includes(b.event_type);
+    setEditCustomEventType(isKnownType ? '' : b.event_type);
     setEditForm({
-      event_type: b.event_type, event_date: b.event_date,
+      event_type: isKnownType ? b.event_type : 'Other', event_date: b.event_date,
       event_time: b.event_time || '', venue: b.venue,
       guest_count: String(b.guest_count), menu_id: b.menu_id || '',
       special_instructions: b.special_instructions || '', status: b.status,
@@ -184,11 +199,17 @@ const Bookings: React.FC = () => {
   const handleUpdate = async () => {
     if (!editingId) return;
     if (!editForm.event_date) { toast.error('Event date is required'); return; }
+    const resolvedEditEventType = editForm.event_type === 'Other'
+      ? editCustomEventType.trim()
+      : editForm.event_type;
+    if (editForm.event_type === 'Other' && !resolvedEditEventType) {
+      toast.error('Please enter a custom event name'); return;
+    }
     try {
       const booking = bookings.find(b => b.id === editingId)!;
       const updated = await updateBooking.mutateAsync({
         id: editingId,
-        event_type: editForm.event_type,
+        event_type: resolvedEditEventType,
         event_date: editForm.event_date,
         event_time: editForm.event_time || undefined,
         venue: editForm.venue,
@@ -199,6 +220,9 @@ const Bookings: React.FC = () => {
         estimated_cost: editEstimatedCost || booking.estimated_cost,
         end_date: isMultiDayEdit && editEndDate ? editEndDate : undefined,
       });
+      if (editForm.event_type === 'Other' && resolvedEditEventType) {
+        createEventType.mutateAsync(resolvedEditEventType).catch(() => {});
+      }
       toast.success('Booking updated!');
       if (editForm.status === 'confirmed' && booking.status !== 'confirmed') {
         openGoogleCalendar(updated);
@@ -295,8 +319,13 @@ const Bookings: React.FC = () => {
               <div>
                 <label style={lbl}>Event type</label>
                 <select style={inp} value={editForm.event_type} onChange={e => setEditForm({ ...editForm, event_type: e.target.value })}>
-                  {eventTypes.map(t => <option key={t}>{t}</option>)}
+                  {eventTypes.filter(t => t !== 'Other').map(t => <option key={t}>{t}</option>)}
+                  <option value="Other">Other</option>
                 </select>
+                {editForm.event_type === 'Other' && (
+                  <input style={{ ...inp, marginTop: 6 }} placeholder="Enter custom event name"
+                    value={editCustomEventType} onChange={e => setEditCustomEventType(e.target.value)} />
+                )}
               </div>
               <div>
                 <label style={lbl}>Status</label>
@@ -396,8 +425,13 @@ const Bookings: React.FC = () => {
               <div>
                 <label style={lbl}>Event type</label>
                 <select style={inp} value={form.event_type} onChange={e => setForm(prev => ({ ...prev, event_type: e.target.value }))}>
-                  {eventTypes.map(t => <option key={t}>{t}</option>)}
+                  {eventTypes.filter(t => t !== 'Other').map(t => <option key={t}>{t}</option>)}
+                  <option value="Other">Other</option>
                 </select>
+                {form.event_type === 'Other' && (
+                  <input style={{ ...inp, marginTop: 6 }} placeholder="Enter custom event name"
+                    value={customEventType} onChange={e => setCustomEventType(e.target.value)} />
+                )}
               </div>
               <div>
                 <label style={lbl}>Event date *</label>

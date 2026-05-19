@@ -206,42 +206,57 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
     }
     y += 6;
   } else {
-    // Single-day: bordered items table
+    // Single-day: items grouped by subcategory
     if ((q.items || []).length > 0) {
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
       doc.text('MENU ITEMS', M, y); y += 5;
 
-      // Header: Category=50, Subcategory=50, Item=58, Amount=22
+      // Header: Item, Amount
       doc.setFillColor(26, 35, 126); doc.rect(M, y, CW, RH, 'F');
       doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
       doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-      doc.text('Category', M + 3, y + RH - 2);
-      doc.line(M + 50, y, M + 50, y + RH);
-      doc.text('Subcategory', M + 53, y + RH - 2);
-      doc.line(M + 100, y, M + 100, y + RH);
-      doc.text('Item', M + 103, y + RH - 2);
+      doc.text('Item', M + 3, y + RH - 2);
       if (withPrices) {
         doc.line(M + 158, y, M + 158, y + RH);
         doc.text('Amount', M + CW - 2, y + RH - 2, { align: 'right' });
       }
       y += RH;
 
-      (q.items || []).forEach(item => {
-        if (y > 268) { doc.addPage(); y = 20; }
-        doc.setFillColor(255, 255, 255); doc.rect(M, y, CW, RH, 'F');
-        doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
-        doc.line(M + 50, y, M + 50, y + RH);
-        doc.line(M + 100, y, M + 100, y + RH);
-        doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
-        doc.setTextColor(26, 35, 126); doc.text(item.category_name, M + 3, y + RH - 2);
-        doc.setTextColor(80, 80, 78); doc.text(item.subcategory_name, M + 53, y + RH - 2);
-        doc.setTextColor(30, 30, 28); doc.text(item.item_name, M + 103, y + RH - 2);
-        if (withPrices) {
-          doc.line(M + 158, y, M + 158, y + RH);
-          doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
+      // Group items by subcategory (preserve first-appearance order)
+      type SubGroup = { subcategoryName: string; categoryName: string; items: typeof q.items };
+      const subGroups: SubGroup[] = [];
+      const seenSubs = new Set<string>();
+      for (const item of (q.items || [])) {
+        const key = `${item.category_name}|||${item.subcategory_name}`;
+        if (!seenSubs.has(key)) {
+          seenSubs.add(key);
+          subGroups.push({ subcategoryName: item.subcategory_name, categoryName: item.category_name, items: [] });
         }
+        subGroups.find(g => g.subcategoryName === item.subcategory_name && g.categoryName === item.category_name)!.items.push(item);
+      }
+
+      for (const group of subGroups) {
+        if (y > 268) { doc.addPage(); y = 20; }
+        // Subcategory header row
+        doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, RH, 'F');
+        doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
+        doc.text(`${group.categoryName}  ›  ${group.subcategoryName}`, M + 3, y + RH - 2);
         y += RH;
-      });
+
+        for (const item of group.items) {
+          if (y > 268) { doc.addPage(); y = 20; }
+          doc.setFillColor(255, 255, 255); doc.rect(M, y, CW, RH, 'F');
+          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
+          doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
+          doc.text(`  · ${item.item_name}`, M + 3, y + RH - 2);
+          if (withPrices) {
+            doc.line(M + 158, y, M + 158, y + RH);
+            doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
+          }
+          y += RH;
+        }
+      }
       y += 3;
     }
     if (withPrices && q.per_plate_amount > 0) {

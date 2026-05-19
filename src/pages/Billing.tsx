@@ -4,7 +4,7 @@ import jsPDF from 'jspdf';
 import {
   useInvoices, useCreateInvoice, useRecordPayment,
   useUpdatePayment, useDeletePayment, usePaymentHistory,
-  useRecalculateTotals, useDeleteInvoice,
+  useRecalculateTotals, useDeleteInvoice, useUpdateEventDays,
 } from '../hooks/useInvoices';
 import { useBookings } from '../hooks/useBookings';
 import { useDataCenter } from '../hooks/useDataCenter';
@@ -361,6 +361,7 @@ const Billing: React.FC = () => {
   const deletePayment = useDeletePayment();
   const recalcTotals = useRecalculateTotals();
   const deleteInvoice = useDeleteInvoice();
+  const updateEventDays = useUpdateEventDays();
   const { data: quotations = [] } = useQuotations();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -373,6 +374,8 @@ const Billing: React.FC = () => {
 
   const [additionalDiscounts, setAdditionalDiscounts] = useState<{ id: string; description: string; amount: number }[]>([]);
   const [transportItems, setTransportItems] = useState<{ description: string; amount: number }[]>([]);
+  const [extraChargeItems, setExtraChargeItems] = useState<{ description: string; amount: number }[]>([]);
+  const [editableEventDays, setEditableEventDays] = useState<any[]>([]);
 
   const [payForm, setPayForm] = useState({
     amount: '', payment_type: 'advance' as 'advance' | 'partial',
@@ -441,6 +444,8 @@ const Billing: React.FC = () => {
           ? [{ description: 'Transportation', amount: selected.transportation_charge }]
           : []
     );
+    setExtraChargeItems(selected.extra_charges?.length ? [...selected.extra_charges] : []);
+    setEditableEventDays((selected.event_days || []) as any[]);
   }, [selected?.id]); // eslint-disable-line
 
   const handleCreate = async () => {
@@ -568,6 +573,7 @@ const Billing: React.FC = () => {
         apply_gst: checked, gst_rate: dc?.gst_rate ?? 18,
         transportation_charges: transportItems,
         additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
+        extra_charges: extraChargeItems.filter(e => e.description.trim() || e.amount > 0),
       });
       toast.success(checked ? `GST @${dc?.gst_rate ?? 18}% added` : 'GST removed');
     } catch (e: any) { toast.error(e?.message || 'Failed to update GST'); }
@@ -583,6 +589,7 @@ const Billing: React.FC = () => {
         apply_gst: showGST, gst_rate: dc?.gst_rate ?? 18,
         transportation_charges: transportItems,
         additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
+        extra_charges: extraChargeItems.filter(e => e.description.trim() || e.amount > 0),
       });
       toast.success('Discount applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply discount'); }
@@ -598,9 +605,57 @@ const Billing: React.FC = () => {
         apply_gst: showGST, gst_rate: dc?.gst_rate ?? 18,
         transportation_charges: transportItems,
         additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
+        extra_charges: extraChargeItems.filter(e => e.description.trim() || e.amount > 0),
       });
       toast.success('Transportation charge applied!');
     } catch (e: any) { toast.error(e?.message || 'Failed to apply transport'); }
+  };
+
+  const handleApplyExtraCharges = async () => {
+    if (!selected) return;
+    try {
+      await recalcTotals.mutateAsync({
+        invoiceId: selected.id,
+        discount_amount: computeTotalDiscount(),
+        discount_type: 'amount',
+        apply_gst: showGST, gst_rate: dc?.gst_rate ?? 18,
+        transportation_charges: transportItems,
+        additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
+        extra_charges: extraChargeItems.filter(e => e.description.trim() || e.amount > 0),
+      });
+      toast.success('Extra charges applied!');
+    } catch (e: any) { toast.error(e?.message || 'Failed to apply extra charges'); }
+  };
+
+  const handleUpdateGuestCount = (dayIndex: number, mealIndex: number, newCount: number) => {
+    setEditableEventDays(prev => prev.map((day: any, di: number) => {
+      if (di !== dayIndex) return day;
+      const meals = (day.meals as any[]).map((meal: any, mi: number) => {
+        if (mi !== mealIndex) return meal;
+        const subtotal = newCount * (meal.per_plate_amount || 0);
+        return { ...meal, guest_count: newCount, subtotal };
+      });
+      const day_subtotal = meals.reduce((s: number, m: any) => s + (m.subtotal || 0), 0);
+      return { ...day, meals, day_subtotal };
+    }));
+  };
+
+  const handleApplyEventDays = async () => {
+    if (!selected) return;
+    const newSubtotal = editableEventDays.reduce((s: number, day: any) => s + (day.day_subtotal || 0), 0);
+    try {
+      await updateEventDays.mutateAsync({ invoiceId: selected.id, event_days: editableEventDays, subtotal: newSubtotal });
+      await recalcTotals.mutateAsync({
+        invoiceId: selected.id,
+        discount_amount: computeTotalDiscount(),
+        discount_type: 'amount',
+        apply_gst: showGST, gst_rate: dc?.gst_rate ?? 18,
+        transportation_charges: transportItems,
+        additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
+        extra_charges: extraChargeItems.filter(e => e.description.trim() || e.amount > 0),
+      });
+      toast.success('Guest counts updated!');
+    } catch (e: any) { toast.error(e?.message || 'Failed to update guest counts'); }
   };
 
   const handleDeleteInvoice = async (inv: Invoice, e: React.MouseEvent) => {
@@ -802,9 +857,15 @@ const Billing: React.FC = () => {
               {/* ── Event content: multi-day schedule or flat menu items ── */}
               {selected.is_multi_day && (selected.event_days || []).length > 0 ? (
                 <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
-                  <div style={{ padding: '7px 12px', background: '#F9F8F5', fontSize: 11, fontWeight: 600, color: '#888880', borderBottom: '0.5px solid #E5E5E0' }}>EVENT SCHEDULE</div>
-                  {(selected.event_days as any[]).map((day: any, di: number) => (
-                    <div key={di} style={{ borderBottom: di < (selected.event_days?.length ?? 0) - 1 ? '0.5px solid #E5E5E0' : 'none' }}>
+                  <div style={{ padding: '7px 12px', background: '#F9F8F5', fontSize: 11, fontWeight: 600, color: '#888880', borderBottom: '0.5px solid #E5E5E0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>EVENT SCHEDULE</span>
+                    <button onClick={handleApplyEventDays} disabled={updateEventDays.isPending || recalcTotals.isPending}
+                      style={{ fontSize: 11, color: '#E8750A', background: 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>
+                      {updateEventDays.isPending ? '...' : 'Save Guest Counts'}
+                    </button>
+                  </div>
+                  {editableEventDays.map((day: any, di: number) => (
+                    <div key={di} style={{ borderBottom: di < editableEventDays.length - 1 ? '0.5px solid #E5E5E0' : 'none' }}>
                       <div style={{ padding: '8px 12px 4px', fontWeight: 600, fontSize: 12, color: '#E8750A', background: '#FFFBF5' }}>
                         Day {day.day_number} — {day.date}
                       </div>
@@ -814,8 +875,14 @@ const Billing: React.FC = () => {
                             <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>{meal.meal_type}{meal.time ? ` (${meal.time})` : ''}</span>
                             <span style={{ fontSize: 12, fontWeight: 600, color: '#E8750A' }}>₹{(meal.subtotal || 0).toLocaleString()}</span>
                           </div>
-                          <div style={{ fontSize: 11, color: '#888880', marginBottom: 4 }}>
-                            {meal.guest_count} guests × ₹{meal.per_plate_amount}/plate
+                          <div style={{ fontSize: 11, color: '#888880', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                            <input
+                              type="number" min={1}
+                              value={meal.guest_count}
+                              onChange={e => handleUpdateGuestCount(di, mi, parseInt(e.target.value) || 1)}
+                              style={{ width: 64, padding: '2px 6px', borderRadius: 5, border: '0.5px solid #D0D0CC', fontSize: 12, textAlign: 'right' }}
+                            />
+                            <span>guests × ₹{meal.per_plate_amount}/plate</span>
                           </div>
                           {(meal.items as any[]).map((item: any, ii: number) => (
                             <div key={ii} style={{ fontSize: 11, color: '#666660', paddingLeft: 8, paddingTop: 1 }}>· {item.item_name}</div>
@@ -860,20 +927,38 @@ const Billing: React.FC = () => {
                 </>
               )}
 
-              {/* ── Extra Charges (from quotation) ── */}
-              {(selected.extra_charges || []).length > 0 && (
-                <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
-                  <div style={{ padding: '7px 12px', background: '#F9F8F5', fontSize: 11, fontWeight: 600, color: '#888880', borderBottom: '0.5px solid #E5E5E0' }}>EXTRA CHARGES</div>
-                  <div style={{ padding: '8px 12px' }}>
-                    {(selected.extra_charges || []).map((ec, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#444', padding: '3px 0' }}>
-                        <span>{ec.description || 'Extra Charge'}</span>
-                        <span style={{ fontWeight: 500 }}>+₹{(ec.amount || 0).toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
+              {/* ── Extra Charges (editable) ── */}
+              <div style={{ background: '#FAFAF8', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#444440' }}>Extra Charges</div>
+                  <button onClick={() => setExtraChargeItems(prev => [...prev, { description: '', amount: 0 }])}
+                    style={{ fontSize: 11, color: '#7B1FA2', background: 'none', border: '1px solid #7B1FA2', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>
+                    + Add
+                  </button>
                 </div>
-              )}
+                {extraChargeItems.length === 0 && (
+                  <div style={{ fontSize: 11, color: '#AAAAAA', marginBottom: 6 }}>No extra charges</div>
+                )}
+                {extraChargeItems.map((ec, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                    <input placeholder="Description"
+                      value={ec.description}
+                      onChange={e => setExtraChargeItems(prev => prev.map((c, j) => j === i ? { ...c, description: e.target.value } : c))}
+                      style={{ ...inp, flex: 1, fontSize: 12 }} />
+                    <input type="number" placeholder="₹ 0"
+                      value={ec.amount || ''}
+                      onChange={e => setExtraChargeItems(prev => prev.map((c, j) => j === i ? { ...c, amount: parseFloat(e.target.value) || 0 } : c))}
+                      style={{ ...inp, width: 90, fontSize: 12, textAlign: 'right' as const }} />
+                    <button onClick={() => setExtraChargeItems(prev => prev.filter((_, j) => j !== i))}
+                      style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', flexShrink: 0 }}>×</button>
+                  </div>
+                ))}
+                {extraChargeItems.length > 0 && (
+                  <button onClick={handleApplyExtraCharges} style={{ ...btnPrimary, fontSize: 12, width: '100%', marginTop: 4, background: '#7B1FA2' }} disabled={recalcTotals.isPending}>
+                    {recalcTotals.isPending ? '...' : 'Apply Extra Charges'}
+                  </button>
+                )}
+              </div>
 
               {/* ── Discount ── */}
               <div style={{ background: '#FAFAF8', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '10px 12px', marginBottom: 10 }}>
