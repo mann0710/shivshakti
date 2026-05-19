@@ -32,213 +32,269 @@ const getDayNumber = (date: string, days: EventDay[]): number => {
   return idx >= 0 ? idx + 1 : 1;
 };
 
+// ─── PDF logo (preloaded at module level) ─────────────────────────────────────
+const _qPdfLogo = (() => { const i = new Image(); i.src = '/logo.png'; return i; })();
+
 // ─── PDF generator ────────────────────────────────────────────────────────────
 const downloadPDF = (q: Quotation, withPrices = true) => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const W = 210; const margin = 18;
-  let y = 18;
+  const W = 210; const M = 15; const CW = W - M * 2; // 180mm content width
+  const RH = 7; // standard row height
+  let y = 0;
 
-  const hline = (y1: number, color = '#E5E5E0') => { doc.setDrawColor(color); doc.line(margin, y1, W - margin, y1); };
+  const hasLogo = _qPdfLogo.complete && _qPdfLogo.naturalWidth > 0;
 
-  doc.setFillColor(232, 117, 10); doc.rect(0, 0, W, 28, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.text('Shiv Shakti', margin, 12);
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.text('Catering & Events', margin, 19);
-  doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.text('QUOTATION', W - margin, 12, { align: 'right' });
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.text(q.quotation_number, W - margin, 19, { align: 'right' });
-  y = 38;
-
-  doc.setTextColor(80, 80, 78); doc.setFontSize(9);
-  doc.text(`Date: ${formatDateIST(q.issue_date, 'dd-MM-yyyy')}`, margin, y);
-  doc.text(`Status: ${q.status.charAt(0).toUpperCase() + q.status.slice(1)}`, W - margin, y, { align: 'right' });
-  y += 6; hline(y); y += 7;
-
-  const customer = q.customer; const booking = q.booking;
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
-  doc.text('CUSTOMER', margin, y); y += 6;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 100, 98);
-  doc.text(customer?.name || '—', margin, y); y += 4;
-  if (customer?.phone) { doc.text(customer.phone, margin, y); y += 4; }
-
-  if (booking) {
-    y += 3; hline(y); y += 6;
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28); doc.text('EVENT DETAILS', margin, y); y += 6;
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
-    const details: [string, string][] = [['Event', booking.event_type || '—'], ['Date', formatDateIST(booking.event_date, 'dd-MM-yyyy')]];
-    if (booking.end_date && booking.end_date !== booking.event_date) details.push(['End Date', formatDateIST(booking.end_date, 'dd-MM-yyyy')]);
-    if (booking.event_time) details.push(['Time', booking.event_time]);
-    if (booking.venue) details.push(['Venue', booking.venue]);
-    details.forEach(([lbl, val]) => {
-      doc.setFontSize(9); doc.setTextColor(120, 120, 118); doc.text(`${lbl}:`, margin, y);
-      doc.setTextColor(30, 30, 28); doc.text(val, margin + 24, y); y += 5;
-    });
-  }
-
-  y += 3; hline(y); y += 6;
-
-  if (q.is_multi_day && q.event_days?.length) {
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
-    doc.text('EVENT SCHEDULE', margin, y); y += 7;
-    for (const day of q.event_days) {
-      if (y > 240) { doc.addPage(); y = 20; }
-      // Day header bar
-      doc.setFillColor(249, 248, 245); doc.rect(margin, y - 3, W - margin * 2, 8, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(232, 117, 10);
-      doc.text(`Day ${day.day_number}  -  ${formatDateIST(day.date, 'dd-MM-yyyy')}`, margin + 2, y + 1);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 78);
-      doc.text(`Rs.${day.day_subtotal.toLocaleString('en-IN')}`, W - margin - 2, y + 1, { align: 'right' });
-      y += 11;
-
-      for (const meal of day.meals) {
-        if (y > 248) { doc.addPage(); y = 20; }
-        const offerRate = meal.discount_amount || 0;
-        const mealNet = offerRate > 0 ? offerRate * meal.guest_count : meal.subtotal;
-        const mealSaving = offerRate > 0 ? (meal.per_plate_amount - offerRate) * meal.guest_count : 0;
-
-        // Meal type header — warm background
-        doc.setFillColor(255, 248, 235);
-        doc.rect(margin + 2, y - 2, W - margin * 2 - 4, 7, 'F');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(180, 90, 0);
-        doc.text(meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1), margin + 6, y + 2);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 130, 128);
-        const mealMeta = [meal.time, `${meal.guest_count} guests`].filter(Boolean).join('  .  ');
-        doc.text(mealMeta, W - margin - 4, y + 2, { align: 'right' });
-        y += 9;
-
-        // Items — one per line; show price on right when withPrices
-        if ((meal.items || []).length > 0) {
-          for (const it of (meal.items || [])) {
-            if (y > 262) { doc.addPage(); y = 20; }
-            doc.setFont('times', 'italic'); doc.setFontSize(9); doc.setTextColor(50, 50, 48);
-            doc.text(`  · ${(it as any).item_name}`, margin + 6, y);
-            if (withPrices && (it as any).amount > 0) {
-              doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(80, 80, 78);
-              doc.text(`Rs.${((it as any).amount || 0).toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
-            }
-            y += 4.5;
-          }
-          y += 1.5;
-        }
-
-        // Pricing summary — always shown regardless of withPrices checkbox
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90, 90, 88);
-        if (offerRate > 0) {
-          // Line 1: left = "Rs.X/plate x Y pax"   right = "Actual: Rs.Z"
-          if (y > 268) { doc.addPage(); y = 20; }
-          doc.text(`Rs.${meal.per_plate_amount.toLocaleString('en-IN')}/plate x ${meal.guest_count} pax`, margin + 6, y);
-          doc.text(`Actual: Rs.${meal.subtotal.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
-          y += 4.5;
-          // Line 2: left = "Offer: Rs.A/plate"   right = "Saving: - Rs.B"
-          if (y > 268) { doc.addPage(); y = 20; }
-          doc.setTextColor(34, 139, 34);
-          doc.text(`Offer: Rs.${offerRate.toLocaleString('en-IN')}/plate`, margin + 6, y);
-          doc.text(`Saving: - Rs.${mealSaving.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
-          doc.setTextColor(90, 90, 88);
-          y += 5;
-        } else {
-          doc.text(`Rs.${meal.per_plate_amount.toLocaleString('en-IN')}/plate x ${meal.guest_count} pax = Rs.${meal.subtotal.toLocaleString('en-IN')}`, margin + 6, y);
-          y += 4.5;
-        }
-        // Meal total line (always shown)
-        doc.setDrawColor(220, 218, 215);
-        doc.line(margin + 4, y, W - margin - 4, y); y += 3.5;
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-        doc.setTextColor(40, 40, 38);
-        doc.text('Meal Total', margin + 6, y);
-        doc.setTextColor(offerRate > 0 && withPrices ? 232 : 30, offerRate > 0 && withPrices ? 117 : 30, offerRate > 0 && withPrices ? 10 : 28);
-        doc.text(`Rs.${mealNet.toLocaleString('en-IN')}`, W - margin - 4, y, { align: 'right' });
-        y += 8;
-      }
-      hline(y, '#E5E5E0'); y += 5;
-    }
+  // ── Header bar ──────────────────────────────────────────────────────────────
+  doc.setFillColor(232, 117, 10); doc.rect(0, 0, W, 32, 'F');
+  y = 7;
+  if (hasLogo) {
+    try { doc.addImage(_qPdfLogo as any, 'PNG', M, y, 18, 18); } catch {}
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+    doc.text('Shiv Shakti', M + 22, y + 7);
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+    doc.text('Catering & Events', M + 22, y + 14);
   } else {
-    // Single-day: items table
-    doc.setFillColor(249, 248, 245); doc.rect(margin, y - 4, W - margin * 2, 8, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(120, 120, 118);
-    doc.text('CATEGORY', margin + 2, y + 1); doc.text('SUBCATEGORY', margin + 48, y + 1);
-    doc.text('ITEM', margin + 90, y + 1);
-    if (withPrices) doc.text('AMOUNT', W - margin - 2, y + 1, { align: 'right' });
-    y += 9; hline(y); y += 5;
-
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); let lastCat = '';
-    (q.items || []).forEach(item => {
-      if (y > 240) { doc.addPage(); y = 20; }
-      if (item.category_name !== lastCat) {
-        doc.setFont('helvetica', 'bold'); doc.setTextColor(232, 117, 10); doc.text(item.category_name, margin + 2, y);
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28); lastCat = item.category_name; y += 5;
-      }
-      doc.setTextColor(100, 100, 98); doc.text(item.subcategory_name, margin + 48, y);
-      doc.setTextColor(30, 30, 28); doc.text(item.item_name, margin + 90, y);
-      if (withPrices) doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, W - margin - 2, y, { align: 'right' });
-      y += 5;
-    });
-
-    y += 3; hline(y); y += 6;
-    if (withPrices && q.per_plate_amount > 0) {
-      doc.setFontSize(9); doc.setTextColor(100, 100, 98);
-      doc.text('Per Plate Rate:', margin, y); doc.setTextColor(30, 30, 28);
-      doc.text(`Rs.${q.per_plate_amount.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
-      doc.setTextColor(100, 100, 98);
-      doc.text(`Subtotal (${q.per_plate_amount} x ${q.guest_count} guests):`, margin, y); doc.setTextColor(30, 30, 28);
-      doc.text(`Rs.${q.subtotal.toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 5;
-    }
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+    doc.text('Shiv Shakti', M, y + 9);
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text('Catering & Events', M, y + 17);
   }
+  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('QUOTATION', W - M, y + 7, { align: 'right' });
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text(q.quotation_number, W - M, y + 14, { align: 'right' });
+  doc.text(formatDateIST(q.issue_date, 'dd-MM-yyyy'), W - M, y + 21, { align: 'right' });
+  y = 40;
 
-  // ── Billing Summary ──────────────────────────────────────────────────────────
-  y += 2;
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
-  doc.text('BILLING SUMMARY', margin, y); y += 7;
-  doc.setFont('helvetica', 'normal');
-
-  let qrIdx = 0;
-  const qrow = (label: string, value: string, valRGB: [number, number, number] = [30, 30, 28]) => {
-    if (y > 268) { doc.addPage(); y = 20; }
-    if (qrIdx % 2 === 1) { doc.setFillColor(247, 246, 243); doc.rect(margin - 2, y - 4, W - margin * 2 + 4, 5.5, 'F'); }
-    doc.setFontSize(9); doc.setTextColor(100, 100, 98); doc.text(label, margin, y);
-    doc.setTextColor(valRGB[0], valRGB[1], valRGB[2]); doc.text(value, W - margin, y, { align: 'right' });
-    y += 5; qrIdx++;
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const infoRow = (label: string, value: string) => {
+    if (y > 272) { doc.addPage(); y = 15; }
+    doc.setDrawColor(210, 208, 205);
+    doc.rect(M, y, 52, RH); doc.rect(M + 52, y, CW - 52, RH);
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(120, 118, 115); doc.text(label, M + 3, y + RH - 2);
+    doc.setTextColor(30, 30, 28); doc.text(value, M + 55, y + RH - 2);
+    y += RH;
   };
 
+  // Meal table column widths: Day=20, MealType=45, Guests=20, Rate=35, Amount=60
+  const MC = [20, 45, 20, 35, 60];
+  const drawMealHeader = () => {
+    if (y > 272) { doc.addPage(); y = 15; }
+    doc.setFillColor(232, 117, 10); doc.rect(M, y, CW, RH, 'F');
+    doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
+    const headers = ['Day', 'Meal Type', 'Guests', 'Rate/Plate', 'Amount'];
+    let x = M;
+    headers.forEach((h, i) => {
+      if (i > 0) { doc.setDrawColor(200, 198, 195); doc.line(x, y, x, y + RH); }
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      const right = i >= 2;
+      doc.text(h, right ? x + MC[i] - 2 : x + 3, y + RH - 2, { align: right ? 'right' : 'left' });
+      x += MC[i];
+    });
+    y += RH;
+  };
+
+  const summaryRow = (label: string, value: string, bold = false, valColor: [number, number, number] = [30, 30, 28]) => {
+    if (y > 272) { doc.addPage(); y = 15; }
+    const rh = bold ? RH + 2 : RH;
+    if (bold) { doc.setFillColor(249, 247, 244); doc.rect(M, y, CW, rh, 'F'); }
+    doc.setDrawColor(210, 208, 205);
+    doc.rect(M, y, 120, rh); doc.rect(M + 120, y, CW - 120, rh);
+    doc.setFontSize(bold ? 10 : 9); doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setTextColor(80, 80, 78); doc.text(label, M + 3, y + rh - 2);
+    doc.setTextColor(valColor[0], valColor[1], valColor[2]);
+    doc.text(value, M + CW - 2, y + rh - 2, { align: 'right' });
+    y += rh;
+  };
+
+  // ── Info block ──────────────────────────────────────────────────────────────
+  const customer = q.customer; const booking = q.booking;
+  infoRow('Quotation No.', q.quotation_number);
+  infoRow('Customer', customer?.name || '—');
+  if (customer?.phone) infoRow('Phone', customer.phone);
+  if (booking?.event_type) infoRow('Event Type', booking.event_type);
+  if (booking?.event_date) {
+    if (booking.end_date && booking.end_date !== booking.event_date) {
+      infoRow('Event Dates', `${formatDateIST(booking.event_date, 'dd-MM-yyyy')} – ${formatDateIST(booking.end_date, 'dd-MM-yyyy')}`);
+    } else {
+      infoRow('Event Date', formatDateIST(booking.event_date, 'dd-MM-yyyy'));
+    }
+  }
+  if (booking?.event_time) infoRow('Time', booking.event_time);
+  if (booking?.venue) infoRow('Venue', booking.venue);
+  infoRow('Status', q.status.charAt(0).toUpperCase() + q.status.slice(1));
+  y += 6;
+
+  // ── Event Schedule ──────────────────────────────────────────────────────────
+  if (q.is_multi_day && q.event_days?.length) {
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+    doc.text('EVENT SCHEDULE', M, y); y += 5;
+    drawMealHeader();
+
+    for (const day of q.event_days) {
+      if (y > 265) { doc.addPage(); y = 15; drawMealHeader(); }
+      // Day separator row
+      doc.setFillColor(255, 247, 232); doc.rect(M, y, CW, RH, 'F');
+      doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(180, 90, 0);
+      doc.text(`Day ${day.day_number}  —  ${formatDateIST(day.date, 'dd-MM-yyyy')}`, M + 3, y + RH - 2);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
+      doc.text(`Rs.${day.day_subtotal.toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
+      y += RH;
+
+      for (const meal of day.meals) {
+        if (y > 265) { doc.addPage(); y = 15; drawMealHeader(); }
+        const offerRate = meal.discount_amount || 0;
+        const mealNet = offerRate > 0 ? offerRate * meal.guest_count : meal.subtotal;
+        const rateStr = `Rs.${(offerRate > 0 ? offerRate : meal.per_plate_amount).toLocaleString('en-IN')}/pl`;
+
+        // Main meal row
+        doc.setFillColor(255, 255, 255); doc.rect(M, y, CW, RH, 'F');
+        doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
+        let x = M;
+        const mealCells = [
+          `Day ${day.day_number}`,
+          meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1),
+          String(meal.guest_count),
+          rateStr,
+          `Rs.${mealNet.toLocaleString('en-IN')}`,
+        ];
+        mealCells.forEach((cell, i) => {
+          if (i > 0) { doc.setDrawColor(210, 208, 205); doc.line(x, y, x, y + RH); }
+          doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
+          const right = i >= 2;
+          doc.text(cell, right ? x + MC[i] - 2 : x + 3, y + RH - 2, { align: right ? 'right' : 'left' });
+          x += MC[i];
+        });
+        y += RH;
+
+        // Item sub-rows
+        for (const it of (meal.items || [])) {
+          if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
+          const subH = 6;
+          doc.setFillColor(250, 249, 246); doc.rect(M, y, CW, subH, 'F');
+          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, subH);
+          doc.line(M + MC[0], y, M + MC[0], y + subH);
+          doc.setFontSize(8); doc.setFont('times', 'italic'); doc.setTextColor(80, 80, 78);
+          doc.text(`  · ${(it as any).item_name}`, M + MC[0] + 2, y + subH - 1.5);
+          if (withPrices && (it as any).amount > 0) {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+            doc.text(`Rs.${((it as any).amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + subH - 1.5, { align: 'right' });
+          }
+          y += subH;
+        }
+
+        // Offer saving sub-row
+        if (offerRate > 0 && meal.per_plate_amount > offerRate) {
+          if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
+          const saving = (meal.per_plate_amount - offerRate) * meal.guest_count;
+          const subH = 6;
+          doc.setFillColor(240, 252, 240); doc.rect(M, y, CW, subH, 'F');
+          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, subH);
+          doc.line(M + MC[0], y, M + MC[0], y + subH);
+          doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(34, 120, 34);
+          doc.text(`  Actual Rs.${meal.per_plate_amount.toLocaleString('en-IN')}/pl — Offer saving`, M + MC[0] + 2, y + subH - 1.5);
+          doc.text(`-Rs.${saving.toLocaleString('en-IN')}`, M + CW - 2, y + subH - 1.5, { align: 'right' });
+          y += subH;
+        }
+      }
+    }
+    y += 6;
+  } else {
+    // Single-day: bordered items table
+    if ((q.items || []).length > 0) {
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+      doc.text('MENU ITEMS', M, y); y += 5;
+
+      // Header: Category=50, Subcategory=50, Item=58, Amount=22
+      doc.setFillColor(232, 117, 10); doc.rect(M, y, CW, RH, 'F');
+      doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      doc.text('Category', M + 3, y + RH - 2);
+      doc.line(M + 50, y, M + 50, y + RH);
+      doc.text('Subcategory', M + 53, y + RH - 2);
+      doc.line(M + 100, y, M + 100, y + RH);
+      doc.text('Item', M + 103, y + RH - 2);
+      if (withPrices) {
+        doc.line(M + 158, y, M + 158, y + RH);
+        doc.text('Amount', M + CW - 2, y + RH - 2, { align: 'right' });
+      }
+      y += RH;
+
+      (q.items || []).forEach(item => {
+        if (y > 268) { doc.addPage(); y = 20; }
+        doc.setFillColor(255, 255, 255); doc.rect(M, y, CW, RH, 'F');
+        doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
+        doc.line(M + 50, y, M + 50, y + RH);
+        doc.line(M + 100, y, M + 100, y + RH);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+        doc.setTextColor(140, 90, 20); doc.text(item.category_name, M + 3, y + RH - 2);
+        doc.setTextColor(80, 80, 78); doc.text(item.subcategory_name, M + 53, y + RH - 2);
+        doc.setTextColor(30, 30, 28); doc.text(item.item_name, M + 103, y + RH - 2);
+        if (withPrices) {
+          doc.line(M + 158, y, M + 158, y + RH);
+          doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
+        }
+        y += RH;
+      });
+      y += 3;
+    }
+    if (withPrices && q.per_plate_amount > 0) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
+      doc.text(`Per Plate: Rs.${q.per_plate_amount.toLocaleString('en-IN')}  ×  ${q.guest_count} guests  =  Rs.${q.subtotal.toLocaleString('en-IN')}`, M, y);
+      y += 5;
+    }
+    y += 4;
+  }
+
+  // ── Billing Summary ─────────────────────────────────────────────────────────
+  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+  doc.text('BILLING SUMMARY', M, y); y += 5;
+
   if (q.is_multi_day && (q.event_days || []).length > 0) {
-    qrow('Original Price', `Rs.${q.subtotal.toLocaleString('en-IN')}`);
+    summaryRow('Original Price', `Rs.${q.subtotal.toLocaleString('en-IN')}`);
     for (const day of (q.event_days || [])) {
       for (const meal of (day.meals || [])) {
         const offer = meal.discount_amount || 0;
         if (offer > 0 && meal.per_plate_amount > offer) {
           const saving = (meal.per_plate_amount - offer) * meal.guest_count;
-          qrow(`  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} (Day ${day.day_number})`, `-Rs.${saving.toLocaleString('en-IN')}`, [70, 140, 40]);
+          summaryRow(
+            `  ${meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} Offer (Day ${day.day_number})`,
+            `-Rs.${saving.toLocaleString('en-IN')}`, false, [34, 120, 34],
+          );
         }
       }
     }
     for (const ad of (q.additional_discounts || [])) {
       if (!ad.amount) continue;
-      qrow(`  ${ad.description || 'Discount'}`, `-Rs.${ad.amount.toLocaleString('en-IN')}`, [70, 140, 40]);
+      summaryRow(`  ${ad.description || 'Discount'}`, `-Rs.${ad.amount.toLocaleString('en-IN')}`, false, [34, 120, 34]);
     }
   } else {
     if (q.discount_amount > 0)
-      qrow('Discount', `-Rs.${q.discount_amount.toLocaleString('en-IN')}`, [70, 140, 40]);
+      summaryRow('Discount', `-Rs.${q.discount_amount.toLocaleString('en-IN')}`, false, [34, 120, 34]);
   }
   (q.extra_charges || []).forEach(ec => {
     if (!ec.description && !ec.amount) return;
-    qrow(ec.description || 'Extra Charge', `Rs.${(ec.amount || 0).toLocaleString('en-IN')}`);
+    summaryRow(ec.description || 'Extra Charge', `Rs.${(ec.amount || 0).toLocaleString('en-IN')}`);
   });
   (q.transportation_charges || []).forEach(tc => {
     if (!tc.description && !tc.amount) return;
-    qrow(tc.description || 'Transportation', `Rs.${(tc.amount || 0).toLocaleString('en-IN')}`);
+    summaryRow(tc.description || 'Transportation', `Rs.${(tc.amount || 0).toLocaleString('en-IN')}`);
   });
   if (q.gst_rate > 0)
-    qrow(`GST @${q.gst_rate}%`, `Rs.${q.gst_amount.toLocaleString('en-IN')}`);
-
-  y += 2; hline(y, '#E8750A'); y += 7;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(30, 30, 28);
-  doc.text('Payable Amount', margin, y); doc.setTextColor(232, 117, 10);
-  doc.text(`Rs.${(q.total_amount || 0).toLocaleString('en-IN')}`, W - margin, y, { align: 'right' }); y += 8;
+    summaryRow(`GST @${q.gst_rate}%`, `Rs.${q.gst_amount.toLocaleString('en-IN')}`);
+  summaryRow('Payable Amount', `Rs.${(q.total_amount || 0).toLocaleString('en-IN')}`, true, [232, 117, 10]);
+  y += 5;
 
   if (q.notes) {
-    hline(y); y += 6;
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(150, 150, 148); doc.text('NOTES', margin, y); y += 4;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 30, 28);
+    doc.text('Notes', M, y); y += 5;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 78);
-    doc.text(doc.splitTextToSize(q.notes, W - margin * 2), margin, y);
+    const noteLines = doc.splitTextToSize(q.notes, CW);
+    doc.text(noteLines, M, y);
   }
   doc.setFontSize(7); doc.setTextColor(180, 180, 178);
   doc.text('Thank you for considering Shiv Shakti Catering & Events', W / 2, 285, { align: 'center' });

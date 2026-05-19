@@ -25,9 +25,19 @@ const navItems: { page: Page; label: string; color: string }[] = [
 const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => {
   return (
     <aside className="app-sidebar">
-      <div style={{ padding: '20px 18px 14px', borderBottom: '0.5px solid #E5E5E0' }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: '#1A1A18' }}>🍽 Shiv Shakti</div>
-        <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>Business Manager</div>
+      <div style={{ padding: '14px 16px 12px', borderBottom: '0.5px solid #E5E5E0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img
+            src="/logo.png"
+            alt=""
+            style={{ height: 40, width: 'auto', flexShrink: 0 }}
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#1A1A18' }}>Shiv Shakti</div>
+            <div style={{ fontSize: 11, color: '#888880', marginTop: 1 }}>Business Manager</div>
+          </div>
+        </div>
       </div>
 
       <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
