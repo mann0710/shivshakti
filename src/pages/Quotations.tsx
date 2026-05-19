@@ -162,13 +162,13 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
           rateStr,
           `Rs.${mealNet.toLocaleString('en-IN')}`,
         ];
-        mealCells.forEach((cell, i) => {
+        for (let i = 0; i < mealCells.length; i++) {
           if (i > 0) { doc.setDrawColor(210, 208, 205); doc.line(x, y, x, y + RH); }
           doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
           const right = i >= 2;
-          doc.text(cell, right ? x + MC[i] - 2 : x + 3, y + RH - 2, { align: right ? 'right' : 'left' });
+          doc.text(mealCells[i], right ? x + MC[i] - 2 : x + 3, y + RH - 2, { align: right ? 'right' : 'left' });
           x += MC[i];
-        });
+        }
         y += RH;
 
         // Item sub-rows
