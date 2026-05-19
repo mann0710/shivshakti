@@ -19,7 +19,10 @@ const navItems: { page: Page; label: string; color: string }[] = [
   { page: 'finance',     label: 'Finance & Analytics', color: '#0F6E56' },
   { page: 'calendar',    label: 'Calendar',            color: '#D4537E' },
   // Settings (9)
-  { page: 'datacenter',  label: 'Data Center',         color: '#888880' },
+  { page: 'datacenter',      label: 'Data Center',       color: '#888880' },
+  // Festival (10-11)
+  { page: 'seasonal_items',   label: 'Festival Items',   color: '#C0392B' },
+  { page: 'seasonal_billing', label: 'Festival Billing', color: '#E67E22' },
 ];
 
 const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => {
@@ -44,7 +47,11 @@ const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => {
           <NavItem key={item.page} item={item} active={currentPage === item.page} onClick={() => onNavigate(item.page)} />
         ))}
         <div style={{ fontSize: 10, fontWeight: 600, color: '#AAAAAA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '12px 10px 4px' }}>Settings</div>
-        {navItems.slice(9).map(item => (
+        {navItems.slice(9, 10).map(item => (
+          <NavItem key={item.page} item={item} active={currentPage === item.page} onClick={() => onNavigate(item.page)} />
+        ))}
+        <div style={{ fontSize: 10, fontWeight: 600, color: '#AAAAAA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '12px 10px 4px' }}>Festival</div>
+        {navItems.slice(10).map(item => (
           <NavItem key={item.page} item={item} active={currentPage === item.page} onClick={() => onNavigate(item.page)} />
         ))}
       </nav>

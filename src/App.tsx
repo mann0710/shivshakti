@@ -12,10 +12,12 @@ import CalendarPage from './pages/CalendarPage';
 import DataCenter from './pages/DataCenter';
 import MenuBuilder from './pages/MenuBuilder';
 import Quotations from './pages/Quotations';
+import SeasonalItems from './pages/SeasonalItems';
+import SeasonalBilling from './pages/SeasonalBilling';
 
 const queryClient = new QueryClient();
 
-export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar' | 'datacenter' | 'menubuilder' | 'quotations';
+export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar' | 'datacenter' | 'menubuilder' | 'quotations' | 'seasonal_items' | 'seasonal_billing';
 
 // 3 pinned items in bottom nav
 const pinnedNav: { page: Page; icon: string; label: string }[] = [
@@ -35,7 +37,9 @@ const allNavItems: { page: Page; icon: string; label: string; section: string }[
   { page: 'menus',       icon: '🍽', label: 'Packages',            section: 'Operations' },
   { page: 'finance',     icon: '📊', label: 'Finance & Analytics', section: 'Operations' },
   { page: 'calendar',    icon: '📅', label: 'Calendar',            section: 'Operations' },
-  { page: 'datacenter',  icon: '⚙️', label: 'Data Center',         section: 'Settings' },
+  { page: 'datacenter',      icon: '⚙️', label: 'Data Center',         section: 'Settings' },
+  { page: 'seasonal_items',   icon: '🪔', label: 'Festival Items',      section: 'Festival' },
+  { page: 'seasonal_billing', icon: '🍬', label: 'Festival Billing',    section: 'Festival' },
 ];
 
 function App() {
@@ -58,13 +62,15 @@ function App() {
       case 'calendar':    return <CalendarPage />;
       case 'datacenter':  return <DataCenter />;
       case 'menubuilder': return <MenuBuilder />;
-      case 'quotations':  return <Quotations />;
-      default:            return <Dashboard onNavigate={navigate} />;
+      case 'quotations':        return <Quotations />;
+      case 'seasonal_items':   return <SeasonalItems />;
+      case 'seasonal_billing': return <SeasonalBilling />;
+      default:                  return <Dashboard onNavigate={navigate} />;
     }
   };
 
   // Group allNavItems by section for drawer
-  const sections = ['Main', 'Operations', 'Settings'];
+  const sections = ['Main', 'Operations', 'Festival', 'Settings'];
 
   return (
     <QueryClientProvider client={queryClient}>

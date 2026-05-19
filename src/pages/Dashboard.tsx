@@ -1,17 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { format, isWithinInterval, addDays, parseISO } from 'date-fns';
 import { useBookings } from '../hooks/useBookings';
 import { useInvoices, useAllPayments } from '../hooks/useInvoices';
+import { useSeasonalOrders } from '../hooks/useSeasonalOrders';
 import StatusPill from '../components/StatusPill';
 import { Page } from '../App';
 import { getISTGreeting, formatDateIST } from '../lib/ist';
 
 interface Props { onNavigate: (page: Page) => void; }
 
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
+
 const Dashboard: React.FC<Props> = ({ onNavigate }) => {
   const { data: bookings = [] } = useBookings();
   const { data: invoices = [] } = useInvoices();
   const { data: allPayments = [] } = useAllPayments();
+  const [seasonalYear, setSeasonalYear] = useState(currentYear);
+  const { data: seasonalOrders = [] } = useSeasonalOrders(seasonalYear);
   const today = new Date();
 
   const activeBookings = bookings.filter(b => b.status !== 'cancelled' && b.status !== 'completed');
@@ -28,6 +34,11 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
     return isWithinInterval(d, { start: today, end: addDays(today, 3) }) && b.status === 'confirmed';
   });
   const overdueInvoices = invoices.filter(i => i.balance_due > 0 && i.status !== 'paid');
+
+  // Seasonal stats
+  const seasonalTotal = seasonalOrders.reduce((s, o) => s + o.total_amount, 0);
+  const seasonalPaid = seasonalOrders.filter(o => o.is_paid).reduce((s, o) => s + o.total_amount, 0);
+  const seasonalUnpaid = seasonalOrders.filter(o => !o.is_paid).reduce((s, o) => s + o.total_amount, 0);
 
   // Payment stats
   const advanceTotal = allPayments.filter(p => p.payment_type === 'advance').reduce((s, p) => s + p.amount, 0);
@@ -120,6 +131,40 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
           </div>
         </div>
 
+        {/* Seasonal stats */}
+        <div style={card}>
+          <div style={cardTitle}>
+            Festival Business
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <select
+                value={seasonalYear}
+                onChange={e => setSeasonalYear(Number(e.target.value))}
+                style={{ border: '0.5px solid #D0D0CC', borderRadius: 6, padding: '3px 8px', fontSize: 12, background: '#fff' }}
+              >
+                {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <span style={cardLink} onClick={() => onNavigate('seasonal_billing')}>View →</span>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10 }}>
+            <div style={seasonalStatBox}>
+              <div style={{ fontSize: 11, color: '#888880' }}>Total Sales</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>₹{seasonalTotal.toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 2 }}>{seasonalOrders.length} orders</div>
+            </div>
+            <div style={seasonalStatBox}>
+              <div style={{ fontSize: 11, color: '#888880' }}>Collected</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4, color: '#3B6D11' }}>₹{seasonalPaid.toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 2 }}>{seasonalOrders.filter(o => o.is_paid).length} paid</div>
+            </div>
+            <div style={seasonalStatBox}>
+              <div style={{ fontSize: 11, color: '#888880' }}>Pending</div>
+              <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4, color: seasonalUnpaid > 0 ? '#C0392B' : '#3B6D11' }}>₹{seasonalUnpaid.toLocaleString()}</div>
+              <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 2 }}>{seasonalOrders.filter(o => !o.is_paid).length} unpaid</div>
+            </div>
+          </div>
+        </div>
+
         <div style={card}>
           <div style={cardTitle}>Event pipeline</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
@@ -169,6 +214,7 @@ const Avatar: React.FC<{ name: string }> = ({ name }) => {
 };
 
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
+const seasonalStatBox: React.CSSProperties = { background: '#F9F8F5', border: '0.5px solid #E5E5E0', borderRadius: 10, padding: '12px 14px' };
 const cardTitle: React.CSSProperties = { fontSize: 13, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
 const cardLink: React.CSSProperties = { fontSize: 12, color: '#378ADD', cursor: 'pointer', fontWeight: 400 };
 const bookingRow: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid #F0F0EC' };
