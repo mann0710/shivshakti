@@ -5,7 +5,7 @@ import {
   useSeasonalOrders, useCreateSeasonalOrder, useUpdateSeasonalOrderPaid, useDeleteSeasonalOrder,
   SeasonalOrder, SeasonalOrderItem,
 } from '../hooks/useSeasonalOrders';
-import { useSeasonalItems } from '../hooks/useSeasonalItems';
+import { useSeasonalItems, SeasonalItem } from '../hooks/useSeasonalItems';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import {
   useSeasonalPreorders, useCreateSeasonalPreorder, useUpdateSeasonalPreorderStatus, useDeleteSeasonalPreorder,
@@ -85,6 +85,124 @@ const useItemPicker = () => {
 
   return { billItems, selItemId, setSelItemId, selQty, setSelQty, addItem, removeItem, updateQty, clear, subtotal };
 };
+
+type PickerState = ReturnType<typeof useItemPicker>;
+
+// ── module-level sub-components (must NOT be inside SeasonalBilling) ─────────
+
+const ItemPickerUI: React.FC<{
+  picker: PickerState;
+  availableItems: SeasonalItem[];
+  label?: string;
+}> = ({ picker, availableItems, label }) => (
+  <div>
+    {label && <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{label}</div>}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', marginBottom: 14 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <label style={{ fontSize: 11, color: '#888880', fontWeight: 500 }}>Select Item</label>
+        <select
+          style={{ border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 10px', fontSize: 13, minWidth: 220, background: '#fff' }}
+          value={picker.selItemId}
+          onChange={e => picker.setSelItemId(e.target.value)}
+        >
+          <option value="">— choose item —</option>
+          {availableItems.map(i => (
+            <option key={i.id} value={i.id}>
+              {i.name} - {i.weight >= 1000 && i.weight_unit === 'gm' ? `${i.weight / 1000} kg` : `${i.weight} ${i.weight_unit}`}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <label style={{ fontSize: 11, color: '#888880', fontWeight: 500 }}>Qty</label>
+        <input
+          style={{ border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 10px', fontSize: 13, width: 70, background: '#fff' }}
+          type="number" min={1}
+          value={picker.selQty}
+          onChange={e => picker.setSelQty(Number(e.target.value))}
+        />
+      </div>
+      <button
+        style={{ background: '#EEF0FB', color: '#1A237E', border: '1px solid #C5CAF5', padding: '7px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 }}
+        onClick={() => picker.addItem(availableItems)}
+      >
+        Add
+      </button>
+    </div>
+
+    {picker.billItems.length > 0 && (
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: '#F5F5F2', borderBottom: '0.5px solid #E5E5E0' }}>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'left', fontSize: 12, color: '#888880' }}>Item</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'left', fontSize: 12, color: '#888880' }}>Weight</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'left', fontSize: 12, color: '#888880' }}>Price</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'left', fontSize: 12, color: '#888880' }}>Qty</th>
+            <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'left', fontSize: 12, color: '#888880' }}>Total</th>
+            <th style={{ padding: '8px 12px' }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {picker.billItems.map(item => (
+            <tr key={item.item_id} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
+              <td style={{ padding: '9px 12px' }}>{item.item_name}</td>
+              <td style={{ padding: '9px 12px' }}>{item.weight >= 1000 && item.weight_unit === 'gm' ? `${item.weight / 1000} kg` : `${item.weight} ${item.weight_unit}`}</td>
+              <td style={{ padding: '9px 12px' }}>₹{item.price.toLocaleString()}</td>
+              <td style={{ padding: '9px 12px' }}>
+                <input type="number" min={1} value={item.qty}
+                  onChange={e => picker.updateQty(item.item_id, Number(e.target.value))}
+                  style={{ width: 60, border: '1px solid #E5E5E0', borderRadius: 5, padding: '3px 6px', fontSize: 12 }} />
+              </td>
+              <td style={{ padding: '9px 12px', fontWeight: 600 }}>₹{item.line_total.toLocaleString()}</td>
+              <td style={{ padding: '9px 12px' }}>
+                <button
+                  style={{ background: '#F5F5F0', border: '0.5px solid #E5E5E0', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#E24B4A' }}
+                  onClick={() => picker.removeItem(item.item_id)}
+                >✕</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </div>
+);
+
+const DiscountTotalUI: React.FC<{
+  subtotal: number; discountAmt: number; total: number;
+  discountAmount: string | number; discountType: 'amount' | 'percentage';
+  setDiscountAmount: (v: string) => void;
+  setDiscountType: (t: 'amount' | 'percentage') => void;
+}> = ({ subtotal, discountAmt, total, discountAmount, discountType, setDiscountAmount, setDiscountType }) => (
+  <div style={{ minWidth: 220 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+      <span style={{ color: '#666' }}>Subtotal</span>
+      <span>₹{subtotal.toLocaleString()}</span>
+    </div>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+      <span style={{ fontSize: 12, color: '#666', minWidth: 70 }}>Discount</span>
+      <div style={{ display: 'flex', gap: 0, border: '1px solid #E5E5E0', borderRadius: 6, overflow: 'hidden' }}>
+        {(['amount', 'percentage'] as const).map(dt => (
+          <button key={dt} onClick={() => setDiscountType(dt)}
+            style={{ padding: '4px 10px', fontSize: 11, border: 'none', cursor: 'pointer',
+              background: discountType === dt ? '#1A237E' : '#F9F8F5',
+              color: discountType === dt ? '#fff' : '#444' }}>
+            {dt === 'amount' ? '₹' : '%'}
+          </button>
+        ))}
+      </div>
+      <input type="number" min={0} value={discountAmount}
+        onChange={e => setDiscountAmount(e.target.value)}
+        style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 5, padding: '4px 8px', fontSize: 12 }} />
+      {discountAmt > 0 && <span style={{ fontSize: 12, color: '#3B6D11' }}>-₹{discountAmt.toLocaleString()}</span>}
+    </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700,
+      borderTop: '0.5px solid #E5E5E0', paddingTop: 8 }}>
+      <span>Total</span>
+      <span style={{ color: '#1A237E' }}>₹{total.toLocaleString()}</span>
+    </div>
+  </div>
+);
 
 const SeasonalBilling: React.FC = () => {
   const [tab, setTab]               = useState<Tab>('new_bill');
@@ -304,110 +422,6 @@ const SeasonalBilling: React.FC = () => {
 
     doc.save(`sessional-report-${selectedYear}.pdf`);
   };
-
-  // ── shared item picker UI ─────────────────────────────────────────────────
-  const ItemPickerUI = ({
-    picker, availableItems, label,
-  }: {
-    picker: ReturnType<typeof useItemPicker>;
-    availableItems: typeof allItems;
-    label?: string;
-  }) => (
-    <div>
-      {label && <div style={cardTitle}>{label}</div>}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end', marginBottom: 14 }}>
-        <div style={fieldWrap}>
-          <label style={lbl}>Select Item</label>
-          <select style={{ ...inp, minWidth: 200 }} value={picker.selItemId}
-            onChange={e => picker.setSelItemId(e.target.value)}>
-            <option value="">— choose item —</option>
-            {availableItems.map(i => (
-              <option key={i.id} value={i.id}>
-                {i.name} ({weightLabel(i.weight, i.weight_unit)}) — ₹{i.price}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={fieldWrap}>
-          <label style={lbl}>Qty</label>
-          <input style={{ ...inp, width: 70 }} type="number" min={1}
-            value={picker.selQty} onChange={e => picker.setSelQty(Number(e.target.value))} />
-        </div>
-        <button style={btnSecondary} onClick={() => picker.addItem(availableItems)}>Add</button>
-      </div>
-
-      {picker.billItems.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#F5F5F2', borderBottom: '0.5px solid #E5E5E0' }}>
-              <th style={th}>Item</th><th style={th}>Weight</th>
-              <th style={th}>Price</th><th style={th}>Qty</th>
-              <th style={th}>Total</th><th style={th}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {picker.billItems.map(item => (
-              <tr key={item.item_id} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
-                <td style={td}>{item.item_name}</td>
-                <td style={td}>{weightLabel(item.weight, item.weight_unit)}</td>
-                <td style={td}>₹{item.price.toLocaleString()}</td>
-                <td style={td}>
-                  <input type="number" min={1} value={item.qty}
-                    onChange={e => picker.updateQty(item.item_id, Number(e.target.value))}
-                    style={{ width: 60, border: '1px solid #E5E5E0', borderRadius: 5, padding: '3px 6px', fontSize: 12 }} />
-                </td>
-                <td style={{ ...td, fontWeight: 600 }}>₹{item.line_total.toLocaleString()}</td>
-                <td style={td}>
-                  <button style={{ ...btnSm, color: '#E24B4A' }} onClick={() => picker.removeItem(item.item_id)}>✕</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-
-  // ── discount + total UI ───────────────────────────────────────────────────
-  const DiscountTotalUI = ({
-    subtotal, discountAmt, total,
-    discountAmount, discountType,
-    setDiscountAmount, setDiscountType,
-  }: {
-    subtotal: number; discountAmt: number; total: number;
-    discountAmount: string | number; discountType: 'amount' | 'percentage';
-    setDiscountAmount: (v: string) => void;
-    setDiscountType: (t: 'amount' | 'percentage') => void;
-  }) => (
-    <div style={{ minWidth: 220 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-        <span style={{ color: '#666' }}>Subtotal</span>
-        <span>₹{subtotal.toLocaleString()}</span>
-      </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: 12, color: '#666', minWidth: 70 }}>Discount</span>
-        <div style={{ display: 'flex', gap: 0, border: '1px solid #E5E5E0', borderRadius: 6, overflow: 'hidden' }}>
-          {(['amount', 'percentage'] as const).map(dt => (
-            <button key={dt} onClick={() => setDiscountType(dt)}
-              style={{ padding: '4px 10px', fontSize: 11, border: 'none', cursor: 'pointer',
-                background: discountType === dt ? '#1A237E' : '#F9F8F5',
-                color: discountType === dt ? '#fff' : '#444' }}>
-              {dt === 'amount' ? '₹' : '%'}
-            </button>
-          ))}
-        </div>
-        <input type="number" min={0} value={discountAmount}
-          onChange={e => setDiscountAmount(e.target.value)}
-          style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 5, padding: '4px 8px', fontSize: 12 }} />
-        {discountAmt > 0 && <span style={{ fontSize: 12, color: '#3B6D11' }}>-₹{discountAmt.toLocaleString()}</span>}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700,
-        borderTop: '0.5px solid #E5E5E0', paddingTop: 8 }}>
-        <span>Total</span>
-        <span style={{ color: '#1A237E' }}>₹{total.toLocaleString()}</span>
-      </div>
-    </div>
-  );
 
   return (
     <div>
@@ -846,7 +860,6 @@ const StatCard: React.FC<{ label: string; value: string; sub: string; subColor?:
 );
 
 const btnPrimary: React.CSSProperties  = { background: '#1A237E', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
-const btnSecondary: React.CSSProperties = { background: '#EEF0FB', color: '#1A237E', border: '1px solid #C5CAF5', padding: '7px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
 const btnGhost: React.CSSProperties   = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '7px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
 const btnSm: React.CSSProperties      = { background: '#F5F5F0', border: '0.5px solid #E5E5E0', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#444' };
 const card: React.CSSProperties       = { background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16, marginBottom: 14 };
