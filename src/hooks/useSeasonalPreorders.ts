@@ -9,6 +9,7 @@ export interface SeasonalPreorder {
   occasion_id?: string;
   customer_name: string;
   phone: string;
+  address?: string;
   items: SeasonalOrderItem[];
   subtotal: number;
   discount_amount: number;
@@ -60,6 +61,20 @@ export const useUpdateSeasonalPreorderStatus = () => {
       const { error } = await supabase
         .from('seasonal_preorders')
         .update({ status })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['seasonal_preorders'] }),
+  });
+};
+
+export const useUpdateSeasonalPreorder = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<SeasonalPreorderPayload> & { id: string }) => {
+      const { error } = await supabase
+        .from('seasonal_preorders')
+        .update(updates)
         .eq('id', id);
       if (error) throw error;
     },

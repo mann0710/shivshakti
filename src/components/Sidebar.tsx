@@ -25,6 +25,7 @@ const navItems: { page: Page; label: string; color: string }[] = [
   { page: 'seasonal_occasions',  label: 'Occasions',           color: '#C0392B' },
   { page: 'seasonal_items',      label: 'Sessional Items',     color: '#E67E22' },
   { page: 'seasonal_billing',    label: 'Sessional Billing',   color: '#D4537E' },
+  { page: 'seasonal_customers',  label: 'Sess. Customers',     color: '#00897B' },
 ];
 
 const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => {

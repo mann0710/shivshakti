@@ -2,15 +2,20 @@ import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import {
-  useSeasonalOrders, useCreateSeasonalOrder, useUpdateSeasonalOrderPaid, useDeleteSeasonalOrder,
+  useSeasonalOrders, useCreateSeasonalOrder, useUpdateSeasonalOrder,
+  useUpdateSeasonalOrderPaid, useDeleteSeasonalOrder,
   SeasonalOrder, SeasonalOrderItem,
 } from '../hooks/useSeasonalOrders';
 import { useSeasonalItems, SeasonalItem } from '../hooks/useSeasonalItems';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import {
-  useSeasonalPreorders, useCreateSeasonalPreorder, useUpdateSeasonalPreorderStatus, useDeleteSeasonalPreorder,
+  useSeasonalPreorders, useCreateSeasonalPreorder, useUpdateSeasonalPreorder,
+  useUpdateSeasonalPreorderStatus, useDeleteSeasonalPreorder,
   SeasonalPreorder,
 } from '../hooks/useSeasonalPreorders';
+import {
+  useSeasonalCustomers, useCreateSeasonalCustomer,
+} from '../hooks/useSeasonalCustomers';
 
 function weightLabel(weight: number, unit: string) {
   if (unit === 'gm' && weight >= 1000) return `${weight / 1000} kg`;
@@ -30,7 +35,8 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 };
 
 const emptyBillForm = () => ({
-  occasion_id: '', customer_name: '', phone: '',
+  occasion_id: '', customer_id: '',
+  customer_name: '', phone: '', address: '',
   discount_amount: '' as string | number,
   discount_type: 'amount' as 'amount' | 'percentage',
   payment_mode: 'cash' as 'cash' | 'upi',
@@ -38,11 +44,13 @@ const emptyBillForm = () => ({
 });
 
 const emptyPreForm = () => ({
-  occasion_id: '', customer_name: '', phone: '',
+  occasion_id: '', customer_id: '',
+  customer_name: '', phone: '', address: '',
   discount_amount: '' as string | number,
   discount_type: 'amount' as 'amount' | 'percentage',
   advance_paid: '' as string | number,
   payment_mode: 'cash' as 'cash' | 'upi',
+  is_no_advance: false,
   delivery_date: '', notes: '',
 });
 
@@ -81,9 +89,13 @@ const useItemPicker = () => {
 
   const clear = () => { setBillItems([]); setSelItemId(''); setSelQty(1); };
 
+  const reset = (items: SeasonalOrderItem[]) => {
+    setBillItems([...items]); setSelItemId(''); setSelQty(1);
+  };
+
   const subtotal = billItems.reduce((s, i) => s + i.line_total, 0);
 
-  return { billItems, selItemId, setSelItemId, selQty, setSelQty, addItem, removeItem, updateQty, clear, subtotal };
+  return { billItems, selItemId, setSelItemId, selQty, setSelQty, addItem, removeItem, updateQty, clear, reset, subtotal };
 };
 
 type PickerState = ReturnType<typeof useItemPicker>;
@@ -204,6 +216,34 @@ const DiscountTotalUI: React.FC<{
   </div>
 );
 
+const CustomerSelectorUI: React.FC<{
+  customers: ReturnType<typeof useSeasonalCustomers>['data'];
+  selectedCustomerId: string;
+  onSelectCustomer: (id: string) => void;
+  onSaveAsCustomer: () => void;
+  showSaveButton: boolean;
+}> = ({ customers = [], selectedCustomerId, onSelectCustomer, onSaveAsCustomer, showSaveButton }) => (
+  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+    <div style={fieldWrap}>
+      <label style={lbl}>Select from Customers</label>
+      <select style={{ ...inp, minWidth: 200 }} value={selectedCustomerId}
+        onChange={e => onSelectCustomer(e.target.value)}>
+        <option value="">— Or type manually below —</option>
+        {customers.map(c => (
+          <option key={c.id} value={c.id}>
+            {c.name}{c.phone ? ` (${c.phone})` : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+    {showSaveButton && (
+      <button style={{ ...btnSm, color: '#00897B', marginBottom: 1 }} onClick={onSaveAsCustomer}>
+        + Save as Customer
+      </button>
+    )}
+  </div>
+);
+
 const SeasonalBilling: React.FC = () => {
   const [tab, setTab]               = useState<Tab>('new_bill');
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -212,13 +252,17 @@ const SeasonalBilling: React.FC = () => {
   const { data: occasions = [] }    = useSeasonalOccasions(false);
   const { data: orders = [] }       = useSeasonalOrders(selectedYear);
   const { data: preorders = [] }    = useSeasonalPreorders(selectedYear);
+  const { data: customers = [] }    = useSeasonalCustomers();
 
   const createOrder    = useCreateSeasonalOrder();
+  const updateOrder    = useUpdateSeasonalOrder();
   const updatePaid     = useUpdateSeasonalOrderPaid();
   const deleteOrder    = useDeleteSeasonalOrder();
   const createPreorder = useCreateSeasonalPreorder();
+  const updatePreorder = useUpdateSeasonalPreorder();
   const updatePreStatus = useUpdateSeasonalPreorderStatus();
   const deletePreorder = useDeleteSeasonalPreorder();
+  const createCustomer = useCreateSeasonalCustomer();
 
   // ── bill form ────────────────────────────────────────────────────────────
   const [billForm, setBillForm] = useState(emptyBillForm());
@@ -242,6 +286,35 @@ const SeasonalBilling: React.FC = () => {
   }, [pre.subtotal, preForm.discount_amount, preForm.discount_type]);
   const preTotal = Math.max(0, pre.subtotal - preDiscount);
 
+  // ── edit order state ─────────────────────────────────────────────────────
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editOrderForm, setEditOrderForm] = useState(emptyBillForm());
+  const editBill = useItemPicker();
+
+  const editOrderDiscount = useMemo(() => {
+    const d = Number(editOrderForm.discount_amount) || 0;
+    return editOrderForm.discount_type === 'percentage'
+      ? Math.round((editBill.subtotal * d) / 100) : d;
+  }, [editBill.subtotal, editOrderForm.discount_amount, editOrderForm.discount_type]);
+  const editOrderTotal = Math.max(0, editBill.subtotal - editOrderDiscount);
+
+  // ── edit preorder state ──────────────────────────────────────────────────
+  const [editingPreId, setEditingPreId] = useState<string | null>(null);
+  const [editPreForm, setEditPreForm] = useState(emptyPreForm());
+  const editPre = useItemPicker();
+
+  const editPreDiscount = useMemo(() => {
+    const d = Number(editPreForm.discount_amount) || 0;
+    return editPreForm.discount_type === 'percentage'
+      ? Math.round((editPre.subtotal * d) / 100) : d;
+  }, [editPre.subtotal, editPreForm.discount_amount, editPreForm.discount_type]);
+  const editPreTotal = Math.max(0, editPre.subtotal - editPreDiscount);
+
+  // ── complete preorder state ──────────────────────────────────────────────
+  const [completingPreId, setCompletingPreId] = useState<string | null>(null);
+  const [completeAmount, setCompleteAmount] = useState<string | number>('');
+  const [completeMode, setCompleteMode] = useState<'cash' | 'upi'>('cash');
+
   const occMap  = Object.fromEntries(occasions.map(o => [o.id, o.name]));
   const activeOccasions = occasions.filter(o => o.is_active);
 
@@ -254,11 +327,70 @@ const SeasonalBilling: React.FC = () => {
     ? allItems.filter(i => i.is_active && i.occasion_id === preForm.occasion_id)
     : allItems.filter(i => i.is_active);
 
+  const editItems4Occ = editOrderForm.occasion_id
+    ? allItems.filter(i => i.is_active && i.occasion_id === editOrderForm.occasion_id)
+    : allItems.filter(i => i.is_active);
+
+  const editPreItems4Occ = editPreForm.occasion_id
+    ? allItems.filter(i => i.is_active && i.occasion_id === editPreForm.occasion_id)
+    : allItems.filter(i => i.is_active);
+
   // ── report stats ─────────────────────────────────────────────────────────
   const totalSales   = orders.reduce((s, o) => s + o.total_amount, 0);
   const totalPaid    = orders.filter(o => o.is_paid).reduce((s, o) => s + o.total_amount, 0);
   const totalUnpaid  = orders.filter(o => !o.is_paid).reduce((s, o) => s + o.total_amount, 0);
   const unpaidOrders = orders.filter(o => !o.is_paid);
+
+  // ── customer selection helpers ────────────────────────────────────────────
+  const applyCustomerToBill = (id: string) => {
+    setBillForm(f => ({ ...f, customer_id: id }));
+    if (id) {
+      const c = customers.find(c => c.id === id);
+      if (c) setBillForm(f => ({
+        ...f, customer_id: id,
+        customer_name: c.name,
+        phone: c.phone || '',
+        address: c.address || '',
+      }));
+    }
+  };
+
+  const applyCustomerToPre = (id: string) => {
+    setPreForm(f => ({ ...f, customer_id: id }));
+    if (id) {
+      const c = customers.find(c => c.id === id);
+      if (c) setPreForm(f => ({
+        ...f, customer_id: id,
+        customer_name: c.name,
+        phone: c.phone || '',
+        address: c.address || '',
+      }));
+    }
+  };
+
+  const handleSaveBillCustomer = async () => {
+    if (!billForm.customer_name.trim()) return;
+    try {
+      await createCustomer.mutateAsync({
+        name: billForm.customer_name.trim(),
+        phone: billForm.phone.trim() || undefined,
+        address: billForm.address.trim() || undefined,
+      });
+      toast.success('Customer saved');
+    } catch (e: any) { toast.error(e.message || 'Error'); }
+  };
+
+  const handleSavePreCustomer = async () => {
+    if (!preForm.customer_name.trim()) return;
+    try {
+      await createCustomer.mutateAsync({
+        name: preForm.customer_name.trim(),
+        phone: preForm.phone.trim() || undefined,
+        address: preForm.address.trim() || undefined,
+      });
+      toast.success('Customer saved');
+    } catch (e: any) { toast.error(e.message || 'Error'); }
+  };
 
   // ── handlers ─────────────────────────────────────────────────────────────
   const handleCreateBill = async () => {
@@ -269,6 +401,7 @@ const SeasonalBilling: React.FC = () => {
         occasion_id: billForm.occasion_id || undefined,
         customer_name: billForm.customer_name.trim(),
         phone: billForm.phone.trim(),
+        address: billForm.address.trim() || undefined,
         items: bill.billItems,
         subtotal: bill.subtotal,
         discount_amount: billDiscount,
@@ -288,18 +421,20 @@ const SeasonalBilling: React.FC = () => {
   const handleCreatePreorder = async () => {
     if (!preForm.customer_name.trim()) { toast.error('Customer name required'); return; }
     if (pre.billItems.length === 0)    { toast.error('Add at least one item');  return; }
+    const advance = preForm.is_no_advance ? 0 : (Number(preForm.advance_paid) || 0);
     try {
       await createPreorder.mutateAsync({
         occasion_id: preForm.occasion_id || undefined,
         customer_name: preForm.customer_name.trim(),
         phone: preForm.phone.trim(),
+        address: preForm.address.trim() || undefined,
         items: pre.billItems,
         subtotal: pre.subtotal,
         discount_amount: preDiscount,
         discount_type: preForm.discount_type,
         total_amount: preTotal,
-        advance_paid: Number(preForm.advance_paid) || 0,
-        payment_mode: Number(preForm.advance_paid) > 0 ? preForm.payment_mode : null,
+        advance_paid: advance,
+        payment_mode: advance > 0 ? preForm.payment_mode : null,
         delivery_date: preForm.delivery_date || undefined,
         status: 'pending',
         year: currentYear,
@@ -308,6 +443,109 @@ const SeasonalBilling: React.FC = () => {
       toast.success('Pre-booking saved');
       setPreForm(emptyPreForm()); pre.clear();
       setTab('preorders');
+    } catch (e: any) { toast.error(e.message || 'Error'); }
+  };
+
+  const openEditOrder = (order: SeasonalOrder) => {
+    setEditOrderForm({
+      occasion_id: order.occasion_id || '',
+      customer_id: '',
+      customer_name: order.customer_name,
+      phone: order.phone || '',
+      address: order.address || '',
+      discount_amount: order.discount_amount,
+      discount_type: order.discount_type,
+      payment_mode: order.payment_mode || 'cash',
+      is_unpaid: !order.is_paid,
+      notes: order.notes || '',
+    });
+    editBill.reset(order.items);
+    setEditingOrderId(order.id);
+  };
+
+  const handleUpdateOrder = async () => {
+    if (!editOrderForm.customer_name.trim()) { toast.error('Customer name required'); return; }
+    if (editBill.billItems.length === 0) { toast.error('Add at least one item'); return; }
+    try {
+      await updateOrder.mutateAsync({
+        id: editingOrderId!,
+        occasion_id: editOrderForm.occasion_id || undefined,
+        customer_name: editOrderForm.customer_name.trim(),
+        phone: editOrderForm.phone.trim(),
+        address: editOrderForm.address.trim() || undefined,
+        items: editBill.billItems,
+        subtotal: editBill.subtotal,
+        discount_amount: editOrderDiscount,
+        discount_type: editOrderForm.discount_type,
+        total_amount: editOrderTotal,
+        is_paid: !editOrderForm.is_unpaid,
+        payment_mode: editOrderForm.is_unpaid ? null : editOrderForm.payment_mode,
+        notes: editOrderForm.notes.trim() || undefined,
+      });
+      toast.success('Order updated');
+      setEditingOrderId(null);
+      editBill.clear();
+    } catch (e: any) { toast.error(e.message || 'Error'); }
+  };
+
+  const openEditPre = (p: SeasonalPreorder) => {
+    setEditPreForm({
+      occasion_id: p.occasion_id || '',
+      customer_id: '',
+      customer_name: p.customer_name,
+      phone: p.phone || '',
+      address: p.address || '',
+      discount_amount: p.discount_amount,
+      discount_type: p.discount_type,
+      advance_paid: p.advance_paid,
+      payment_mode: p.payment_mode || 'cash',
+      is_no_advance: p.advance_paid === 0,
+      delivery_date: p.delivery_date || '',
+      notes: p.notes || '',
+    });
+    editPre.reset(p.items);
+    setEditingPreId(p.id);
+  };
+
+  const handleUpdatePre = async () => {
+    if (!editPreForm.customer_name.trim()) { toast.error('Customer name required'); return; }
+    if (editPre.billItems.length === 0) { toast.error('Add at least one item'); return; }
+    const advance = editPreForm.is_no_advance ? 0 : (Number(editPreForm.advance_paid) || 0);
+    try {
+      await updatePreorder.mutateAsync({
+        id: editingPreId!,
+        occasion_id: editPreForm.occasion_id || undefined,
+        customer_name: editPreForm.customer_name.trim(),
+        phone: editPreForm.phone.trim(),
+        address: editPreForm.address.trim() || undefined,
+        items: editPre.billItems,
+        subtotal: editPre.subtotal,
+        discount_amount: editPreDiscount,
+        discount_type: editPreForm.discount_type,
+        total_amount: editPreTotal,
+        advance_paid: advance,
+        payment_mode: advance > 0 ? editPreForm.payment_mode : null,
+        delivery_date: editPreForm.delivery_date || undefined,
+        notes: editPreForm.notes.trim() || undefined,
+      });
+      toast.success('Pre-booking updated');
+      setEditingPreId(null);
+      editPre.clear();
+    } catch (e: any) { toast.error(e.message || 'Error'); }
+  };
+
+  const handleCompletePreorder = async (p: SeasonalPreorder) => {
+    const received = Number(completeAmount) || 0;
+    try {
+      await updatePreorder.mutateAsync({
+        id: p.id,
+        status: 'delivered',
+        advance_paid: p.advance_paid + received,
+        payment_mode: received > 0 ? completeMode : p.payment_mode,
+      });
+      toast.success('Order completed');
+      setCompletingPreId(null);
+      setCompleteAmount('');
     } catch (e: any) { toast.error(e.message || 'Error'); }
   };
 
@@ -465,7 +703,14 @@ const SeasonalBilling: React.FC = () => {
           <div>
             <div style={card}>
               <div style={cardTitle}>Customer Details</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              <CustomerSelectorUI
+                customers={customers}
+                selectedCustomerId={billForm.customer_id}
+                onSelectCustomer={applyCustomerToBill}
+                onSaveAsCustomer={handleSaveBillCustomer}
+                showSaveButton={!!(billForm.customer_name.trim() && !billForm.customer_id)}
+              />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
                 <div style={fieldWrap}>
                   <label style={lbl}>Choose Occasion</label>
                   <select style={inp} value={billForm.occasion_id}
@@ -477,7 +722,7 @@ const SeasonalBilling: React.FC = () => {
                 <div style={fieldWrap}>
                   <label style={lbl}>Customer Name *</label>
                   <input style={inp} value={billForm.customer_name}
-                    onChange={e => setBillForm(f => ({ ...f, customer_name: e.target.value }))}
+                    onChange={e => setBillForm(f => ({ ...f, customer_name: e.target.value, customer_id: '' }))}
                     placeholder="Full name" />
                 </div>
                 <div style={fieldWrap}>
@@ -485,6 +730,12 @@ const SeasonalBilling: React.FC = () => {
                   <input style={inp} value={billForm.phone}
                     onChange={e => setBillForm(f => ({ ...f, phone: e.target.value }))}
                     placeholder="10-digit mobile" maxLength={10} />
+                </div>
+                <div style={fieldWrap}>
+                  <label style={lbl}>Address</label>
+                  <input style={{ ...inp, minWidth: 220 }} value={billForm.address}
+                    onChange={e => setBillForm(f => ({ ...f, address: e.target.value }))}
+                    placeholder="Area / City" />
                 </div>
               </div>
             </div>
@@ -540,7 +791,14 @@ const SeasonalBilling: React.FC = () => {
           <div>
             <div style={card}>
               <div style={cardTitle}>Pre-Booking Details</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              <CustomerSelectorUI
+                customers={customers}
+                selectedCustomerId={preForm.customer_id}
+                onSelectCustomer={applyCustomerToPre}
+                onSaveAsCustomer={handleSavePreCustomer}
+                showSaveButton={!!(preForm.customer_name.trim() && !preForm.customer_id)}
+              />
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
                 <div style={fieldWrap}>
                   <label style={lbl}>Choose Occasion</label>
                   <select style={inp} value={preForm.occasion_id}
@@ -552,7 +810,7 @@ const SeasonalBilling: React.FC = () => {
                 <div style={fieldWrap}>
                   <label style={lbl}>Customer Name *</label>
                   <input style={inp} value={preForm.customer_name}
-                    onChange={e => setPreForm(f => ({ ...f, customer_name: e.target.value }))}
+                    onChange={e => setPreForm(f => ({ ...f, customer_name: e.target.value, customer_id: '' }))}
                     placeholder="Full name" />
                 </div>
                 <div style={fieldWrap}>
@@ -560,6 +818,12 @@ const SeasonalBilling: React.FC = () => {
                   <input style={inp} value={preForm.phone}
                     onChange={e => setPreForm(f => ({ ...f, phone: e.target.value }))}
                     placeholder="10-digit mobile" maxLength={10} />
+                </div>
+                <div style={fieldWrap}>
+                  <label style={lbl}>Address</label>
+                  <input style={{ ...inp, minWidth: 220 }} value={preForm.address}
+                    onChange={e => setPreForm(f => ({ ...f, address: e.target.value }))}
+                    placeholder="Area / City" />
                 </div>
                 <div style={fieldWrap}>
                   <label style={lbl}>Delivery Date</label>
@@ -583,35 +847,45 @@ const SeasonalBilling: React.FC = () => {
                   setDiscountType={t => setPreForm(f => ({ ...f, discount_type: t }))}
                 />
                 <div style={{ minWidth: 220 }}>
-                  <div style={{ marginBottom: 10 }}>
-                    <label style={{ ...lbl, display: 'block', marginBottom: 4 }}>Advance Paid (₹)</label>
-                    <input style={{ ...inp, width: 140 }} type="number" min={0}
-                      value={preForm.advance_paid}
-                      onChange={e => setPreForm(f => ({ ...f, advance_paid: e.target.value }))}
-                      placeholder="0" />
-                  </div>
-                  {Number(preForm.advance_paid) > 0 && (
-                    <div style={{ marginBottom: 10 }}>
-                      <label style={{ ...lbl, display: 'block', marginBottom: 6 }}>Advance Mode</label>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        {(['cash', 'upi'] as const).map(pm => (
-                          <button key={pm} onClick={() => setPreForm(f => ({ ...f, payment_mode: pm }))}
-                            style={{ padding: '5px 14px', borderRadius: 7, border: '1px solid',
-                              borderColor: preForm.payment_mode === pm ? '#1A237E' : '#E5E5E0',
-                              background: preForm.payment_mode === pm ? '#EEF0FB' : '#F9F8F5',
-                              color: preForm.payment_mode === pm ? '#1A237E' : '#555',
-                              fontWeight: preForm.payment_mode === pm ? 600 : 400,
-                              fontSize: 12, cursor: 'pointer', textTransform: 'uppercase' }}>
-                            {pm}
-                          </button>
-                        ))}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 10 }}>
+                    <input type="checkbox" checked={preForm.is_no_advance}
+                      onChange={e => setPreForm(f => ({ ...f, is_no_advance: e.target.checked }))}
+                      style={{ width: 15, height: 15 }} />
+                    No advance (collect on delivery)
+                  </label>
+                  {!preForm.is_no_advance && (
+                    <>
+                      <div style={{ marginBottom: 10 }}>
+                        <label style={{ ...lbl, display: 'block', marginBottom: 4 }}>Advance Paid (₹)</label>
+                        <input style={{ ...inp, width: 140 }} type="number" min={0}
+                          value={preForm.advance_paid}
+                          onChange={e => setPreForm(f => ({ ...f, advance_paid: e.target.value }))}
+                          placeholder="0" />
                       </div>
-                    </div>
-                  )}
-                  {preTotal > 0 && Number(preForm.advance_paid) > 0 && (
-                    <div style={{ fontSize: 13, color: '#E65100', fontWeight: 500 }}>
-                      Balance: ₹{Math.max(0, preTotal - Number(preForm.advance_paid)).toLocaleString()}
-                    </div>
+                      {Number(preForm.advance_paid) > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <label style={{ ...lbl, display: 'block', marginBottom: 6 }}>Advance Mode</label>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            {(['cash', 'upi'] as const).map(pm => (
+                              <button key={pm} onClick={() => setPreForm(f => ({ ...f, payment_mode: pm }))}
+                                style={{ padding: '5px 14px', borderRadius: 7, border: '1px solid',
+                                  borderColor: preForm.payment_mode === pm ? '#1A237E' : '#E5E5E0',
+                                  background: preForm.payment_mode === pm ? '#EEF0FB' : '#F9F8F5',
+                                  color: preForm.payment_mode === pm ? '#1A237E' : '#555',
+                                  fontWeight: preForm.payment_mode === pm ? 600 : 400,
+                                  fontSize: 12, cursor: 'pointer', textTransform: 'uppercase' }}>
+                                {pm}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {preTotal > 0 && Number(preForm.advance_paid) > 0 && (
+                        <div style={{ fontSize: 13, color: '#E65100', fontWeight: 500 }}>
+                          Balance: ₹{Math.max(0, preTotal - Number(preForm.advance_paid)).toLocaleString()}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -632,6 +906,77 @@ const SeasonalBilling: React.FC = () => {
         {/* ── ORDERS ───────────────────────────────────────────────────────── */}
         {tab === 'orders' && (
           <div>
+            {/* Inline edit form for an order */}
+            {editingOrderId && (
+              <div style={{ ...card, border: '1px solid #C5CAF5', background: '#FAFBFF', marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1A237E' }}>Edit Order</div>
+                  <button style={btnGhost} onClick={() => { setEditingOrderId(null); editBill.clear(); }}>Cancel</button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Customer Name *</label>
+                    <input style={inp} value={editOrderForm.customer_name}
+                      onChange={e => setEditOrderForm(f => ({ ...f, customer_name: e.target.value }))} />
+                  </div>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Phone</label>
+                    <input style={inp} value={editOrderForm.phone}
+                      onChange={e => setEditOrderForm(f => ({ ...f, phone: e.target.value }))} maxLength={10} />
+                  </div>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Address</label>
+                    <input style={{ ...inp, minWidth: 220 }} value={editOrderForm.address}
+                      onChange={e => setEditOrderForm(f => ({ ...f, address: e.target.value }))} />
+                  </div>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Occasion</label>
+                    <select style={inp} value={editOrderForm.occasion_id}
+                      onChange={e => setEditOrderForm(f => ({ ...f, occasion_id: e.target.value }))}>
+                      <option value="">— None —</option>
+                      {activeOccasions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <ItemPickerUI picker={editBill} availableItems={editItems4Occ} />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 28, marginTop: 12 }}>
+                  <DiscountTotalUI
+                    subtotal={editBill.subtotal} discountAmt={editOrderDiscount} total={editOrderTotal}
+                    discountAmount={editOrderForm.discount_amount} discountType={editOrderForm.discount_type}
+                    setDiscountAmount={v => setEditOrderForm(f => ({ ...f, discount_amount: v }))}
+                    setDiscountType={t => setEditOrderForm(f => ({ ...f, discount_type: t }))}
+                  />
+                  <div style={{ minWidth: 200 }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ ...lbl, display: 'block', marginBottom: 6 }}>Payment Mode</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {(['cash', 'upi'] as const).map(pm => (
+                          <button key={pm} onClick={() => setEditOrderForm(f => ({ ...f, payment_mode: pm }))}
+                            style={{ padding: '5px 14px', borderRadius: 7, border: '1px solid',
+                              borderColor: editOrderForm.payment_mode === pm ? '#1A237E' : '#E5E5E0',
+                              background: editOrderForm.payment_mode === pm ? '#EEF0FB' : '#F9F8F5',
+                              color: editOrderForm.payment_mode === pm ? '#1A237E' : '#555',
+                              fontSize: 12, cursor: 'pointer', textTransform: 'uppercase' }}>
+                            {pm}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                      <input type="checkbox" checked={editOrderForm.is_unpaid}
+                        onChange={e => setEditOrderForm(f => ({ ...f, is_unpaid: e.target.checked }))}
+                        style={{ width: 15, height: 15 }} />
+                      Unpaid (collect later)
+                    </label>
+                  </div>
+                </div>
+                <div style={{ marginTop: 14, display: 'flex', gap: 10 }}>
+                  <button style={btnPrimary} onClick={handleUpdateOrder}>Save Changes</button>
+                  <button style={btnGhost} onClick={() => { setEditingOrderId(null); editBill.clear(); }}>Cancel</button>
+                </div>
+              </div>
+            )}
+
             <div style={{ fontSize: 13, color: '#888880', marginBottom: 12 }}>
               {orders.length} orders · ₹{totalSales.toLocaleString()} total
             </div>
@@ -642,11 +987,12 @@ const SeasonalBilling: React.FC = () => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {orders.map(order => (
-                  <div key={order.id} style={{ ...card, padding: 14 }}>
+                  <div key={order.id} style={{ ...card, padding: 14, opacity: editingOrderId && editingOrderId !== order.id ? 0.5 : 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>{order.customer_name}</div>
                         {order.phone && <div style={{ fontSize: 11, color: '#888880' }}>{order.phone}</div>}
+                        {order.address && <div style={{ fontSize: 11, color: '#888880' }}>{order.address}</div>}
                         {order.occasion_id && occMap[order.occasion_id] && (
                           <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#EEF0FB', color: '#1A237E', fontWeight: 500, marginTop: 4, display: 'inline-block' }}>
                             {occMap[order.occasion_id]}
@@ -677,6 +1023,7 @@ const SeasonalBilling: React.FC = () => {
                       {order.phone && (
                         <button style={{ ...btnSm, color: '#128C7E' }} onClick={() => handleWhatsApp(order)}>WhatsApp</button>
                       )}
+                      <button style={btnSm} onClick={() => openEditOrder(order)}>Edit</button>
                       <button style={{ ...btnSm, color: '#E24B4A' }} onClick={() => deleteOrder.mutateAsync(order.id).then(() => toast.success('Deleted')).catch(e => toast.error(e.message))}>Delete</button>
                     </div>
                   </div>
@@ -689,6 +1036,75 @@ const SeasonalBilling: React.FC = () => {
         {/* ── PRE-ORDERS ───────────────────────────────────────────────────── */}
         {tab === 'preorders' && (
           <div>
+            {/* Inline edit form for a preorder */}
+            {editingPreId && (
+              <div style={{ ...card, border: '1px solid #C5CAF5', background: '#FAFBFF', marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#1A237E' }}>Edit Pre-Booking</div>
+                  <button style={btnGhost} onClick={() => { setEditingPreId(null); editPre.clear(); }}>Cancel</button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Customer Name *</label>
+                    <input style={inp} value={editPreForm.customer_name}
+                      onChange={e => setEditPreForm(f => ({ ...f, customer_name: e.target.value }))} />
+                  </div>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Phone</label>
+                    <input style={inp} value={editPreForm.phone}
+                      onChange={e => setEditPreForm(f => ({ ...f, phone: e.target.value }))} maxLength={10} />
+                  </div>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Address</label>
+                    <input style={{ ...inp, minWidth: 220 }} value={editPreForm.address}
+                      onChange={e => setEditPreForm(f => ({ ...f, address: e.target.value }))} />
+                  </div>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Delivery Date</label>
+                    <input style={inp} type="date" value={editPreForm.delivery_date}
+                      onChange={e => setEditPreForm(f => ({ ...f, delivery_date: e.target.value }))} />
+                  </div>
+                  <div style={fieldWrap}>
+                    <label style={lbl}>Occasion</label>
+                    <select style={inp} value={editPreForm.occasion_id}
+                      onChange={e => setEditPreForm(f => ({ ...f, occasion_id: e.target.value }))}>
+                      <option value="">— None —</option>
+                      {activeOccasions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <ItemPickerUI picker={editPre} availableItems={editPreItems4Occ} />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 28, marginTop: 12 }}>
+                  <DiscountTotalUI
+                    subtotal={editPre.subtotal} discountAmt={editPreDiscount} total={editPreTotal}
+                    discountAmount={editPreForm.discount_amount} discountType={editPreForm.discount_type}
+                    setDiscountAmount={v => setEditPreForm(f => ({ ...f, discount_amount: v }))}
+                    setDiscountType={t => setEditPreForm(f => ({ ...f, discount_type: t }))}
+                  />
+                  <div style={{ minWidth: 220 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, marginBottom: 10 }}>
+                      <input type="checkbox" checked={editPreForm.is_no_advance}
+                        onChange={e => setEditPreForm(f => ({ ...f, is_no_advance: e.target.checked }))}
+                        style={{ width: 15, height: 15 }} />
+                      No advance
+                    </label>
+                    {!editPreForm.is_no_advance && (
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ ...lbl, display: 'block', marginBottom: 4 }}>Advance Paid (₹)</label>
+                        <input style={{ ...inp, width: 140 }} type="number" min={0}
+                          value={editPreForm.advance_paid}
+                          onChange={e => setEditPreForm(f => ({ ...f, advance_paid: e.target.value }))} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div style={{ marginTop: 14, display: 'flex', gap: 10 }}>
+                  <button style={btnPrimary} onClick={handleUpdatePre}>Save Changes</button>
+                  <button style={btnGhost} onClick={() => { setEditingPreId(null); editPre.clear(); }}>Cancel</button>
+                </div>
+              </div>
+            )}
+
             <div style={{ fontSize: 13, color: '#888880', marginBottom: 12 }}>
               {preorders.length} pre-bookings for {selectedYear}
             </div>
@@ -699,66 +1115,113 @@ const SeasonalBilling: React.FC = () => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {preorders.map(p => (
-                  <div key={p.id} style={{ ...card, padding: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>{p.customer_name}</div>
-                        {p.phone && <div style={{ fontSize: 11, color: '#888880' }}>{p.phone}</div>}
-                        {p.occasion_id && occMap[p.occasion_id] && (
-                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#EEF0FB', color: '#1A237E', fontWeight: 500, marginTop: 2, display: 'inline-block' }}>
-                            {occMap[p.occasion_id]}
+                  <div key={p.id} style={{ opacity: editingPreId && editingPreId !== p.id ? 0.5 : 1 }}>
+                    <div style={{ ...card, padding: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{p.customer_name}</div>
+                          {p.phone && <div style={{ fontSize: 11, color: '#888880' }}>{p.phone}</div>}
+                          {p.address && <div style={{ fontSize: 11, color: '#888880' }}>{p.address}</div>}
+                          {p.occasion_id && occMap[p.occasion_id] && (
+                            <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: '#EEF0FB', color: '#1A237E', fontWeight: 500, marginTop: 2, display: 'inline-block' }}>
+                              {occMap[p.occasion_id]}
+                            </span>
+                          )}
+                          {p.delivery_date && (
+                            <div style={{ fontSize: 11, color: '#E65100', marginTop: 2 }}>
+                              Deliver: {new Date(p.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: '#1A237E' }}>₹{p.total_amount.toLocaleString()}</div>
+                          {p.advance_paid > 0 && (
+                            <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 1 }}>
+                              Advance: ₹{p.advance_paid.toLocaleString()}
+                            </div>
+                          )}
+                          {p.total_amount > p.advance_paid && (
+                            <div style={{ fontSize: 11, color: '#E65100', marginTop: 1 }}>
+                              Balance: ₹{Math.max(0, p.total_amount - p.advance_paid).toLocaleString()}
+                            </div>
+                          )}
+                          <span style={{
+                            fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600, marginTop: 4, display: 'inline-block',
+                            background: STATUS_COLORS[p.status]?.bg || '#F5F5F0',
+                            color: STATUS_COLORS[p.status]?.color || '#555',
+                          }}>
+                            {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
                           </span>
-                        )}
-                        {p.delivery_date && (
-                          <div style={{ fontSize: 11, color: '#E65100', marginTop: 2 }}>
-                            Deliver: {new Date(p.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </div>
-                        )}
+                        </div>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: '#1A237E' }}>₹{p.total_amount.toLocaleString()}</div>
-                        {p.advance_paid > 0 && (
-                          <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 1 }}>
-                            Advance: ₹{p.advance_paid.toLocaleString()}
-                          </div>
-                        )}
-                        {p.advance_paid > 0 && (
-                          <div style={{ fontSize: 11, color: '#E65100', marginTop: 1 }}>
-                            Balance: ₹{Math.max(0, p.total_amount - p.advance_paid).toLocaleString()}
-                          </div>
-                        )}
-                        <span style={{
-                          fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 600, marginTop: 4, display: 'inline-block',
-                          background: STATUS_COLORS[p.status]?.bg || '#F5F5F0',
-                          color: STATUS_COLORS[p.status]?.color || '#555',
-                        }}>
-                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                        </span>
+
+                      <div style={{ marginTop: 8, fontSize: 12, color: '#555' }}>
+                        {p.items.map(it => (
+                          <span key={it.item_id} style={{ marginRight: 10 }}>
+                            {it.item_name} ({weightLabel(it.weight, it.weight_unit)}) ×{it.qty}
+                          </span>
+                        ))}
                       </div>
-                    </div>
 
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#555' }}>
-                      {p.items.map(it => (
-                        <span key={it.item_id} style={{ marginRight: 10 }}>
-                          {it.item_name} ({weightLabel(it.weight, it.weight_unit)}) ×{it.qty}
-                        </span>
-                      ))}
-                    </div>
+                      {/* Complete order panel */}
+                      {completingPreId === p.id && (
+                        <div style={{ marginTop: 12, padding: 12, background: '#F0FBF4', border: '1px solid #A5D6A7', borderRadius: 8 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#2E7D32', marginBottom: 8 }}>
+                            Complete Order — Balance: ₹{Math.max(0, p.total_amount - p.advance_paid).toLocaleString()}
+                          </div>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                            <div style={fieldWrap}>
+                              <label style={lbl}>Amount Received (₹)</label>
+                              <input style={{ ...inp, width: 140 }} type="number" min={0}
+                                value={completeAmount}
+                                onChange={e => setCompleteAmount(e.target.value)}
+                                placeholder={String(Math.max(0, p.total_amount - p.advance_paid))} />
+                            </div>
+                            <div style={fieldWrap}>
+                              <label style={lbl}>Payment Mode</label>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                {(['cash', 'upi'] as const).map(pm => (
+                                  <button key={pm} onClick={() => setCompleteMode(pm)}
+                                    style={{ padding: '5px 14px', borderRadius: 7, border: '1px solid',
+                                      borderColor: completeMode === pm ? '#2E7D32' : '#E5E5E0',
+                                      background: completeMode === pm ? '#E8F5E9' : '#F9F8F5',
+                                      color: completeMode === pm ? '#2E7D32' : '#555',
+                                      fontWeight: completeMode === pm ? 600 : 400,
+                                      fontSize: 12, cursor: 'pointer', textTransform: 'uppercase' }}>
+                                    {pm}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <button style={{ ...btnPrimary, background: '#2E7D32' }} onClick={() => handleCompletePreorder(p)}>
+                              Complete &amp; Deliver
+                            </button>
+                            <button style={btnGhost} onClick={() => { setCompletingPreId(null); setCompleteAmount(''); }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                      {p.status === 'pending' && (
-                        <button style={{ ...btnSm, color: '#1565C0' }} onClick={() => handleUpdatePreStatus(p.id, 'confirmed')}>Confirm</button>
-                      )}
-                      {(p.status === 'pending' || p.status === 'confirmed') && (
-                        <button style={{ ...btnSm, color: '#3B6D11' }} onClick={() => handleUpdatePreStatus(p.id, 'delivered')}>Delivered</button>
-                      )}
-                      {p.status !== 'cancelled' && p.status !== 'delivered' && (
-                        <button style={{ ...btnSm, color: '#888880' }} onClick={() => handleUpdatePreStatus(p.id, 'cancelled')}>Cancel</button>
-                      )}
-                      {p.phone && (
-                        <button style={{ ...btnSm, color: '#128C7E' }} onClick={() => handleWhatsApp(p, true)}>WhatsApp</button>
-                      )}
-                      <button style={{ ...btnSm, color: '#E24B4A' }} onClick={() => deletePreorder.mutateAsync(p.id).then(() => toast.success('Deleted')).catch(e => toast.error(e.message))}>Delete</button>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                        {p.status === 'pending' && (
+                          <button style={{ ...btnSm, color: '#1565C0' }} onClick={() => handleUpdatePreStatus(p.id, 'confirmed')}>Confirm</button>
+                        )}
+                        {(p.status === 'pending' || p.status === 'confirmed') && completingPreId !== p.id && (
+                          <button style={{ ...btnSm, color: '#2E7D32', background: '#E8F5E9' }}
+                            onClick={() => { setCompletingPreId(p.id); setCompleteAmount(Math.max(0, p.total_amount - p.advance_paid)); }}>
+                            Complete Order
+                          </button>
+                        )}
+                        {p.status !== 'cancelled' && p.status !== 'delivered' && (
+                          <button style={{ ...btnSm, color: '#888880' }} onClick={() => handleUpdatePreStatus(p.id, 'cancelled')}>Cancel</button>
+                        )}
+                        {p.phone && (
+                          <button style={{ ...btnSm, color: '#128C7E' }} onClick={() => handleWhatsApp(p, true)}>WhatsApp</button>
+                        )}
+                        <button style={btnSm} onClick={() => openEditPre(p)}>Edit</button>
+                        <button style={{ ...btnSm, color: '#E24B4A' }} onClick={() => deletePreorder.mutateAsync(p.id).then(() => toast.success('Deleted')).catch(e => toast.error(e.message))}>Delete</button>
+                      </div>
                     </div>
                   </div>
                 ))}

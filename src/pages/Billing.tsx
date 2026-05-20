@@ -12,7 +12,7 @@ import { useQuotations } from '../hooks/useQuotations';
 import StatusPill from '../components/StatusPill';
 import { formatDateIST, todayIST } from '../lib/ist';
 import { Payment, LineItem, Invoice } from '../types';
-import { Quotation } from '../hooks/useQuotations';
+import { Quotation, QuotationLineItem } from '../hooks/useQuotations';
 
 // ─── PDF logo (preloaded at module level) ─────────────────────────────────────
 const _iPdfLogo = (() => { const i = new Image(); i.src = '/logo.png'; return i; })();
@@ -197,8 +197,39 @@ const generateInvoicePDF = (
     }
     y += 6;
   } else {
-    // Flat line items table
-    if ((inv.line_items || []).length > 0) {
+    if ((quotation?.items?.length ?? 0) > 0) {
+      // Subcategory-grouped menu items from quotation
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+      doc.text('MENU ITEMS', M, y); y += 5;
+
+      const seenGrps: Record<string, { label: string; items: QuotationLineItem[] }> = {};
+      const grpOrder: string[] = [];
+      for (const qi of quotation!.items) {
+        const gk = `${qi.category_name} › ${qi.subcategory_name}`;
+        if (!seenGrps[gk]) { seenGrps[gk] = { label: gk, items: [] }; grpOrder.push(gk); }
+        seenGrps[gk].items.push(qi);
+      }
+      for (const gk of grpOrder) {
+        const grp = seenGrps[gk];
+        if (y > 268) { doc.addPage(); y = 20; }
+        doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, RH, 'F');
+        doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
+        doc.text(grp.label, M + 3, y + RH - 2);
+        y += RH;
+        for (const qi of grp.items) {
+          if (y > 272) { doc.addPage(); y = 15; }
+          const subH = 6;
+          doc.setFillColor(250, 249, 246); doc.rect(M, y, CW, subH, 'F');
+          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, subH);
+          doc.setFontSize(8); doc.setFont('times', 'italic'); doc.setTextColor(30, 30, 28);
+          doc.text(`  · ${qi.item_name}`, M + 3, y + subH - 1.5);
+          y += subH;
+        }
+      }
+      y += 3;
+    } else if ((inv.line_items || []).length > 0) {
+      // Flat line items table (fallback when no quotation)
       doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
       doc.text('MENU ITEMS', M, y); y += 5;
 

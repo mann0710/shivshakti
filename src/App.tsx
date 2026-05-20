@@ -16,10 +16,11 @@ import SeasonalItems from './pages/SeasonalItems';
 import SeasonalBilling from './pages/SeasonalBilling';
 import SeasonalOccasions from './pages/SeasonalOccasions';
 import SeasonalDashboard from './pages/SeasonalDashboard';
+import SeasonalCustomers from './pages/SeasonalCustomers';
 
 const queryClient = new QueryClient();
 
-export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar' | 'datacenter' | 'menubuilder' | 'quotations' | 'seasonal_items' | 'seasonal_billing' | 'seasonal_dashboard' | 'seasonal_occasions';
+export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar' | 'datacenter' | 'menubuilder' | 'quotations' | 'seasonal_items' | 'seasonal_billing' | 'seasonal_dashboard' | 'seasonal_occasions' | 'seasonal_customers';
 
 // 3 pinned items in bottom nav
 const pinnedNav: { page: Page; icon: string; label: string }[] = [
@@ -44,6 +45,7 @@ const allNavItems: { page: Page; icon: string; label: string; section: string }[
   { page: 'seasonal_occasions', icon: '🎊', label: 'Occasions',           section: 'Sessional' },
   { page: 'seasonal_items',     icon: '🪔', label: 'Sessional Items',     section: 'Sessional' },
   { page: 'seasonal_billing',   icon: '🍬', label: 'Sessional Billing',   section: 'Sessional' },
+  { page: 'seasonal_customers', icon: '👤', label: 'Sess. Customers',      section: 'Sessional' },
 ];
 
 function App() {
@@ -71,6 +73,7 @@ function App() {
       case 'seasonal_occasions':  return <SeasonalOccasions />;
       case 'seasonal_items':      return <SeasonalItems />;
       case 'seasonal_billing':    return <SeasonalBilling />;
+      case 'seasonal_customers':  return <SeasonalCustomers />;
       default:                     return <Dashboard onNavigate={navigate} />;
     }
   };

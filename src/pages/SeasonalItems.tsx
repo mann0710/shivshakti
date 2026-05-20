@@ -77,7 +77,7 @@ const SeasonalItems: React.FC = () => {
       weight: form.weight,
       weight_unit: form.weight_unit,
       price,
-      occasion_id: form.occasion_id || undefined,
+      occasion_id: form.occasion_id || null,
       is_active: form.is_active,
     };
     try {

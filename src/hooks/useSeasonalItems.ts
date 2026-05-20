@@ -8,7 +8,7 @@ export interface SeasonalItem {
   weight_unit: 'gm' | 'ltr';
   price: number;
   is_active: boolean;
-  occasion_id?: string;
+  occasion_id?: string | null;
   created_at: string;
 }
 

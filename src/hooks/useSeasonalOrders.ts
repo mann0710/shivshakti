@@ -16,6 +16,7 @@ export interface SeasonalOrder {
   occasion_id?: string;
   customer_name: string;
   phone: string;
+  address?: string;
   items: SeasonalOrderItem[];
   subtotal: number;
   discount_amount: number;
@@ -68,6 +69,20 @@ export const useUpdateSeasonalOrderPaid = () => {
       const { error } = await supabase
         .from('seasonal_orders')
         .update({ is_paid, payment_mode })
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['seasonal_orders'] }),
+  });
+};
+
+export const useUpdateSeasonalOrder = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<SeasonalOrderPayload> & { id: string }) => {
+      const { error } = await supabase
+        .from('seasonal_orders')
+        .update(updates)
         .eq('id', id);
       if (error) throw error;
     },
