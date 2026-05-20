@@ -373,6 +373,14 @@ const Quotations: React.FC = () => {
   const [dragOverDayIdx, setDragOverDayIdx] = useState<number | null>(null);
   const [dragOverMealId, setDragOverMealId] = useState<string | null>(null);
 
+  // item drag-to-reorder (single-day)
+  const [draggedItemIdx, setDraggedItemIdx]   = useState<number | null>(null);
+  const [dragOverItemIdx, setDragOverItemIdx] = useState<number | null>(null);
+
+  // item drag-to-reorder (multi-day meal items)  "dayIdx|mealId|itemIdx"
+  const [draggedMealItemKey, setDraggedMealItemKey] = useState<string | null>(null);
+  const [dragOverMealItemKey, setDragOverMealItemKey] = useState<string | null>(null);
+
   useEffect(() => { setMealSearch(''); }, [activeMealKey]);
 
   // Auto-enable multi-day when selected booking already has an end_date
@@ -697,6 +705,29 @@ const Quotations: React.FC = () => {
     }));
   };
 
+  const reorderSelectedItems = (fromIdx: number, toIdx: number) => {
+    setSelectedItems(prev => {
+      const next = [...prev];
+      const [removed] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, removed);
+      return next;
+    });
+  };
+
+  const reorderMealItems = (dayIdx: number, mealId: string, fromIdx: number, toIdx: number) => {
+    setEventDays(prev => prev.map((d, i) => {
+      if (i !== dayIdx) return d;
+      const meals = d.meals.map(m => {
+        if (m.id !== mealId) return m;
+        const items = [...m.items];
+        const [removed] = items.splice(fromIdx, 1);
+        items.splice(toIdx, 0, removed);
+        return { ...m, items };
+      });
+      return { ...d, meals };
+    }));
+  };
+
   // ── form lifecycle ────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
@@ -824,6 +855,33 @@ const Quotations: React.FC = () => {
     if (!window.confirm(`Delete quotation ${num}?`)) return;
     try { await deleteQuotation.mutateAsync(id); toast.success('Deleted'); }
     catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
+  };
+
+  const handleClone = async (q: Quotation) => {
+    if (!window.confirm(`Clone "${q.quotation_number}"? A new draft will be created with the same details.`)) return;
+    try {
+      await createQuotation.mutateAsync({
+        customer_id:      q.customer_id,
+        booking_id:       q.booking_id || '',
+        items:            q.items || [],
+        per_plate_amount: q.per_plate_amount,
+        guest_count:      q.guest_count,
+        subtotal:         q.subtotal,
+        discount_amount:  q.discount_amount,
+        discount_type:    q.discount_type,
+        gst_rate:         q.gst_rate,
+        gst_amount:       q.gst_amount,
+        extra_charges:    q.extra_charges || [],
+        transportation_charges: q.transportation_charges || [],
+        additional_discounts:   q.additional_discounts || [],
+        total_amount:     q.total_amount,
+        notes:            q.notes,
+        status:           'draft' as const,
+        is_multi_day:     q.is_multi_day || false,
+        event_days:       q.event_days || [],
+      });
+      toast.success('Cloned as new draft');
+    } catch (e: any) { toast.error(e?.message || 'Failed to clone'); }
   };
 
   const isSaving = createQuotation.isPending || updateQuotation.isPending;
@@ -1063,30 +1121,47 @@ const Quotations: React.FC = () => {
                                           style={{ fontSize: 11, color: '#CC4444', background: 'none', border: '1px solid #CC4444', borderRadius: 4, padding: '2px 7px', cursor: 'pointer' }}>Reset</button>
                                       )}
                                     </div>
-                                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: 240, padding: '6px 0' }}>
+                                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: 240, padding: '4px 0' }}>
                                       {meal.items.length === 0 ? (
                                         <div style={{ padding: '36px 12px', textAlign: 'center', color: '#AAAAAA', fontSize: 12 }}>Click + on the left to add items</div>
-                                      ) : Object.entries(mealGroupedRight).map(([cat, subs]) => (
-                                        <div key={cat}>
-                                          <div style={{ padding: '5px 12px 2px', fontSize: 10, fontWeight: 700, color: '#E8750A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{cat}</div>
-                                          {subs.map(sg => (
-                                            <div key={sg.subcategory}>
-                                              <div style={{ padding: '3px 12px 2px 18px', fontSize: 10, fontWeight: 600, color: '#888880', textTransform: 'uppercase' }}>{sg.subcategory}</div>
-                                              {sg.items.map(it => (
-                                                <div key={it.item_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px 4px 24px' }}>
-                                                  <span style={{ fontSize: 12, flex: 1 }}>{it.item_name}</span>
-                                                  <span style={{ fontSize: 11, color: '#888880' }}>₹</span>
-                                                  <input type="number" min="0" value={it.amount || ''} placeholder="0"
-                                                    onChange={e => updateMealItemAmount(dayIdx, meal.id, it.item_id, parseFloat(e.target.value) || 0)}
-                                                    style={{ width: 70, border: '1px solid #E5E5E0', borderRadius: 5, padding: '3px 5px', fontSize: 12, textAlign: 'right' }} />
-                                                  <button onClick={() => removeItemFromMeal(dayIdx, meal.id, it.item_id)}
-                                                    style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 15, cursor: 'pointer', padding: '0 2px' }}>×</button>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ))}
+                                      ) : meal.items.map((it, itemIdx) => {
+                                        const itemKey = `${dayIdx}|${meal.id}|${itemIdx}`;
+                                        const isDraggingItem = draggedMealItemKey === itemKey;
+                                        const isItemTarget  = dragOverMealItemKey === itemKey && !isDraggingItem;
+                                        return (
+                                          <div key={it.item_id}
+                                            draggable
+                                            onDragStart={e => { setDraggedMealItemKey(itemKey); e.dataTransfer.effectAllowed = 'move'; }}
+                                            onDragEnd={() => { setDraggedMealItemKey(null); setDragOverMealItemKey(null); }}
+                                            onDragOver={e => { e.preventDefault(); if (dragOverMealItemKey !== itemKey) setDragOverMealItemKey(itemKey); }}
+                                            onDrop={e => {
+                                              e.preventDefault();
+                                              if (draggedMealItemKey && draggedMealItemKey !== itemKey) {
+                                                const [srcDay, srcMeal, srcIdx] = draggedMealItemKey.split('|');
+                                                if (srcMeal === meal.id && Number(srcDay) === dayIdx)
+                                                  reorderMealItems(dayIdx, meal.id, Number(srcIdx), itemIdx);
+                                              }
+                                              setDraggedMealItemKey(null); setDragOverMealItemKey(null);
+                                            }}
+                                            style={{
+                                              display: 'flex', alignItems: 'center', gap: 8,
+                                              padding: '4px 12px 4px 8px',
+                                              opacity: isDraggingItem ? 0.35 : 1,
+                                              borderTop: isItemTarget ? '2px solid #E8750A' : '2px solid transparent',
+                                              transition: 'border-top-color 0.1s',
+                                            }}>
+                                            <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
+                                            <span style={{ fontSize: 12, flex: 1 }}>{it.item_name}</span>
+                                            {it.subcategory_name && <span style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
+                                            <span style={{ fontSize: 11, color: '#888880' }}>₹</span>
+                                            <input type="number" min="0" value={it.amount || ''} placeholder="0"
+                                              onChange={e => updateMealItemAmount(dayIdx, meal.id, it.item_id, parseFloat(e.target.value) || 0)}
+                                              style={{ width: 70, border: '1px solid #E5E5E0', borderRadius: 5, padding: '3px 5px', fontSize: 12, textAlign: 'right' }} />
+                                            <button onClick={() => removeItemFromMeal(dayIdx, meal.id, it.item_id)}
+                                              style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 15, cursor: 'pointer', padding: '0 2px' }}>×</button>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                     {meal.items.length > 0 && (
                                       <div style={{ borderTop: '0.5px solid #E5E5E0', padding: '6px 12px', background: '#F9F8F5', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666' }}>
@@ -1164,26 +1239,34 @@ const Quotations: React.FC = () => {
                       <button onClick={() => setSelectedItems([])} style={{ fontSize: 11, color: '#CC4444', background: 'none', border: '1px solid #CC4444', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>Reset All</button>
                     )}
                   </div>
-                  <div style={{ flex: 1, overflowY: 'auto', maxHeight: 300, padding: '8px 0' }}>
+                  <div style={{ flex: 1, overflowY: 'auto', maxHeight: 300, padding: '4px 0' }}>
                     {selectedItems.length === 0 ? (
                       <div style={{ padding: '40px 12px', textAlign: 'center', color: '#AAAAAA', fontSize: 12 }}>Click + on the left to add items</div>
-                    ) : Object.entries(groupedRight).map(([cat, subs]) => (
-                      <div key={cat}>
-                        <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 700, color: '#E8750A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{cat}</div>
-                        {subs.map(sg => (
-                          <div key={sg.subcategory}>
-                            <div style={{ padding: '4px 12px 2px 18px', fontSize: 10, fontWeight: 600, color: '#888880', textTransform: 'uppercase' }}>{sg.subcategory}</div>
-                            {sg.items.map(it => (
-                              <div key={it.item_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 5px 24px' }}>
-                                <span style={{ fontSize: 13, flex: 1 }}>{it.item_name}</span>
-                                <span style={{ fontSize: 12, color: '#888880' }}>₹</span>
-                                <input type="number" min="0" value={it.amount || ''} onChange={e => updateAmount(it.item_id, e.target.value)}
-                                  placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: 13, textAlign: 'right' }} />
-                                <button onClick={() => removeItem(it.item_id)} style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
+                    ) : selectedItems.map((it, idx) => (
+                      <div key={it.item_id}
+                        draggable
+                        onDragStart={e => { setDraggedItemIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
+                        onDragEnd={() => { setDraggedItemIdx(null); setDragOverItemIdx(null); }}
+                        onDragOver={e => { e.preventDefault(); if (dragOverItemIdx !== idx) setDragOverItemIdx(idx); }}
+                        onDrop={e => {
+                          e.preventDefault();
+                          if (draggedItemIdx !== null && draggedItemIdx !== idx) reorderSelectedItems(draggedItemIdx, idx);
+                          setDraggedItemIdx(null); setDragOverItemIdx(null);
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '5px 12px 5px 8px',
+                          opacity: draggedItemIdx === idx ? 0.35 : 1,
+                          borderTop: dragOverItemIdx === idx && draggedItemIdx !== idx ? '2px solid #E8750A' : '2px solid transparent',
+                          transition: 'border-top-color 0.1s',
+                        }}>
+                        <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
+                        <span style={{ fontSize: 13, flex: 1 }}>{it.item_name}</span>
+                        {it.subcategory_name && <span style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
+                        <span style={{ fontSize: 12, color: '#888880' }}>₹</span>
+                        <input type="number" min="0" value={it.amount || ''} onChange={e => updateAmount(it.item_id, e.target.value)}
+                          placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: 13, textAlign: 'right' }} />
+                        <button onClick={() => removeItem(it.item_id)} style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
                       </div>
                     ))}
                   </div>
@@ -1438,6 +1521,7 @@ const Quotations: React.FC = () => {
                     <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                       <button onClick={() => downloadPDF(q)} style={actionBtn('#378ADD')}>⬇ PDF</button>
                       <button onClick={() => openEdit(q)} style={actionBtn('#444')}>✏ Edit</button>
+                      <button onClick={() => handleClone(q)} style={actionBtn('#0F6E56')}>⧉ Clone</button>
                       <button onClick={() => handleDelete(q.id, q.quotation_number)} style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 14, cursor: 'pointer', padding: '2px 4px' }}>×</button>
                     </td>
                   </tr>
