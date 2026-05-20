@@ -126,7 +126,7 @@ const downloadEventMenuPDF = (booking: any, quotation: any | undefined) => {
       doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, RH, 'F');
       doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
       doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
-      doc.text(`${group.categoryName}  ›  ${group.subcategoryName}`, M + 3, y + RH - 2);
+      doc.text(group.subcategoryName, M + 3, y + RH - 2);
       y += RH;
       for (const item of group.items) {
         if (y > 268) { doc.addPage(); y = 20; }

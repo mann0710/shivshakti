@@ -205,8 +205,8 @@ const generateInvoicePDF = (
       const seenGrps: Record<string, { label: string; items: QuotationLineItem[] }> = {};
       const grpOrder: string[] = [];
       for (const qi of quotation!.items) {
-        const gk = `${qi.category_name} › ${qi.subcategory_name}`;
-        if (!seenGrps[gk]) { seenGrps[gk] = { label: gk, items: [] }; grpOrder.push(gk); }
+        const gk = `${qi.category_name}|||${qi.subcategory_name}`;
+        if (!seenGrps[gk]) { seenGrps[gk] = { label: qi.subcategory_name, items: [] }; grpOrder.push(gk); }
         seenGrps[gk].items.push(qi);
       }
       for (const gk of grpOrder) {
