@@ -493,18 +493,6 @@ const Quotations: React.FC = () => {
     return map;
   };
 
-  const getMealGroupedRight = (mealItems: QuotationLineItem[]) => {
-    const map: Record<string, { subcategory: string; items: QuotationLineItem[] }[]> = {};
-    mealItems.forEach(it => {
-      const cat = it.category_name || 'Uncategorised';
-      const sub = it.subcategory_name || 'General';
-      if (!map[cat]) map[cat] = [];
-      let sg = map[cat].find(g => g.subcategory === sub);
-      if (!sg) { sg = { subcategory: sub, items: [] }; map[cat].push(sg); }
-      sg.items.push(it);
-    });
-    return map;
-  };
 
   // ── multi-day helpers ─────────────────────────────────────────────────────
   const addOccasion = () => {
