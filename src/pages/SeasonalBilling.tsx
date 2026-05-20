@@ -22,6 +22,11 @@ function weightLabel(weight: number, unit: string) {
   return `${weight} ${unit}`;
 }
 
+function totalWeightLabel(totalWeight: number, unit: 'gm' | 'ltr') {
+  if (unit === 'gm') return totalWeight >= 1000 ? `${(totalWeight / 1000).toLocaleString()} kg` : `${totalWeight} gm`;
+  return totalWeight >= 1000 ? `${(totalWeight / 1000).toLocaleString()} ltr` : `${totalWeight} ltr`;
+}
+
 const currentYear = new Date().getFullYear();
 const yearOptions  = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
@@ -341,6 +346,23 @@ const SeasonalBilling: React.FC = () => {
   const totalUnpaid  = orders.filter(o => !o.is_paid).reduce((s, o) => s + o.total_amount, 0);
   const unpaidOrders = orders.filter(o => !o.is_paid);
 
+  const unpaidPreorders = preorders.filter(p => p.status !== 'cancelled' && p.advance_paid < p.total_amount);
+  const totalPreorderBalance = unpaidPreorders.reduce((s, p) => s + (p.total_amount - p.advance_paid), 0);
+
+  const itemSummary = useMemo(() => {
+    const map = new Map<string, { name: string; totalWeight: number; unit: 'gm' | 'ltr'; totalQty: number }>();
+    const process = (items: SeasonalOrderItem[]) => {
+      for (const it of items) {
+        const ex = map.get(it.item_id);
+        if (ex) { ex.totalWeight += it.weight * it.qty; ex.totalQty += it.qty; }
+        else map.set(it.item_id, { name: it.item_name, totalWeight: it.weight * it.qty, unit: it.weight_unit, totalQty: it.qty });
+      }
+    };
+    for (const o of orders) process(o.items);
+    for (const p of preorders) process(p.items);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [orders, preorders]);
+
   // ── customer selection helpers ────────────────────────────────────────────
   const applyCustomerToBill = (id: string) => {
     setBillForm(f => ({ ...f, customer_id: id }));
@@ -659,6 +681,131 @@ const SeasonalBilling: React.FC = () => {
     }
 
     doc.save(`sessional-report-${selectedYear}.pdf`);
+  };
+
+  const downloadUnpaidReportPDF = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const M = 15; const PW = 210; const CW = PW - M * 2; const rowH = 8; let y = M;
+
+    doc.setFillColor(163, 45, 45); doc.rect(M, y, CW, 14, 'F');
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('UNPAID REPORT', M + CW / 2, y + 9, { align: 'center' });
+    y += 14;
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+    doc.text(`Year: ${selectedYear}   |   Generated: ${new Date().toLocaleDateString('en-IN')}`, M, y + 6);
+    y += 14;
+
+    // Unpaid bills
+    if (unpaidOrders.length > 0) {
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(163, 45, 45);
+      doc.text(`Unpaid Bills (${unpaidOrders.length})  —  Rs ${totalUnpaid.toLocaleString()}`, M, y); y += 6;
+      const cols = ['Customer', 'Phone', 'Items', 'Amount'];
+      const colW = [45, 28, 72, 35];
+      doc.setFillColor(163, 45, 45); doc.rect(M, y, CW, rowH, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      let cx = M + 2; cols.forEach((c, i) => { doc.text(c, cx, y + 5.5); cx += colW[i]; }); y += rowH;
+      doc.setFont('helvetica', 'normal');
+      unpaidOrders.forEach((o, idx) => {
+        if (y > 270) { doc.addPage(); y = M; }
+        const bg: [number, number, number] = idx % 2 === 0 ? [254, 248, 248] : [255, 255, 255];
+        doc.setFillColor(bg[0], bg[1], bg[2]); doc.rect(M, y, CW, rowH, 'F');
+        doc.setDrawColor(230, 210, 210); doc.rect(M, y, CW, rowH);
+        doc.setTextColor(50, 50, 50); doc.setFontSize(7);
+        const itemStr = o.items.map(it => `${it.item_name}×${it.qty}`).join(', ');
+        cx = M + 2;
+        [o.customer_name, o.phone || '—', itemStr.length > 42 ? itemStr.slice(0, 40) + '…' : itemStr, `Rs ${o.total_amount.toLocaleString()}`]
+          .forEach((cell, i) => { doc.text(cell, cx, y + 5.5); cx += colW[i]; });
+        y += rowH;
+      });
+      y += 10;
+    }
+
+    // Unpaid / balance pre-bookings
+    if (unpaidPreorders.length > 0) {
+      if (y > 240) { doc.addPage(); y = M; }
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(163, 45, 45);
+      doc.text(`Pre-Bookings with Balance Due (${unpaidPreorders.length})  —  Rs ${totalPreorderBalance.toLocaleString()}`, M, y); y += 6;
+      const cols2 = ['Customer', 'Phone', 'Total', 'Advance', 'Balance', 'Status'];
+      const colW2 = [44, 27, 24, 24, 24, 22];
+      doc.setFillColor(163, 45, 45); doc.rect(M, y, CW, rowH, 'F');
+      doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+      let cx = M + 2; cols2.forEach((c, i) => { doc.text(c, cx, y + 5.5); cx += colW2[i]; }); y += rowH;
+      doc.setFont('helvetica', 'normal');
+      unpaidPreorders.forEach((p, idx) => {
+        if (y > 270) { doc.addPage(); y = M; }
+        const bg: [number, number, number] = idx % 2 === 0 ? [254, 248, 248] : [255, 255, 255];
+        doc.setFillColor(bg[0], bg[1], bg[2]); doc.rect(M, y, CW, rowH, 'F');
+        doc.setDrawColor(230, 210, 210); doc.rect(M, y, CW, rowH);
+        doc.setTextColor(50, 50, 50); doc.setFontSize(7);
+        cx = M + 2;
+        [p.customer_name, p.phone || '—', `Rs ${p.total_amount.toLocaleString()}`,
+          `Rs ${p.advance_paid.toLocaleString()}`, `Rs ${(p.total_amount - p.advance_paid).toLocaleString()}`,
+          p.status.charAt(0).toUpperCase() + p.status.slice(1)]
+          .forEach((cell, i) => { doc.text(cell, cx, y + 5.5); cx += colW2[i]; });
+        y += rowH;
+      });
+      y += 2;
+      doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, rowH, 'F');
+      doc.setDrawColor(200, 205, 240); doc.rect(M, y, CW, rowH);
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
+      doc.text('Total Balance Due (Pre-Bookings):', M + 2, y + 5.5);
+      doc.text(`Rs ${totalPreorderBalance.toLocaleString()}`, M + CW - 2, y + 5.5, { align: 'right' });
+    }
+
+    doc.save(`unpaid-report-${selectedYear}.pdf`);
+  };
+
+  const downloadItemSummaryPDF = () => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const M = 15; const PW = 210; const CW = PW - M * 2; const rowH = 8; let y = M;
+
+    doc.setFillColor(15, 110, 86); doc.rect(M, y, CW, 14, 'F');
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text('ITEM SALES SUMMARY', M + CW / 2, y + 9, { align: 'center' });
+    y += 14;
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+    doc.text(`Year: ${selectedYear}   |   Generated: ${new Date().toLocaleDateString('en-IN')}`, M, y + 6);
+    y += 14;
+
+    const totalPcs = itemSummary.reduce((s, i) => s + i.totalQty, 0);
+    const boxes = [
+      { label: 'Unique Items',  value: String(itemSummary.length) },
+      { label: 'Total Pieces',  value: String(totalPcs) },
+      { label: 'From Orders',   value: String(orders.length) },
+      { label: 'Pre-Bookings',  value: String(preorders.length) },
+    ];
+    const bw = CW / 4 - 2;
+    boxes.forEach((box, i) => {
+      const bx = M + i * (bw + 2.67);
+      doc.setFillColor(220, 245, 235); doc.rect(bx, y, bw, 16, 'F');
+      doc.setDrawColor(160, 215, 195); doc.rect(bx, y, bw, 16);
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(10, 80, 60);
+      doc.text(box.label, bx + bw / 2, y + 5, { align: 'center' });
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(15, 110, 86);
+      doc.text(box.value, bx + bw / 2, y + 12, { align: 'center' });
+    });
+    y += 22;
+
+    const cols = ['Item Name', 'Pcs Sold', 'Total Quantity'];
+    const colW = [110, 28, 42];
+    doc.setFillColor(15, 110, 86); doc.rect(M, y, CW, rowH, 'F');
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    let cx = M + 2; cols.forEach((c, i) => { doc.text(c, cx, y + 5.5); cx += colW[i]; }); y += rowH;
+
+    doc.setFont('helvetica', 'normal');
+    itemSummary.forEach((item, idx) => {
+      if (y > 270) { doc.addPage(); y = M; }
+      const bg: [number, number, number] = idx % 2 === 0 ? [245, 252, 248] : [255, 255, 255];
+      doc.setFillColor(bg[0], bg[1], bg[2]); doc.rect(M, y, CW, rowH, 'F');
+      doc.setDrawColor(200, 230, 215); doc.rect(M, y, CW, rowH);
+      doc.setTextColor(30, 30, 30); doc.setFontSize(7.5);
+      cx = M + 2;
+      [item.name, `${item.totalQty} pcs`, totalWeightLabel(item.totalWeight, item.unit)]
+        .forEach((cell, i) => { doc.text(cell, cx, y + 5.5); cx += colW[i]; });
+      y += rowH;
+    });
+
+    doc.save(`item-sales-${selectedYear}.pdf`);
   };
 
   return (
@@ -1233,21 +1380,29 @@ const SeasonalBilling: React.FC = () => {
         {/* ── REPORTS ──────────────────────────────────────────────────────── */}
         {tab === 'reports' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            {/* Top bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 500 }}>Summary for {selectedYear}</div>
-              <button style={btnPrimary} onClick={downloadReportPDF}>↓ Download PDF</button>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button style={btnPrimary} onClick={downloadReportPDF}>↓ Full Report</button>
+                <button style={{ ...btnPrimary, background: '#A32D2D' }} onClick={downloadUnpaidReportPDF}>↓ Unpaid Report</button>
+                <button style={{ ...btnPrimary, background: '#0F6E56' }} onClick={downloadItemSummaryPDF}>↓ Item Sales</button>
+              </div>
             </div>
 
+            {/* Stat cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 12, marginBottom: 20 }}>
-              <StatCard label="Total Sales"  value={`₹${totalSales.toLocaleString()}`}  sub={`${orders.length} orders`} />
-              <StatCard label="Collected"    value={`₹${totalPaid.toLocaleString()}`}   sub={`${orders.filter(o => o.is_paid).length} paid`} subColor="#3B6D11" />
-              <StatCard label="Pending"      value={`₹${totalUnpaid.toLocaleString()}`} sub={`${unpaidOrders.length} unpaid`} subColor={totalUnpaid > 0 ? '#C0392B' : '#3B6D11'} />
+              <StatCard label="Total Sales"    value={`₹${totalSales.toLocaleString()}`}            sub={`${orders.length} orders`} />
+              <StatCard label="Collected"      value={`₹${totalPaid.toLocaleString()}`}             sub={`${orders.filter(o => o.is_paid).length} paid`} subColor="#3B6D11" />
+              <StatCard label="Pending Bills"  value={`₹${totalUnpaid.toLocaleString()}`}           sub={`${unpaidOrders.length} unpaid`} subColor={totalUnpaid > 0 ? '#C0392B' : '#3B6D11'} />
+              <StatCard label="Pre-Bal Due"    value={`₹${totalPreorderBalance.toLocaleString()}`}  sub={`${unpaidPreorders.length} pre-orders`} subColor={totalPreorderBalance > 0 ? '#C0392B' : '#3B6D11'} />
             </div>
 
+            {/* Unpaid Bills */}
             {unpaidOrders.length > 0 && (
               <div style={{ ...card, marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#C0392B', marginBottom: 10 }}>
-                  Unpaid Customers ({unpaidOrders.length})
+                  Unpaid Bills ({unpaidOrders.length})
                 </div>
                 {unpaidOrders.map(order => (
                   <div key={order.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '0.5px solid #F5F5F0', fontSize: 13 }}>
@@ -1261,6 +1416,78 @@ const SeasonalBilling: React.FC = () => {
               </div>
             )}
 
+            {/* Unpaid Pre-Bookings */}
+            {unpaidPreorders.length > 0 && (
+              <div style={{ ...card, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#C0392B', marginBottom: 10 }}>
+                  Unpaid Pre-Bookings ({unpaidPreorders.length})
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#FEF4F4', borderBottom: '0.5px solid #F0DADA' }}>
+                      <th style={th}>Customer</th>
+                      <th style={th}>Total</th>
+                      <th style={th}>Advance</th>
+                      <th style={{ ...th, color: '#C0392B' }}>Balance</th>
+                      <th style={th}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unpaidPreorders.map((p, idx) => (
+                      <tr key={p.id} style={{ borderBottom: idx < unpaidPreorders.length - 1 ? '0.5px solid #F5F0F0' : 'none' }}>
+                        <td style={td}>
+                          <div>{p.customer_name}</div>
+                          {p.phone && <div style={{ fontSize: 11, color: '#888880' }}>{p.phone}</div>}
+                        </td>
+                        <td style={td}>₹{p.total_amount.toLocaleString()}</td>
+                        <td style={td}>₹{p.advance_paid.toLocaleString()}</td>
+                        <td style={{ ...td, fontWeight: 700, color: '#C0392B' }}>₹{(p.total_amount - p.advance_paid).toLocaleString()}</td>
+                        <td style={td}>
+                          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 12, fontWeight: 600, ...STATUS_COLORS[p.status] }}>
+                            {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10, fontSize: 13, fontWeight: 700, color: '#C0392B' }}>
+                  Total Balance Due: ₹{totalPreorderBalance.toLocaleString()}
+                </div>
+              </div>
+            )}
+
+            {/* Item Sales Summary */}
+            <div style={{ ...card, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0F6E56' }}>Item Sales Summary</div>
+                <button style={{ ...btnSm, color: '#0F6E56', borderColor: '#9BCDB8' }} onClick={downloadItemSummaryPDF}>↓ Download</button>
+              </div>
+              {itemSummary.length === 0 ? (
+                <div style={{ color: '#888880', fontSize: 13 }}>No sales data</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#EAF5EF', borderBottom: '0.5px solid #C8E6D8' }}>
+                      <th style={{ ...th, color: '#0F6E56' }}>Item Name</th>
+                      <th style={{ ...th, color: '#0F6E56' }}>Pcs Sold</th>
+                      <th style={{ ...th, color: '#0F6E56' }}>Total Quantity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itemSummary.map((item, idx) => (
+                      <tr key={item.name} style={{ borderBottom: idx < itemSummary.length - 1 ? '0.5px solid #F0F0EC' : 'none' }}>
+                        <td style={{ ...td, fontWeight: 500 }}>{item.name}</td>
+                        <td style={td}>{item.totalQty} pcs</td>
+                        <td style={{ ...td, fontWeight: 600, color: '#0F6E56' }}>{totalWeightLabel(item.totalWeight, item.unit)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* All Orders table */}
             <div style={card}>
               <div style={cardTitle}>All Orders — {selectedYear}</div>
               {orders.length === 0 ? (
