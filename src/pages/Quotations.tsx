@@ -465,18 +465,6 @@ const Quotations: React.FC = () => {
     return map;
   }, [leftItems]);
 
-  const groupedRight = useMemo(() => {
-    const map: Record<string, { subcategory: string; items: SelectedItem[] }[]> = {};
-    selectedItems.forEach(it => {
-      const cat = it.category_name || 'Uncategorised';
-      const sub = it.subcategory_name || 'General';
-      if (!map[cat]) map[cat] = [];
-      let sg = map[cat].find(g => g.subcategory === sub);
-      if (!sg) { sg = { subcategory: sub, items: [] }; map[cat].push(sg); }
-      sg.items.push(it);
-    });
-    return map;
-  }, [selectedItems]);
 
   const itemsTotal = selectedItems.reduce((s, i) => s + (i.amount || 0), 0);
 
@@ -1006,8 +994,7 @@ const Quotations: React.FC = () => {
                       {day.meals.map(meal => {
                         const mealKey = `${dayIdx}_${meal.id}`;
                         const isOpen  = activeMealKey === mealKey;
-                        const mealGroupedLeft  = isOpen ? getMealGroupedLeft(meal.items)  : {};
-                        const mealGroupedRight = isOpen ? getMealGroupedRight(meal.items) : {};
+                        const mealGroupedLeft  = isOpen ? getMealGroupedLeft(meal.items) : {};
                         const isBeingDragged = draggedMeal?.mealId === meal.id && draggedMeal?.dayIdx === dayIdx;
                         const isDragTarget = dragOverMealId === meal.id && !isBeingDragged;
                         return (
