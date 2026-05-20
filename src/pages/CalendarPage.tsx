@@ -86,15 +86,33 @@ const downloadEventMenuPDF = (booking: any, quotation: any | undefined) => {
         doc.text(`${meal.guest_count} guests`, M + CW - 2, y + RH - 2, { align: 'right' });
         y += RH;
 
-        // Item rows
+        // Item rows grouped by subcategory
+        const mealGrpsC: { label: string; items: any[] }[] = [];
+        const mealGrpIdxC = new Map<string, number>();
         for (const item of (meal.items || [])) {
-          if (y > 272) { doc.addPage(); y = 15; }
-          const subH = 6;
-          doc.setFillColor(250, 249, 246); doc.rect(M, y, CW, subH, 'F');
-          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, subH);
-          doc.setFontSize(8); doc.setFont('times', 'italic'); doc.setTextColor(30, 30, 28);
-          doc.text(`  · ${item.item_name}`, M + 3, y + subH - 1.5);
-          y += subH;
+          const sk = (item as any).subcategory_name || '';
+          if (!mealGrpIdxC.has(sk)) { mealGrpIdxC.set(sk, mealGrpsC.length); mealGrpsC.push({ label: sk, items: [] }); }
+          mealGrpsC[mealGrpIdxC.get(sk)!].items.push(item);
+        }
+        for (const grp of mealGrpsC) {
+          if (grp.label) {
+            if (y > 272) { doc.addPage(); y = 15; }
+            const hdrH = 6;
+            doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, hdrH, 'F');
+            doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, hdrH);
+            doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
+            doc.text(`  ${grp.label}`, M + 3, y + hdrH - 1.5);
+            y += hdrH;
+          }
+          for (const item of grp.items) {
+            if (y > 272) { doc.addPage(); y = 15; }
+            const subH = 6;
+            doc.setFillColor(250, 249, 246); doc.rect(M, y, CW, subH, 'F');
+            doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, subH);
+            doc.setFontSize(8); doc.setFont('times', 'italic'); doc.setTextColor(30, 30, 28);
+            doc.text(`  · ${(item as any).item_name}`, M + 3, y + subH - 1.5);
+            y += subH;
+          }
         }
       }
     }
