@@ -115,11 +115,11 @@ const downloadEventMenuPDF = (booking: any, quotation: any | undefined) => {
             y += subH;
             if ((item as any).instruction) {
               if (y > 272) { doc.addPage(); y = 15; }
-              const noteH = 5;
+              const noteH = 5.5;
               doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
               doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
-              doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
-              doc.text(`     ↳ ${(item as any).instruction}`, M + 3, y + noteH - 1.5);
+              doc.setFontSize(7.5); doc.setFont('times', 'italic'); doc.setTextColor(100, 70, 30);
+              doc.text(`  Note: ${(item as any).instruction}`, M + 3, y + noteH - 1.5);
               y += noteH;
             }
           }
@@ -165,11 +165,11 @@ const downloadEventMenuPDF = (booking: any, quotation: any | undefined) => {
         y += RH;
         if ((item as any).instruction) {
           if (y > 272) { doc.addPage(); y = 20; }
-          const noteH = 5;
+          const noteH = 5.5;
           doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
           doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
-          doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
-          doc.text(`     ↳ ${(item as any).instruction}`, M + 3, y + noteH - 1.5);
+          doc.setFontSize(7.5); doc.setFont('times', 'italic'); doc.setTextColor(100, 70, 30);
+          doc.text(`  Note: ${(item as any).instruction}`, M + 3, y + noteH - 1.5);
           y += noteH;
         }
       }
@@ -328,7 +328,10 @@ const CalendarPage: React.FC = () => {
                           ⬇ Menu PDF
                         </button>
                       </div>
-                      <div style={{ fontSize: 11, color: '#666660', marginTop: 2 }}>{b.event_type} · {b.venue}</div>
+                      <div style={{ fontSize: 11, color: '#666660', marginTop: 2 }}>
+                        {b.event_type}{b.venue ? ` · ${b.venue}` : ''}
+                        {bQuotation?.food_type && <span style={{ marginLeft: 6, background: '#EEF0FB', color: '#1A237E', borderRadius: 8, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>{bQuotation.food_type}</span>}
+                      </div>
 
                       {meals.length > 0 ? (
                         /* Multi-day: show each meal slot for this date */
@@ -371,21 +374,29 @@ const CalendarPage: React.FC = () => {
               </div>
               {thisMonthBookings.length === 0 ? (
                 <div style={{ fontSize: 12, color: '#888880' }}>No events this month</div>
-              ) : thisMonthBookings.map((b, i) => (
-                <div key={b.id} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', alignItems: 'center' }}>
-                  <div style={{ width: 36, textAlign: 'center', flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: eventColors[i % eventColors.length] }}>{format(parseISO(b.event_date), 'dd')}</div>
-                    <div style={{ fontSize: 9, color: '#888880' }}>{format(parseISO(b.event_date), 'MM')}</div>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.customer?.name}</div>
-                    <div style={{ fontSize: 11, color: '#888880' }}>
-                      {b.event_type}{b.end_date && b.end_date !== b.event_date ? ` · to ${format(parseISO(b.end_date), 'dd-MM')}` : ''} · {b.guest_count}g
+              ) : thisMonthBookings.map((b, i) => {
+                const mQ = quotations.find(q => q.booking_id === b.id);
+                return (
+                  <div key={b.id} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', alignItems: 'center' }}>
+                    <div style={{ width: 36, textAlign: 'center', flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: eventColors[i % eventColors.length] }}>{format(parseISO(b.event_date), 'dd')}</div>
+                      <div style={{ fontSize: 9, color: '#888880' }}>{format(parseISO(b.event_date), 'MM')}</div>
                     </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.customer?.name}</div>
+                      <div style={{ fontSize: 11, color: '#888880' }}>
+                        {b.event_type}{b.end_date && b.end_date !== b.event_date ? ` · to ${format(parseISO(b.end_date), 'dd-MM')}` : ''} · {b.guest_count}g
+                        {mQ?.food_type && <span style={{ marginLeft: 6, background: '#EEF0FB', color: '#1A237E', borderRadius: 8, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>{mQ.food_type}</span>}
+                      </div>
+                    </div>
+                    <StatusPill status={b.status} />
+                    <button onClick={() => downloadEventMenuPDF(b, mQ)}
+                      style={{ fontSize: 10, background: 'none', border: `1px solid ${eventColors[i % eventColors.length]}`, color: eventColors[i % eventColors.length], borderRadius: 5, padding: '2px 7px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      ⬇ PDF
+                    </button>
                   </div>
-                  <StatusPill status={b.status} />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

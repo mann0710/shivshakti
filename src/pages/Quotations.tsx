@@ -208,7 +208,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
             y += subH;
             if ((it as any).instruction) {
               if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
-              const noteH = 5;
+              const noteH = 5.5;
               doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
               doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
               doc.line(M + MC[0], y, M + MC[0], y + noteH);
@@ -287,11 +287,11 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
           y += RH;
           if (item.instruction) {
             if (y > 272) { doc.addPage(); y = 20; }
-            const noteH = 5;
+            const noteH = 5.5;
             doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
             doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
-            doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
-            doc.text(`     ↳ ${item.instruction}`, M + 3, y + noteH - 1.5);
+            doc.setFontSize(7.5); doc.setFont('times', 'italic'); doc.setTextColor(100, 70, 30);
+            doc.text(`  Note: ${item.instruction}`, M + 3, y + noteH - 1.5);
             y += noteH;
           }
         }
