@@ -57,6 +57,7 @@ const downloadEventMenuPDF = (booking: any, quotation: any | undefined) => {
   if (booking.event_time) infoRow('Time', booking.event_time);
   if (booking.venue) infoRow('Venue', booking.venue);
   infoRow('Guests', String(booking.guest_count));
+  if (quotation?.food_type) infoRow('Food Type', quotation.food_type);
   y += 6;
 
   // ── Menu items ───────────────────────────────────────────────────────────────
@@ -112,6 +113,15 @@ const downloadEventMenuPDF = (booking: any, quotation: any | undefined) => {
             doc.setFontSize(8); doc.setFont('times', 'italic'); doc.setTextColor(30, 30, 28);
             doc.text(`  · ${(item as any).item_name}`, M + 3, y + subH - 1.5);
             y += subH;
+            if ((item as any).instruction) {
+              if (y > 272) { doc.addPage(); y = 15; }
+              const noteH = 5;
+              doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
+              doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
+              doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
+              doc.text(`     ↳ ${(item as any).instruction}`, M + 3, y + noteH - 1.5);
+              y += noteH;
+            }
           }
         }
       }
@@ -153,6 +163,15 @@ const downloadEventMenuPDF = (booking: any, quotation: any | undefined) => {
         doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
         doc.text(`  · ${item.item_name}`, M + 3, y + RH - 2);
         y += RH;
+        if ((item as any).instruction) {
+          if (y > 272) { doc.addPage(); y = 20; }
+          const noteH = 5;
+          doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
+          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
+          doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
+          doc.text(`     ↳ ${(item as any).instruction}`, M + 3, y + noteH - 1.5);
+          y += noteH;
+        }
       }
     }
     y += 3;

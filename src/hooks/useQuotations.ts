@@ -8,6 +8,7 @@ export interface QuotationLineItem {
   category_name: string;
   subcategory_name: string;
   amount: number;
+  instruction?: string;
 }
 
 export interface MealSlot {
@@ -49,6 +50,7 @@ export interface Quotation {
   transportation_charges: { description: string; amount: number }[];
   additional_discounts: { id: string; description: string; amount: number }[];
   notes?: string;
+  food_type?: string;
   status: 'draft' | 'sent' | 'accepted' | 'rejected';
   issue_date: string;
   is_multi_day?: boolean;
@@ -72,6 +74,7 @@ type QuotationPayload = {
   transportation_charges: { description: string; amount: number }[];
   additional_discounts: { id: string; description: string; amount: number }[];
   notes?: string;
+  food_type?: string;
   status: string;
   is_multi_day?: boolean;
   event_days?: EventDay[];

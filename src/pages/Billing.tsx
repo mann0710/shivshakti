@@ -105,6 +105,7 @@ const generateInvoicePDF = (
   if (booking?.event_time) infoRow('Time', booking.event_time);
   if (booking?.venue) infoRow('Venue', booking.venue);
   if (booking?.guest_count) infoRow('Guests', String(booking.guest_count));
+  if (quotation?.food_type) infoRow('Food Type', quotation.food_type);
   if (gstNumber) infoRow('GSTIN', gstNumber);
   y += 6;
 
@@ -196,6 +197,16 @@ const generateInvoicePDF = (
             doc.setFontSize(8); doc.setFont('times', 'italic'); doc.setTextColor(80, 80, 78);
             doc.text(`  · ${item.item_name}`, M + MC[0] + 2, y + subH - 1.5);
             y += subH;
+            if (item.instruction) {
+              if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
+              const noteH = 5;
+              doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
+              doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
+              doc.line(M + MC[0], y, M + MC[0], y + noteH);
+              doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
+              doc.text(`     ↳ ${item.instruction}`, M + MC[0] + 2, y + noteH - 1.5);
+              y += noteH;
+            }
           }
         }
 
@@ -244,6 +255,15 @@ const generateInvoicePDF = (
           doc.setFontSize(8); doc.setFont('times', 'italic'); doc.setTextColor(30, 30, 28);
           doc.text(`  · ${qi.item_name}`, M + 3, y + subH - 1.5);
           y += subH;
+          if (qi.instruction) {
+            if (y > 272) { doc.addPage(); y = 15; }
+            const noteH = 5;
+            doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
+            doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
+            doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
+            doc.text(`     ↳ ${qi.instruction}`, M + 3, y + noteH - 1.5);
+            y += noteH;
+          }
         }
       }
       y += 3;

@@ -115,6 +115,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   }
   if (booking?.event_time) infoRow('Time', booking.event_time);
   if (booking?.venue) infoRow('Venue', booking.venue);
+  if (q.food_type) infoRow('Food Type', q.food_type);
   infoRow('Status', q.status.charAt(0).toUpperCase() + q.status.slice(1));
   y += 6;
 
@@ -205,6 +206,16 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
               doc.text(`Rs.${((it as any).amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + subH - 1.5, { align: 'right' });
             }
             y += subH;
+            if ((it as any).instruction) {
+              if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
+              const noteH = 5;
+              doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
+              doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
+              doc.line(M + MC[0], y, M + MC[0], y + noteH);
+              doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
+              doc.text(`     ↳ ${(it as any).instruction}`, M + MC[0] + 2, y + noteH - 1.5);
+              y += noteH;
+            }
           }
         }
 
@@ -274,6 +285,15 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
             doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
           }
           y += RH;
+          if (item.instruction) {
+            if (y > 272) { doc.addPage(); y = 20; }
+            const noteH = 5;
+            doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
+            doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
+            doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
+            doc.text(`     ↳ ${item.instruction}`, M + 3, y + noteH - 1.5);
+            y += noteH;
+          }
         }
       }
       y += 3;
@@ -376,6 +396,9 @@ const Quotations: React.FC = () => {
   // item drag-to-reorder (single-day)
   const [draggedItemIdx, setDraggedItemIdx]   = useState<number | null>(null);
   const [dragOverItemIdx, setDragOverItemIdx] = useState<number | null>(null);
+
+  // food type & instructions
+  const [foodType, setFoodType] = useState('');
 
   // item drag-to-reorder (multi-day meal items)  "dayIdx|mealId|itemIdx"
   const [draggedMealItemKey, setDraggedMealItemKey] = useState<string | null>(null);
@@ -704,6 +727,19 @@ const Quotations: React.FC = () => {
     }));
   };
 
+  const updateInstruction = (itemId: string, instruction: string) =>
+    setSelectedItems(prev => prev.map(i => i.item_id === itemId ? { ...i, instruction } : i));
+
+  const updateMealItemInstruction = (dayIdx: number, mealId: string, itemId: string, instruction: string) =>
+    setEventDays(prev => prev.map((d, i) => {
+      if (i !== dayIdx) return d;
+      const meals = d.meals.map(m => {
+        if (m.id !== mealId) return m;
+        return { ...m, items: m.items.map(x => x.item_id === itemId ? { ...x, instruction } : x) };
+      });
+      return { ...d, meals };
+    }));
+
   // ── form lifecycle ────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
@@ -711,6 +747,7 @@ const Quotations: React.FC = () => {
     setGstChecked(false); setAdditionalDiscounts([]);
     setExtraCharges([]); setTransportationCharges([]);
     setIsMultiDay(false); setEventDays([]); setActiveMealKey(null);
+    setFoodType('');
     perPlateAutoRef.current = true;
     setShowForm(true);
   };
@@ -735,6 +772,7 @@ const Quotations: React.FC = () => {
       }
     }
     setNotes(q.notes || '');
+    setFoodType(q.food_type || '');
     setGstChecked(q.gst_rate > 0);
     setExtraCharges(q.extra_charges || []);
     setTransportationCharges(q.transportation_charges || []);
@@ -750,6 +788,7 @@ const Quotations: React.FC = () => {
     setGstChecked(false); setAdditionalDiscounts([]);
     setExtraCharges([]); setTransportationCharges([]);
     setIsMultiDay(false); setEventDays([]); setActiveMealKey(null);
+    setFoodType('');
     perPlateAutoRef.current = true;
     setShowForm(false);
   };
@@ -801,6 +840,7 @@ const Quotations: React.FC = () => {
       additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
       total_amount:     finalTotal,
       notes:            notes || undefined,
+      food_type:        foodType || undefined,
       status:           'draft' as const,
       is_multi_day:     isMultiDay,
       event_days:       isMultiDay
@@ -882,6 +922,7 @@ const Quotations: React.FC = () => {
     additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
     total_amount: finalTotal,
     notes: notes || undefined,
+    food_type: foodType || undefined,
     status: 'draft',
     issue_date: new Date().toISOString().split('T')[0],
     is_multi_day: isMultiDay,
@@ -931,6 +972,18 @@ const Quotations: React.FC = () => {
                 <div><span style={{ color: '#888880' }}>Guests: </span><strong>{guestCount}</strong></div>
               </div>
             )}
+
+            {/* Food type */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={lbl}>FOOD TYPE</label>
+              <select value={foodType} onChange={e => setFoodType(e.target.value)}
+                style={{ border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 10px', fontSize: 13, background: '#fff', minWidth: 200 }}>
+                <option value="">— Select food type —</option>
+                <option value="Regular">Regular</option>
+                <option value="Jain">Jain</option>
+                <option value="Swaminarayan">Swaminarayan</option>
+              </select>
+            </div>
 
             {/* Multi-day toggle */}
             <div style={{ marginBottom: 16 }}>
@@ -1119,21 +1172,27 @@ const Quotations: React.FC = () => {
                                               setDraggedMealItemKey(null); setDragOverMealItemKey(null);
                                             }}
                                             style={{
-                                              display: 'flex', alignItems: 'center', gap: 8,
-                                              padding: '4px 12px 4px 8px',
                                               opacity: isDraggingItem ? 0.35 : 1,
                                               borderTop: isItemTarget ? '2px solid #E8750A' : '2px solid transparent',
                                               transition: 'border-top-color 0.1s',
+                                              borderBottom: '0.5px solid #F5F5F0',
                                             }}>
-                                            <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
-                                            <span style={{ fontSize: 12, flex: 1 }}>{it.item_name}</span>
-                                            {it.subcategory_name && <span style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
-                                            <span style={{ fontSize: 11, color: '#888880' }}>₹</span>
-                                            <input type="number" min="0" value={it.amount || ''} placeholder="0"
-                                              onChange={e => updateMealItemAmount(dayIdx, meal.id, it.item_id, parseFloat(e.target.value) || 0)}
-                                              style={{ width: 70, border: '1px solid #E5E5E0', borderRadius: 5, padding: '3px 5px', fontSize: 12, textAlign: 'right' }} />
-                                            <button onClick={() => removeItemFromMeal(dayIdx, meal.id, it.item_id)}
-                                              style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 15, cursor: 'pointer', padding: '0 2px' }}>×</button>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px 3px 8px' }}>
+                                              <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
+                                              <span style={{ fontSize: 12, flex: 1 }}>{it.item_name}</span>
+                                              {it.subcategory_name && <span style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
+                                              <span style={{ fontSize: 11, color: '#888880' }}>₹</span>
+                                              <input type="number" min="0" value={it.amount || ''} placeholder="0"
+                                                onChange={e => updateMealItemAmount(dayIdx, meal.id, it.item_id, parseFloat(e.target.value) || 0)}
+                                                style={{ width: 70, border: '1px solid #E5E5E0', borderRadius: 5, padding: '3px 5px', fontSize: 12, textAlign: 'right' }} />
+                                              <button onClick={() => removeItemFromMeal(dayIdx, meal.id, it.item_id)}
+                                                style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 15, cursor: 'pointer', padding: '0 2px' }}>×</button>
+                                            </div>
+                                            <div style={{ paddingLeft: 26, paddingRight: 12, paddingBottom: 3 }}>
+                                              <input draggable={false} placeholder="Add instruction (optional)…" value={it.instruction || ''}
+                                                onChange={e => updateMealItemInstruction(dayIdx, meal.id, it.item_id, e.target.value)}
+                                                style={{ width: '100%', border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
+                                            </div>
                                           </div>
                                         );
                                       })}
@@ -1229,19 +1288,25 @@ const Quotations: React.FC = () => {
                           setDraggedItemIdx(null); setDragOverItemIdx(null);
                         }}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          padding: '5px 12px 5px 8px',
                           opacity: draggedItemIdx === idx ? 0.35 : 1,
                           borderTop: dragOverItemIdx === idx && draggedItemIdx !== idx ? '2px solid #E8750A' : '2px solid transparent',
                           transition: 'border-top-color 0.1s',
+                          borderBottom: '0.5px solid #F5F5F0',
                         }}>
-                        <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
-                        <span style={{ fontSize: 13, flex: 1 }}>{it.item_name}</span>
-                        {it.subcategory_name && <span style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
-                        <span style={{ fontSize: 12, color: '#888880' }}>₹</span>
-                        <input type="number" min="0" value={it.amount || ''} onChange={e => updateAmount(it.item_id, e.target.value)}
-                          placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: 13, textAlign: 'right' }} />
-                        <button onClick={() => removeItem(it.item_id)} style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 3px 8px' }}>
+                          <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
+                          <span style={{ fontSize: 13, flex: 1 }}>{it.item_name}</span>
+                          {it.subcategory_name && <span style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
+                          <span style={{ fontSize: 12, color: '#888880' }}>₹</span>
+                          <input type="number" min="0" value={it.amount || ''} onChange={e => updateAmount(it.item_id, e.target.value)}
+                            placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: 13, textAlign: 'right' }} />
+                          <button onClick={() => removeItem(it.item_id)} style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
+                        </div>
+                        <div style={{ paddingLeft: 28, paddingRight: 12, paddingBottom: 4 }}>
+                          <input draggable={false} placeholder="Add instruction (optional)…" value={it.instruction || ''}
+                            onChange={e => updateInstruction(it.item_id, e.target.value)}
+                            style={{ width: '100%', border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
+                        </div>
                       </div>
                     ))}
                   </div>
