@@ -212,8 +212,8 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
               doc.setFillColor(252, 250, 244); doc.rect(M, y, CW, noteH, 'F');
               doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, noteH);
               doc.line(M + MC[0], y, M + MC[0], y + noteH);
-              doc.setFontSize(7); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 95, 50);
-              doc.text(`     ↳ ${(it as any).instruction}`, M + MC[0] + 2, y + noteH - 1.5);
+              doc.setFontSize(7.5); doc.setFont('times', 'italic'); doc.setTextColor(100, 70, 30);
+              doc.text(`  Note: ${(it as any).instruction}`, M + MC[0] + 2, y + noteH - 1.5);
               y += noteH;
             }
           }
