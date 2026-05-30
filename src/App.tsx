@@ -48,12 +48,19 @@ const allNavItems: { page: Page; icon: string; label: string; section: string }[
   { page: 'seasonal_customers', icon: '👤', label: 'Sess. Customers',      section: 'Sessional' },
 ];
 
+const validPages = new Set<Page>(allNavItems.map(i => i.page));
+
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  // Restore the last-viewed page on refresh (falls back to dashboard).
+  const [currentPage, setCurrentPage] = useState<Page>(() => {
+    const saved = localStorage.getItem('currentPage') as Page | null;
+    return saved && validPages.has(saved) ? saved : 'dashboard';
+  });
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const navigate = (page: Page) => {
     setCurrentPage(page);
+    localStorage.setItem('currentPage', page);
     setShowMobileMenu(false);
   };
 
