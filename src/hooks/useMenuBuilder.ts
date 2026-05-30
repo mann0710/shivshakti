@@ -145,12 +145,24 @@ export const useMenuItemsFull = () =>
   useQuery({
     queryKey: ['menu_items_full'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('menu_items')
-        .select('*, subcategory:menu_subcategories(*, category:menu_categories(*))')
-        .order('name');
-      if (error) throw error;
-      return data as (MenuItem & { subcategory: MenuSubcategory & { category: MenuCategory } })[];
+      // Supabase caps a single response at 1000 rows, so page through all of them.
+      // Without this, items late in the alphabet (e.g. "Tandoori Paneer", "Wood Fire
+      // Pizza") were silently dropped once the catalog grew past 1000 items.
+      const PAGE = 1000;
+      type Row = MenuItem & { subcategory: MenuSubcategory & { category: MenuCategory } };
+      const all: Row[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from('menu_items')
+          .select('*, subcategory:menu_subcategories(*, category:menu_categories(*))')
+          .order('name')
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        const rows = (data as Row[]) || [];
+        all.push(...rows);
+        if (rows.length < PAGE) break;
+      }
+      return all;
     },
   });
 
