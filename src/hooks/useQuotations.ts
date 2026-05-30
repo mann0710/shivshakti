@@ -9,6 +9,7 @@ export interface QuotationLineItem {
   subcategory_name: string;
   amount: number;
   instruction?: string;
+  served_with?: string;
 }
 
 export interface MealSlot {

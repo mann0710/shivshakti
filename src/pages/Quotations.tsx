@@ -206,6 +206,16 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
               doc.text(`Rs.${((it as any).amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + subH - 1.5, { align: 'right' });
             }
             y += subH;
+            if ((it as any).served_with) {
+              if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
+              const swH = 5.5;
+              doc.setFillColor(244, 250, 244); doc.rect(M, y, CW, swH, 'F');
+              doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, swH);
+              doc.line(M + MC[0], y, M + MC[0], y + swH);
+              doc.setFontSize(7.5); doc.setFont('times', 'italic'); doc.setTextColor(34, 90, 34);
+              doc.text(`  Served with: ${(it as any).served_with}`, M + MC[0] + 2, y + swH - 1.5);
+              y += swH;
+            }
             if ((it as any).instruction) {
               if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
               const noteH = 5.5;
@@ -285,6 +295,15 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
             doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
           }
           y += RH;
+          if (item.served_with) {
+            if (y > 272) { doc.addPage(); y = 20; }
+            const swH = 5.5;
+            doc.setFillColor(244, 250, 244); doc.rect(M, y, CW, swH, 'F');
+            doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, swH);
+            doc.setFontSize(7.5); doc.setFont('times', 'italic'); doc.setTextColor(34, 90, 34);
+            doc.text(`  Served with: ${item.served_with}`, M + 3, y + swH - 1.5);
+            y += swH;
+          }
           if (item.instruction) {
             if (y > 272) { doc.addPage(); y = 20; }
             const noteH = 5.5;
@@ -351,9 +370,103 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 78);
     const noteLines = doc.splitTextToSize(q.notes, CW);
     doc.text(noteLines, M, y);
+    y += noteLines.length * 4.5 + 4;
   }
+
+  // ── Terms & Contact ───────────────────────────────────────────────────────────
+  // Navy section bar matching the menu/billing headers.
+  const sectionBar = (title: string) => {
+    if (y > 255) { doc.addPage(); y = 20; }
+    doc.setFillColor(26, 35, 126); doc.rect(M, y, CW, RH, 'F');
+    doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text(title, M + 3, y + RH - 2);
+    y += RH;
+  };
+
+  // Bulleted row (wraps long text, sizes the row to fit).
+  const bulletRow = (text: string) => {
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+    const lines = doc.splitTextToSize(text, CW - 10) as string[];
+    const h = Math.max(6, lines.length * 4.2 + 1.8);
+    if (y + h > 280) { doc.addPage(); y = 20; }
+    doc.setFillColor(250, 249, 246); doc.rect(M, y, CW, h, 'F');
+    doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, h);
+    doc.setTextColor(26, 35, 126); doc.text('•', M + 4, y + 4.6);
+    doc.setTextColor(60, 60, 58); doc.text(lines, M + 9, y + 4.6);
+    y += h;
+  };
+
+  // Continue right after the quotation details with a margin; sections break to a
+  // new page on their own only when they actually run out of room (handled in the
+  // sectionBar / bulletRow helpers below).
+  y += 8;
+
+  sectionBar('ADDITIONAL CHARGES (ON DEMAND)');
+  [
+    'Bone China Crockery — extra charges',
+    'P.R.O. Services Girls',
+    'V.I.P Boys',
+    'Display Themes',
+    'Water Bottles',
+    'Transportation Charges extra',
+  ].forEach(bulletRow);
+  y += 5;
+
+  sectionBar('TERMS & CONDITIONS');
+  [
+    'No deposit or fixed charge shall be payable by the caterer; any such charges at the party plot or hall shall be borne entirely by the Party.',
+    'Faraskhana, Decoration, Light Connections and Kitchen Facility shall be arranged and paid for by the Party only.',
+  ].forEach(bulletRow);
+  y += 5;
+
+  sectionBar('PAYMENT TERMS');
+  {
+    const gap = 5;
+    const boxW = (CW - gap * 2) / 3;
+    const boxH = 24;
+    if (y + boxH > 280) { doc.addPage(); y = 20; }
+    const boxes = [
+      { pct: '10%', l1: 'On Booking',  l2: '' },
+      { pct: '70%', l1: 'Advance',     l2: 'One Month Before Event' },
+      { pct: '20%', l1: 'Balance Due', l2: 'On Event Day' },
+    ];
+    let bx = M;
+    for (const b of boxes) {
+      doc.setFillColor(235, 238, 252); doc.setDrawColor(26, 35, 126); doc.setLineWidth(0.4);
+      doc.rect(bx, y, boxW, boxH, 'FD'); doc.setLineWidth(0.2);
+      doc.setFontSize(17); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
+      doc.text(b.pct, bx + boxW / 2, y + 9.5, { align: 'center' });
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
+      doc.text(b.l1, bx + boxW / 2, y + 15, { align: 'center' });
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 90, 88);
+      const l2 = doc.splitTextToSize(b.l2, boxW - 4) as string[];
+      doc.text(l2, bx + boxW / 2, y + 19.5, { align: 'center' });
+      bx += boxW + gap;
+    }
+    y += boxH + 5;
+  }
+
+  sectionBar('CONTACT DETAIL');
+  {
+    const contactRow = (label: string, value: string) => {
+      if (y + RH > 280) { doc.addPage(); y = 20; }
+      doc.setDrawColor(210, 208, 205);
+      doc.rect(M, y, 40, RH); doc.rect(M + 40, y, CW - 40, RH);
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(120, 118, 115);
+      doc.text(label, M + 3, y + RH - 2);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
+      doc.text(value, M + 43, y + RH - 2);
+      y += RH;
+    };
+    contactRow('Name', 'Mann Sheth');
+    contactRow('Phone Number', '9879529967');
+    contactRow('Email', 'shivshakticatering.2005@gmail.com');
+  }
+
   doc.setFontSize(7); doc.setTextColor(180, 180, 178);
-  doc.text('Thank you for considering Shiv Shakti Catering & Events', W / 2, 285, { align: 'center' });
+  doc.text('Thank you for considering Shiv Shakti Catering & Events', W / 2, 290, { align: 'center' });
+
   const qName = (q.customer?.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
   doc.save(`${qName}_${q.quotation_number}.pdf`);
 };
@@ -736,6 +849,19 @@ const Quotations: React.FC = () => {
       const meals = d.meals.map(m => {
         if (m.id !== mealId) return m;
         return { ...m, items: m.items.map(x => x.item_id === itemId ? { ...x, instruction } : x) };
+      });
+      return { ...d, meals };
+    }));
+
+  const updateServedWith = (itemId: string, served_with: string) =>
+    setSelectedItems(prev => prev.map(i => i.item_id === itemId ? { ...i, served_with } : i));
+
+  const updateMealItemServedWith = (dayIdx: number, mealId: string, itemId: string, served_with: string) =>
+    setEventDays(prev => prev.map((d, i) => {
+      if (i !== dayIdx) return d;
+      const meals = d.meals.map(m => {
+        if (m.id !== mealId) return m;
+        return { ...m, items: m.items.map(x => x.item_id === itemId ? { ...x, served_with } : x) };
       });
       return { ...d, meals };
     }));
@@ -1188,10 +1314,13 @@ const Quotations: React.FC = () => {
                                               <button onClick={() => removeItemFromMeal(dayIdx, meal.id, it.item_id)}
                                                 style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 15, cursor: 'pointer', padding: '0 2px' }}>×</button>
                                             </div>
-                                            <div style={{ paddingLeft: 26, paddingRight: 12, paddingBottom: 3 }}>
+                                            <div style={{ paddingLeft: 26, paddingRight: 12, paddingBottom: 3, display: 'flex', gap: 10 }}>
                                               <input draggable={false} placeholder="Add instruction (optional)…" value={it.instruction || ''}
                                                 onChange={e => updateMealItemInstruction(dayIdx, meal.id, it.item_id, e.target.value)}
-                                                style={{ width: '100%', border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
+                                                style={{ flex: 1, border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
+                                              <input draggable={false} placeholder="Served with (optional)…" value={it.served_with || ''}
+                                                onChange={e => updateMealItemServedWith(dayIdx, meal.id, it.item_id, e.target.value)}
+                                                style={{ flex: 1, border: 'none', borderBottom: `1px dashed ${it.served_with ? '#2E7D32' : '#E0E0DC'}`, fontSize: 11, color: it.served_with ? '#1B5E20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
                                             </div>
                                           </div>
                                         );
@@ -1302,10 +1431,13 @@ const Quotations: React.FC = () => {
                             placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: 13, textAlign: 'right' }} />
                           <button onClick={() => removeItem(it.item_id)} style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
                         </div>
-                        <div style={{ paddingLeft: 28, paddingRight: 12, paddingBottom: 4 }}>
+                        <div style={{ paddingLeft: 28, paddingRight: 12, paddingBottom: 4, display: 'flex', gap: 10 }}>
                           <input draggable={false} placeholder="Add instruction (optional)…" value={it.instruction || ''}
                             onChange={e => updateInstruction(it.item_id, e.target.value)}
-                            style={{ width: '100%', border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
+                            style={{ flex: 1, border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
+                          <input draggable={false} placeholder="Served with (optional)…" value={it.served_with || ''}
+                            onChange={e => updateServedWith(it.item_id, e.target.value)}
+                            style={{ flex: 1, border: 'none', borderBottom: `1px dashed ${it.served_with ? '#2E7D32' : '#E0E0DC'}`, fontSize: 11, color: it.served_with ? '#1B5E20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
                         </div>
                       </div>
                     ))}
