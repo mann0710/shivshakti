@@ -42,39 +42,72 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   const RH = 7; // standard row height
   let y = 0;
 
+  // ── Palette — refined navy brand with a warm gold accent ─────────────────────
+  const NAVY: [number, number, number] = [26, 35, 126];
+  const GOLD: [number, number, number] = [176, 141, 66];
+  const INK:  [number, number, number] = [34, 34, 40];
+  const MUTE: [number, number, number] = [122, 122, 130];
+  const LINE: [number, number, number] = [221, 221, 226];
+  const BAND: [number, number, number] = [244, 246, 253]; // light navy tint
+  const setFill = (c: [number, number, number]) => doc.setFillColor(c[0], c[1], c[2]);
+  const setText = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2]);
+  const setDraw = (c: [number, number, number]) => doc.setDrawColor(c[0], c[1], c[2]);
+
   const hasLogo = _qPdfLogo.complete && _qPdfLogo.naturalWidth > 0;
 
-  // ── Header bar ──────────────────────────────────────────────────────────────
-  doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, 36, 'F');
-  doc.setFillColor(26, 35, 126); doc.rect(0, 35.5, W, 0.5, 'F');
-  y = 4;
+  // ── Header ────────────────────────────────────────────────────────────────
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, 40, 'F');
+  y = 5;
   if (hasLogo) {
     try { doc.addImage(_qPdfLogo as any, 'PNG', M, y, 40, 29); } catch {}
   }
-  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
-  doc.text('QUOTATION', W - M, y + 11, { align: 'right' });
-  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
-  doc.text(q.quotation_number, W - M, y + 18, { align: 'right' });
-  doc.text(formatDateIST(q.issue_date, 'dd-MM-yyyy'), W - M, y + 25, { align: 'right' });
-  y = 43;
+  // Elegant serif title with a gold underscore rule
+  doc.setFontSize(28); doc.setFont('times', 'bold'); setText(NAVY);
+  doc.text('Quotation', W - M, y + 11, { align: 'right' });
+  setDraw(GOLD); doc.setLineWidth(0.6);
+  doc.line(W - M - 48, y + 14.5, W - M, y + 14.5); doc.setLineWidth(0.2);
+  // Meta block — muted labels, inked values
+  doc.setFontSize(8); doc.setFont('helvetica', 'normal'); setText(MUTE);
+  doc.text('QUOTATION NO.', W - M - 44, y + 21);
+  doc.text('DATE', W - M - 44, y + 27);
+  doc.setFont('helvetica', 'bold'); setText(INK);
+  doc.text(q.quotation_number, W - M, y + 21, { align: 'right' });
+  doc.text(formatDateIST(q.issue_date, 'dd-MM-yyyy'), W - M, y + 27, { align: 'right' });
+  // Twin accent rules under the header: fine gold over a navy band
+  setFill(GOLD); doc.rect(0, 38.4, W, 0.5, 'F');
+  setFill(NAVY); doc.rect(0, 38.9, W, 1.5, 'F');
+  y = 47;
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const infoRow = (label: string, value: string) => {
     if (y > 272) { doc.addPage(); y = 15; }
-    doc.setDrawColor(210, 208, 205);
-    doc.rect(M, y, 52, RH); doc.rect(M + 52, y, CW - 52, RH);
-    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
-    doc.setTextColor(120, 118, 115); doc.text(label, M + 3, y + RH - 2);
-    doc.setTextColor(30, 30, 28); doc.text(value, M + 55, y + RH - 2);
+    setFill(BAND); doc.rect(M, y, 52, RH, 'F');            // label band
+    setDraw(LINE); doc.setLineWidth(0.2);
+    doc.line(M, y + RH, M + CW, y + RH);                   // hairline under row
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+    setText(MUTE); doc.text(label.toUpperCase(), M + 3, y + RH - 2);
+    doc.setFont('helvetica', 'normal'); setText(INK);
+    doc.text(value, M + 55, y + RH - 2);
     y += RH;
+  };
+
+  // Elegant section heading: gold tab + serif label + hairline rule
+  const sectionTitle = (title: string) => {
+    if (y > 268) { doc.addPage(); y = 15; }
+    setFill(GOLD); doc.rect(M, y - 3.4, 2.2, 5, 'F');
+    doc.setFontSize(12); doc.setFont('times', 'bold'); setText(NAVY);
+    doc.text(title, M + 5, y + 1);
+    setDraw(LINE); doc.setLineWidth(0.3);
+    doc.line(M, y + 3.6, M + CW, y + 3.6); doc.setLineWidth(0.2);
+    y += 8;
   };
 
   // Meal table column widths: Day=20, MealType=45, Guests=20, Rate=35, Amount=60
   const MC = [20, 45, 20, 35, 60];
   const drawMealHeader = () => {
     if (y > 272) { doc.addPage(); y = 15; }
-    doc.setFillColor(26, 35, 126); doc.rect(M, y, CW, RH, 'F');
-    doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
+    setFill(NAVY); doc.rect(M, y, CW, RH, 'F');
+    setFill(GOLD); doc.rect(M, y + RH - 0.7, CW, 0.7, 'F');
     const headers = ['Day', 'Meal Type', 'Guests', 'Rate/Plate', 'Amount'];
     let x = M;
     headers.forEach((h, i) => {
@@ -102,7 +135,6 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
 
   // ── Info block ──────────────────────────────────────────────────────────────
   const customer = q.customer; const booking = q.booking;
-  infoRow('Quotation No.', q.quotation_number);
   infoRow('Customer', customer?.name || '—');
   if (customer?.phone) infoRow('Phone', customer.phone);
   if (booking?.event_type) infoRow('Event Type', booking.event_type);
@@ -121,8 +153,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
 
   // ── Event Schedule ──────────────────────────────────────────────────────────
   if (q.is_multi_day && q.event_days?.length) {
-    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
-    doc.text('EVENT SCHEDULE', M, y); y += 5;
+    sectionTitle('Event Schedule');
     drawMealHeader();
 
     for (const day of q.event_days) {
@@ -186,24 +217,25 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
           if (grp.label) {
             if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
             const hdrH = 6;
-            doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, hdrH, 'F');
-            doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, hdrH);
+            setFill(BAND); doc.rect(M, y, CW, hdrH, 'F');
+            setDraw(LINE); doc.rect(M, y, CW, hdrH);
             doc.line(M + MC[0], y, M + MC[0], y + hdrH);
-            doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
-            doc.text(`  ${grp.label}`, M + MC[0] + 2, y + hdrH - 1.5);
+            setFill(GOLD); doc.rect(M + MC[0] + 1.5, y + 1.4, 1.4, hdrH - 2.8, 'F');
+            doc.setFontSize(8); doc.setFont('helvetica', 'bold'); setText(NAVY);
+            doc.text(grp.label, M + MC[0] + 4.5, y + hdrH - 1.7);
             y += hdrH;
           }
           for (const it of grp.items) {
             if (y > 272) { doc.addPage(); y = 15; drawMealHeader(); }
-            const subH = 6;
-            doc.setFillColor(250, 249, 246); doc.rect(M, y, CW, subH, 'F');
-            doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, subH);
+            const subH = 6.5;
+            doc.setFillColor(255, 255, 255); doc.rect(M, y, CW, subH, 'F');
+            setDraw(LINE); doc.rect(M, y, CW, subH);
             doc.line(M + MC[0], y, M + MC[0], y + subH);
-            doc.setFontSize(8); doc.setFont('times', 'italic'); doc.setTextColor(80, 80, 78);
-            doc.text(`  · ${(it as any).item_name}`, M + MC[0] + 2, y + subH - 1.5);
+            doc.setFontSize(9); doc.setFont('times', 'normal'); setText(INK);
+            doc.text(`•  ${(it as any).item_name}`, M + MC[0] + 4.5, y + subH - 2);
             if (withPrices && (it as any).amount > 0) {
-              doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-              doc.text(`Rs.${((it as any).amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + subH - 1.5, { align: 'right' });
+              doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); setText([70, 70, 74]);
+              doc.text(`Rs.${((it as any).amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + subH - 2, { align: 'right' });
             }
             y += subH;
             if ((it as any).served_with) {
@@ -248,12 +280,11 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   } else {
     // Single-day: items grouped by subcategory
     if ((q.items || []).length > 0) {
-      doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
-      doc.text('MENU ITEMS', M, y); y += 5;
+      sectionTitle('Menu Items');
 
       // Header: Item, Amount
-      doc.setFillColor(26, 35, 126); doc.rect(M, y, CW, RH, 'F');
-      doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
+      setFill(NAVY); doc.rect(M, y, CW, RH, 'F');
+      setFill(GOLD); doc.rect(M, y + RH - 0.7, CW, 0.7, 'F');
       doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
       doc.text('Item', M + 3, y + RH - 2);
       if (withPrices) {
@@ -278,20 +309,22 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
       for (const group of subGroups) {
         if (y > 268) { doc.addPage(); y = 20; }
         // Subcategory header row
-        doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, RH, 'F');
-        doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
-        doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
-        doc.text(group.subcategoryName, M + 3, y + RH - 2);
+        setFill(BAND); doc.rect(M, y, CW, RH, 'F');
+        setDraw(LINE); doc.rect(M, y, CW, RH);
+        setFill(GOLD); doc.rect(M + 2, y + 1.6, 1.4, RH - 3.2, 'F');
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold'); setText(NAVY);
+        doc.text(group.subcategoryName, M + 5, y + RH - 2);
         y += RH;
 
         for (const item of group.items) {
           if (y > 268) { doc.addPage(); y = 20; }
           doc.setFillColor(255, 255, 255); doc.rect(M, y, CW, RH, 'F');
-          doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
-          doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 28);
-          doc.text(`  · ${item.item_name}`, M + 3, y + RH - 2);
+          setDraw(LINE); doc.rect(M, y, CW, RH);
+          doc.setFontSize(9); doc.setFont('times', 'normal'); setText(INK);
+          doc.text(`•  ${item.item_name}`, M + 5, y + RH - 2);
           if (withPrices) {
             doc.line(M + 158, y, M + 158, y + RH);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); setText([70, 70, 74]);
             doc.text(`Rs.${(item.amount || 0).toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
           }
           y += RH;
@@ -326,8 +359,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   }
 
   // ── Billing Summary ─────────────────────────────────────────────────────────
-  doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 28);
-  doc.text('BILLING SUMMARY', M, y); y += 5;
+  sectionTitle('Billing Summary');
 
   if (q.is_multi_day && (q.event_days || []).length > 0) {
     summaryRow('Original Price', `Rs.${q.subtotal.toLocaleString('en-IN')}`);
@@ -365,8 +397,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   y += 5;
 
   if (q.notes) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(30, 30, 28);
-    doc.text('Notes', M, y); y += 5;
+    sectionTitle('Notes');
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 78);
     const noteLines = doc.splitTextToSize(q.notes, CW);
     doc.text(noteLines, M, y);
@@ -377,10 +408,10 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   // Navy section bar matching the menu/billing headers.
   const sectionBar = (title: string) => {
     if (y > 255) { doc.addPage(); y = 20; }
-    doc.setFillColor(26, 35, 126); doc.rect(M, y, CW, RH, 'F');
-    doc.setDrawColor(200, 198, 195); doc.rect(M, y, CW, RH);
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
-    doc.text(title, M + 3, y + RH - 2);
+    setFill(NAVY); doc.rect(M, y, CW, RH, 'F');
+    setFill(GOLD); doc.rect(M, y + RH - 0.7, CW, 0.7, 'F'); // gold underline accent
+    doc.setFontSize(9.5); doc.setFont('times', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text(title, M + 3.5, y + RH - 2.3);
     y += RH;
   };
 
@@ -464,7 +495,9 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
     contactRow('Email', 'shivshakticatering.2005@gmail.com');
   }
 
-  doc.setFontSize(7); doc.setTextColor(180, 180, 178);
+  setDraw(GOLD); doc.setLineWidth(0.4);
+  doc.line(W / 2 - 30, 285, W / 2 + 30, 285); doc.setLineWidth(0.2);
+  doc.setFontSize(8.5); doc.setFont('times', 'italic'); setText(NAVY);
   doc.text('Thank you for considering Shiv Shakti Catering & Events', W / 2, 290, { align: 'center' });
 
   const qName = (q.customer?.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
