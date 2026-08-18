@@ -147,6 +147,20 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   }
   if (booking?.event_time) infoRow('Time', booking.event_time);
   if (booking?.venue) infoRow('Venue', booking.venue);
+  // No. of persons — single-day uses the quotation guest count; multi-day shows the
+  // range across every meal (guest_count is stored as 0 on multi-day quotations).
+  {
+    const mealCounts = (q.is_multi_day ? (q.event_days || []) : [])
+      .flatMap(d => (d.meals || []).map(ml => ml.guest_count || 0))
+      .filter(n => n > 0);
+    if (mealCounts.length) {
+      const lo = Math.min(...mealCounts), hi = Math.max(...mealCounts);
+      infoRow('No. of Persons', lo === hi ? String(lo) : `${lo} – ${hi}`);
+    } else {
+      const count = q.guest_count || booking?.guest_count || 0;
+      if (count > 0) infoRow('No. of Persons', String(count));
+    }
+  }
   if (q.food_type) infoRow('Food Type', q.food_type);
   infoRow('Status', q.status.charAt(0).toUpperCase() + q.status.slice(1));
   y += 6;
