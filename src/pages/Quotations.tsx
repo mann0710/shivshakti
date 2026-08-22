@@ -163,7 +163,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   }
   // Per plate rate — single-day uses the quotation rate; multi-day shows the range
   // of effective rates (the offer rate when one is set) across every meal.
-  if (withPrices) {
+  {
     const rates = (q.is_multi_day ? (q.event_days || []) : [])
       .flatMap(d => (d.meals || []).map(ml => {
         const off = ml.discount_amount || 0;
@@ -415,7 +415,7 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
       summaryRow(`  ${ad.description || 'Discount'}`, `-Rs.${ad.amount.toLocaleString('en-IN')}`, false, [34, 120, 34]);
     }
   } else {
-    if (withPrices && q.per_plate_amount > 0 && q.guest_count > 0)
+    if (q.per_plate_amount > 0 && q.guest_count > 0)
       summaryRow(
         `Per Plate Rs.${q.per_plate_amount.toLocaleString('en-IN')}  ×  ${q.guest_count} guests`,
         `Rs.${q.subtotal.toLocaleString('en-IN')}`,
