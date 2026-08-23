@@ -161,6 +161,24 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
       if (count > 0) infoRow('No. of Persons', String(count));
     }
   }
+  // Per plate rate — single-day uses the quotation rate; multi-day shows the range
+  // of effective rates (the offer rate when one is set) across every meal.
+  {
+    const rates = (q.is_multi_day ? (q.event_days || []) : [])
+      .flatMap(d => (d.meals || []).map(ml => {
+        const off = ml.discount_amount || 0;
+        return off > 0 ? off : (ml.per_plate_amount || 0);
+      }))
+      .filter(n => n > 0);
+    if (rates.length) {
+      const lo = Math.min(...rates), hi = Math.max(...rates);
+      infoRow('Per Plate', lo === hi
+        ? `Rs.${lo.toLocaleString('en-IN')}`
+        : `Rs.${lo.toLocaleString('en-IN')} – Rs.${hi.toLocaleString('en-IN')}`);
+    } else if (q.per_plate_amount > 0) {
+      infoRow('Per Plate', `Rs.${q.per_plate_amount.toLocaleString('en-IN')}`);
+    }
+  }
   if (q.food_type) infoRow('Food Type', q.food_type);
   infoRow('Status', q.status.charAt(0).toUpperCase() + q.status.slice(1));
   y += 6;
@@ -364,11 +382,6 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
       }
       y += 3;
     }
-    if (withPrices && q.per_plate_amount > 0) {
-      doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
-      doc.text(`Per Plate: Rs.${q.per_plate_amount.toLocaleString('en-IN')}  ×  ${q.guest_count} guests  =  Rs.${q.subtotal.toLocaleString('en-IN')}`, M, y);
-      y += 5;
-    }
     y += 4;
   }
 
@@ -376,7 +389,15 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
   sectionTitle('Billing Summary');
 
   if (q.is_multi_day && (q.event_days || []).length > 0) {
-    summaryRow('Original Price', `Rs.${q.subtotal.toLocaleString('en-IN')}`);
+    const dayRates = (q.event_days || [])
+      .flatMap(d => (d.meals || []).map(ml => ml.per_plate_amount || 0))
+      .filter(n => n > 0);
+    const lo = dayRates.length ? Math.min(...dayRates) : 0;
+    const hi = dayRates.length ? Math.max(...dayRates) : 0;
+    const origLabel = !dayRates.length ? 'Original Price'
+      : lo === hi ? `Original Price (Rs.${lo.toLocaleString('en-IN')}/plate)`
+      : `Original Price (Rs.${lo.toLocaleString('en-IN')} – Rs.${hi.toLocaleString('en-IN')}/plate)`;
+    summaryRow(origLabel, `Rs.${q.subtotal.toLocaleString('en-IN')}`);
     for (const day of (q.event_days || [])) {
       for (const meal of (day.meals || [])) {
         const offer = meal.discount_amount || 0;
@@ -394,6 +415,11 @@ const downloadPDF = (q: Quotation, withPrices = true) => {
       summaryRow(`  ${ad.description || 'Discount'}`, `-Rs.${ad.amount.toLocaleString('en-IN')}`, false, [34, 120, 34]);
     }
   } else {
+    if (q.per_plate_amount > 0 && q.guest_count > 0)
+      summaryRow(
+        `Per Plate Rs.${q.per_plate_amount.toLocaleString('en-IN')}  ×  ${q.guest_count} guests`,
+        `Rs.${q.subtotal.toLocaleString('en-IN')}`,
+      );
     if (q.discount_amount > 0)
       summaryRow('Discount', `-Rs.${q.discount_amount.toLocaleString('en-IN')}`, false, [34, 120, 34]);
   }
