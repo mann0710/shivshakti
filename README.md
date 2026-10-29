@@ -33,12 +33,14 @@ Because the anon key is public (it ships inside the website), anyone could read 
 1. Supabase → **Authentication → Users → Add user → Create new user**: your email and a password, with **Auto Confirm User** ticked.
 2. Optional but recommended: Authentication → Sign In / Providers → turn off **Allow new users to sign up**.
 3. SQL Editor: open [`supabase/migrations/20261031_security_rls.sql`](supabase/migrations/20261031_security_rls.sql), replace `owner@example.com` with your login email (add a line per staff member), and run it.
-   - Every table gets row-level security with a single rule: only signed-in emails listed in the `staff` table can read or write.
+   - Every table gets row-level security with a single rule: only signed-in emails listed in the `staff` table can read or write. The check (`private.is_staff()`) lives in a schema the API doesn't expose.
    - The open policies are removed.
    - The documents bucket stays viewable by direct link, but only staff can list, upload, replace or delete files.
 4. Open the app and sign in. To add staff later, run `insert into public.staff (email) values ('name@example.com');` and create their user in Authentication.
 
 A signed-in email that isn't on the staff list sees an "Access not set up" screen. Sign out is at the bottom of the sidebar, and in the phone **More** menu.
+
+Done on the live project on 30 Oct 2026, after a full data backup (`backups/`, gitignored). Security Advisor: 0 errors, 0 warnings. The pack-sizes update below was also applied.
 
 ### One-time database update (required for the new sweets features)
 

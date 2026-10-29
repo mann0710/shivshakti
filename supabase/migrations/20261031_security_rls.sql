@@ -14,8 +14,13 @@ insert into public.staff (email) values
   ('owner@example.com')          -- <- replace with the login email(s)
 on conflict (email) do nothing;
 
--- True when the signed-in user's email is on the staff list
-create or replace function public.is_staff()
+-- True when the signed-in user's email is on the staff list.
+-- The privileged check lives in a schema the API doesn't expose; public.is_staff() is a plain wrapper for the app.
+create schema if not exists private;
+revoke all on schema private from public, anon;
+grant usage on schema private to authenticated;
+
+create or replace function private.is_staff()
 returns boolean
 language sql
 stable
@@ -27,6 +32,17 @@ as $$
     where lower(s.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
   );
 $$;
+
+revoke all on function private.is_staff() from public, anon;
+grant execute on function private.is_staff() to authenticated;
+
+create or replace function public.is_staff()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$ select private.is_staff(); $$;
 
 revoke all on function public.is_staff() from public, anon;
 grant execute on function public.is_staff() to authenticated;
@@ -41,7 +57,7 @@ begin
     execute format('drop policy if exists staff_all on public.%I', t.tablename);
     if t.tablename <> 'staff' then
       execute format(
-        'create policy staff_all on public.%I for all to authenticated using (public.is_staff()) with check (public.is_staff())',
+        'create policy staff_all on public.%I for all to authenticated using (private.is_staff()) with check (private.is_staff())',
         t.tablename);
     end if;
   end loop;
@@ -57,7 +73,7 @@ drop policy if exists "Allow public update" on storage.objects;
 drop policy if exists "Allow public delete" on storage.objects;
 drop policy if exists "Staff manage documents" on storage.objects;
 create policy "Staff manage documents" on storage.objects for all to authenticated
-  using (bucket_id = 'documents' and public.is_staff())
-  with check (bucket_id = 'documents' and public.is_staff());
+  using (bucket_id = 'documents' and private.is_staff())
+  with check (bucket_id = 'documents' and private.is_staff());
 
 notify pgrst, 'reload schema';
