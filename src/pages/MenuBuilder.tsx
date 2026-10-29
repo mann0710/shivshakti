@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../components/ui/ConfirmDialog';
 import {
   useMenuCategories, useCreateCategory, useUpdateCategory, useDeleteCategory,
   useMenuSubcategories, useCreateSubcategory, useUpdateSubcategory, useDeleteSubcategory,
@@ -8,6 +9,7 @@ import {
 } from '../hooks/useMenuBuilder';
 
 const MenuBuilder: React.FC = () => {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const { data: categories = [] } = useMenuCategories();
   const { data: subcategories = [] } = useMenuSubcategories();
   const { data: items = [], refetch: refetchItems } = useMenuItemsFull();
@@ -114,7 +116,7 @@ const MenuBuilder: React.FC = () => {
   };
 
   const handleDeleteCat = async (id: string) => {
-    if (!window.confirm('Delete this category and all its subcategories & items?')) return;
+    if (!(await confirm({ title: 'Delete category?', message: 'This also deletes all its subcategories and items.', confirmLabel: 'Delete', danger: true }))) return;
     try { await deleteCat.mutateAsync(id); toast.success('Deleted'); if (selectedCatId === id) { setSelectedCatId(null); setSelectedSubId(null); } }
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
@@ -139,7 +141,7 @@ const MenuBuilder: React.FC = () => {
   };
 
   const handleDeleteSub = async (id: string) => {
-    if (!window.confirm('Delete this subcategory and all its items?')) return;
+    if (!(await confirm({ title: 'Delete subcategory?', message: 'This also deletes all its items.', confirmLabel: 'Delete', danger: true }))) return;
     try { await deleteSub.mutateAsync(id); toast.success('Deleted'); if (selectedSubId === id) setSelectedSubId(null); }
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
@@ -187,6 +189,8 @@ const MenuBuilder: React.FC = () => {
   };
 
   const handleDeleteItem = async (id: string) => {
+    const name = items.find(i => i.id === id)?.name ?? 'this item';
+    if (!(await confirm({ title: `Delete ${name}?`, message: 'Old quotations keep their copy. Mark it Inactive instead if you may use it again.', confirmLabel: 'Delete', danger: true }))) return;
     try { await deleteItem.mutateAsync(id); toast.success('Deleted'); }
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
@@ -211,7 +215,7 @@ const MenuBuilder: React.FC = () => {
         <div style={{ fontSize: 11, color: '#888880' }}>Manage categories, subcategories & items</div>
       </div>
       <div className="page-content">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }} className="menu-builder-grid">
+        <div className="menu-builder-grid">
 
           {/* ── CATEGORIES ───────────────────────────────────────────── */}
           <div style={col}>
@@ -449,6 +453,7 @@ const MenuBuilder: React.FC = () => {
           💡 Each column has its own search. Click a <strong>category</strong> to filter subcategories & items by that category. Click a <strong>subcategory</strong> to filter items. Inactive items are hidden in Quotations.
         </div>
       </div>
+      {confirmDialog}
     </div>
   );
 };

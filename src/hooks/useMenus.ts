@@ -2,15 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Menu } from '../types';
 
-export const useMenus = () =>
+// Active packages by default; the Packages page can include inactive ones to reactivate them.
+export const useMenus = (includeInactive = false) =>
   useQuery({
-    queryKey: ['menus'],
+    queryKey: ['menus', includeInactive],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('menus')
-        .select('*')
-        .eq('is_active', true)
-        .order('name', { ascending: true });
+      let q = supabase.from('menus').select('*').order('name', { ascending: true });
+      if (!includeInactive) q = q.eq('is_active', true);
+      const { data, error } = await q;
       if (error) throw error;
       return data as Menu[];
     },

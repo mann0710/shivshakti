@@ -8,12 +8,13 @@ import { Quotation, QuotationLineItem } from '../../hooks/useQuotations';
 const _iPdfLogo = (() => { const i = new Image(); i.src = '/logo.png'; return i; })();
 
 // ─── PDF generator ────────────────────────────────────────────────────────────
-export const generateInvoicePDF = (
+// Builds the PDF; generateInvoicePDF saves it, sharing code sends it.
+export const buildInvoicePdf = (
   inv: Invoice,
   quotation: Quotation | undefined,
   payments: Payment[],
   gstNumber: string | undefined,
-) => {
+): { doc: jsPDF; fileName: string } => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210; const M = 15; const CW = W - M * 2; // 180mm content width
   const RH = 7;
@@ -405,5 +406,10 @@ export const generateInvoicePDF = (
   doc.setFontSize(7); doc.setTextColor(180, 180, 178);
   doc.text('Thank you for choosing Shiv Shakti Catering & Events', W / 2, 285, { align: 'center' });
   const invName = (customer?.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
-  doc.save(`${invName}_${inv.invoice_number}.pdf`);
+  return { doc, fileName: `${invName}_${inv.invoice_number}.pdf` };
+};
+
+export const generateInvoicePDF = (...args: Parameters<typeof buildInvoicePdf>) => {
+  const { doc, fileName } = buildInvoicePdf(...args);
+  doc.save(fileName);
 };

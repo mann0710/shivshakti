@@ -4,10 +4,11 @@ import { useBookings } from '../hooks/useBookings';
 import { useInvoices, useAllPayments } from '../hooks/useInvoices';
 import { useSeasonalOrders } from '../hooks/useSeasonalOrders';
 import StatusPill from '../components/StatusPill';
-import { Page } from '../App';
+import { Navigate } from '../hooks/useNavIntent';
+import { Page } from '../components/navItems';
 import { getISTGreeting, formatDateIST } from '../lib/ist';
 
-interface Props { onNavigate: (page: Page) => void; }
+interface Props { onNavigate: Navigate; }
 
 const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
@@ -58,7 +59,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
           <button style={btnGhost} onClick={() => onNavigate('bookings')}>
             🔔 {activeBookings.length} active
           </button>
-          <button style={btnPrimary} onClick={() => onNavigate('bookings')}>+ New Booking</button>
+          <button style={btnPrimary} onClick={() => onNavigate('bookings', { action: 'new' })}>+ New Booking</button>
         </div>
       </div>
 
@@ -115,18 +116,18 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
             <div style={cardTitle}>Quick actions</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {[
-                { icon: '📋', label: 'New booking',    page: 'bookings',    bg: '#FFF0E0' },
-                { icon: '👤', label: 'Add customer',   page: 'customers',   bg: '#E6F1FB' },
-                { icon: '🧾', label: 'Create invoice', page: 'billing',     bg: '#EAF3DE' },
-                { icon: '🍽',  label: 'Manage menus',   page: 'menus',       bg: '#EEEDFE' },
-                { icon: '📅', label: 'Open calendar',  page: 'calendar',    bg: '#FBEAF0' },
-                { icon: '⚙️', label: 'Data Center',    page: 'datacenter',  bg: '#F5F5F0' },
+                { icon: '📋', label: 'New booking',    page: 'bookings',    bg: '#FFF0E0', isNew: true },
+                { icon: '📝', label: 'New quotation',  page: 'quotations',  bg: '#E3F6F1', isNew: true },
+                { icon: '👤', label: 'Add customer',   page: 'customers',   bg: '#E6F1FB', isNew: true },
+                { icon: '🧾', label: 'Create invoice', page: 'billing',     bg: '#EAF3DE', isNew: true },
+                { icon: '🍬', label: 'Sweets POS',     page: 'seasonal_billing', bg: '#FBEAF0', isNew: false },
+                { icon: '📅', label: 'Open calendar',  page: 'calendar',    bg: '#F5F5F0', isNew: false },
               ].map(a => (
-                <div key={a.label} onClick={() => onNavigate(a.page as Page)}
-                  style={{ background: a.bg, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button type="button" key={a.label} onClick={() => onNavigate(a.page as Page, a.isNew ? { action: 'new' } : undefined)}
+                  style={{ background: a.bg, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, border: 'none', textAlign: 'left' }}>
                   <span style={{ fontSize: 16 }}>{a.icon}</span>
                   <span style={{ fontSize: 12, fontWeight: 500 }}>{a.label}</span>
-                </div>
+                </button>
               ))}
             </div>
           </div>

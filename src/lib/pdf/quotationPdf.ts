@@ -18,7 +18,8 @@ export const getDayNumber = (date: string, days: EventDay[]): number => {
 const _qPdfLogo = (() => { const i = new Image(); i.src = '/logo.png'; return i; })();
 
 // ─── PDF generator ────────────────────────────────────────────────────────────
-export const downloadPDF = (q: Quotation, withPrices = true) => {
+// Builds the PDF; downloadPDF saves it, sharing code sends it.
+export const buildQuotationPdf = (q: Quotation, withPrices = true): { doc: jsPDF; fileName: string } => {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210; const M = 15; const CW = W - M * 2; // 180mm content width
   const RH = 7; // standard row height
@@ -523,5 +524,10 @@ export const downloadPDF = (q: Quotation, withPrices = true) => {
   doc.text('Thank you for considering Shiv Shakti Catering & Events', W / 2, 290, { align: 'center' });
 
   const qName = (q.customer?.name || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
-  doc.save(`${qName}_${q.quotation_number}.pdf`);
+  return { doc, fileName: `${qName}_${q.quotation_number}.pdf` };
+};
+
+export const downloadPDF = (q: Quotation, withPrices = true) => {
+  const { doc, fileName } = buildQuotationPdf(q, withPrices);
+  doc.save(fileName);
 };

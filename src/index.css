@@ -127,8 +127,9 @@ a { color: inherit; }
 
 /* ─── Small mobile  ≤ 480px ─── */
 @media (max-width: 480px) {
-  .g4 { grid-template-columns: 1fr; }
-  .g3 { grid-template-columns: 1fr; }
+  /* Stat cards stay two-up on phones so key numbers fit on one screen */
+  .g4 { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .g3 { grid-template-columns: 1fr 1fr; gap: 8px; }
   .page-topbar { padding: 8px 10px; }
   .page-content { padding: 10px; }
 }
@@ -195,4 +196,26 @@ a { color: inherit; }
   .ui-modal-backdrop { align-items: flex-end; padding: 0; }
   .ui-modal { border-radius: 16px 16px 0 0; max-height: 88vh; }
   .ui-tabs { padding: 0 8px; }
+}
+
+/* ─── Responsive list helpers: table on desktop, cards on phones ─── */
+.only-mobile { display: none; }
+.list-cards { display: flex; flex-direction: column; gap: 10px; }
+.list-card { background: #fff; border: 0.5px solid #E5E5E0; border-radius: 12px; padding: 12px 14px; }
+.list-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.list-card-actions button { min-height: 34px; }
+@media (max-width: 768px) {
+  .only-desktop { display: none !important; }
+  .only-mobile { display: block; }
+}
+
+/* Simple tables stack into cards on phones (add className="stack-table") */
+@media (max-width: 768px) {
+  .stack-table, .stack-table tbody, .stack-table tr, .stack-table td { display: block; width: 100%; }
+  .stack-table { min-width: 0 !important; }
+  .stack-table thead { display: none; }
+  .stack-table tr { padding: 10px 12px; }
+  .stack-table td { padding: 3px 0 !important; text-align: left !important; white-space: normal !important; }
+  .stack-table td:empty { display: none; }
+  .stack-table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 80px; font-size: 11px; color: #888880; }
 }

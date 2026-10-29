@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../components/ui/ConfirmDialog';
 import { supabase } from '../lib/supabase';
 import {
   useDataCenter, useUpsertDataCenter,
@@ -12,6 +13,7 @@ import {
 const gstRateValue = (v: string) => { const n = parseFloat(v); return Number.isFinite(n) && n >= 0 ? n : 18; };
 
 const DataCenter: React.FC = () => {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const { data: dc } = useDataCenter();
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: eventTypes = [], isSuccess: etLoaded } = useEventTypes();
@@ -96,7 +98,7 @@ const DataCenter: React.FC = () => {
   };
 
   const handleDeleteFssai = async () => {
-    if (!fssaiUrl || !window.confirm('Remove the FSSAI certificate? This cannot be undone.')) return;
+    if (!fssaiUrl || !(await confirm({ title: 'Remove FSSAI certificate?', message: 'The uploaded file is deleted. This cannot be undone.', confirmLabel: 'Remove', danger: true }))) return;
     try {
       const oldPath = extractStoragePath(fssaiUrl);
       if (oldPath) await supabase.storage.from('documents').remove([oldPath]).catch(() => {});
@@ -144,6 +146,7 @@ const DataCenter: React.FC = () => {
   };
 
   const handleDeleteMember = async (id: string) => {
+    if (!(await confirm({ title: 'Remove team member?', message: `${teamMembers.find(m => m.id === id)?.name ?? 'This member'} will be removed.`, confirmLabel: 'Remove', danger: true }))) return;
     try {
       await deleteMember.mutateAsync(id);
       toast.success('Member removed');
@@ -170,6 +173,7 @@ const DataCenter: React.FC = () => {
   };
 
   const handleDeleteEventType = async (id: string) => {
+    if (!(await confirm({ title: 'Remove event type?', message: `${eventTypes.find(e => e.id === id)?.name ?? 'It'} will no longer be offered for new bookings.`, confirmLabel: 'Remove', danger: true }))) return;
     try {
       await deleteEventType.mutateAsync(id);
       toast.success('Event type removed');
@@ -357,6 +361,7 @@ const DataCenter: React.FC = () => {
         </div>
 
       </div>
+      {confirmDialog}
     </div>
   );
 };

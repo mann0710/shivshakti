@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import Sidebar from './components/Sidebar';
@@ -18,38 +18,60 @@ import SeasonalOccasions from './pages/SeasonalOccasions';
 import SeasonalDashboard from './pages/SeasonalDashboard';
 import SeasonalCustomers from './pages/SeasonalCustomers';
 import { Page, NAV_ITEMS, SECTIONS, PINNED, isPage } from './components/navItems';
+import { setNavIntent, NavIntent } from './hooks/useNavIntent';
+import { useAuth } from './hooks/useAuth';
+import LoginScreen from './components/LoginScreen';
 
 const queryClient = new QueryClient();
 
 export type { Page };
 
+const hashPage = () => window.location.hash.replace('#', '');
+
 function App() {
-  // Restore the last-viewed page on refresh (falls back to dashboard).
+  // URL hash first (#quotations), then the last-viewed page, then the dashboard.
   const [currentPage, setCurrentPage] = useState<Page>(() => {
-    let saved: string | null = null;
-    try { saved = localStorage.getItem('currentPage'); } catch { /* storage blocked */ }
+    let saved: string | null = hashPage();
+    if (!isPage(saved)) { try { saved = localStorage.getItem('currentPage'); } catch { saved = null; } }
     return isPage(saved) ? saved : 'dashboard';
   });
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const auth = useAuth();
+  const signOut = async () => { await auth.signOut(); queryClient.clear(); };
 
-  const navigate = (page: Page) => {
+  const remember = (page: Page) => { try { localStorage.setItem('currentPage', page); } catch { /* storage blocked */ } };
+
+  // Each page is a history entry, so the phone Back button returns to the previous screen.
+  useEffect(() => {
+    window.history.replaceState({ page: currentPage }, '', `#${currentPage}`);
+    const onPop = (e: PopStateEvent) => {
+      const page = e.state?.page ?? hashPage();
+      if (isPage(page)) { setCurrentPage(page); remember(page); setShowMobileMenu(false); }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const navigate = (page: Page, intent?: NavIntent) => {
+    setNavIntent(page, intent);
+    if (page !== currentPage) window.history.pushState({ page }, '', `#${page}`);
     setCurrentPage(page);
-    try { localStorage.setItem('currentPage', page); } catch { /* storage blocked */ }
+    remember(page);
     setShowMobileMenu(false);
   };
 
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':   return <Dashboard onNavigate={navigate} />;
-      case 'bookings':    return <Bookings />;
+      case 'bookings':    return <Bookings onNavigate={navigate} />;
       case 'customers':   return <Customers onNavigate={navigate} />;
       case 'menus':       return <Menus />;
-      case 'billing':     return <Billing />;
+      case 'billing':     return <Billing onNavigate={navigate} />;
       case 'finance':     return <Finance />;
-      case 'calendar':    return <CalendarPage />;
+      case 'calendar':    return <CalendarPage onNavigate={navigate} />;
       case 'datacenter':  return <DataCenter />;
       case 'menubuilder': return <MenuBuilder />;
-      case 'quotations':        return <Quotations />;
+      case 'quotations':        return <Quotations onNavigate={navigate} />;
       case 'seasonal_dashboard':  return <SeasonalDashboard onNavigate={navigate} />;
       case 'seasonal_occasions':  return <SeasonalOccasions />;
       case 'seasonal_items':      return <SeasonalItems />;
@@ -59,10 +81,21 @@ function App() {
     }
   };
 
+  // Only signed-in staff get past this point.
+  if (auth.access === 'checking') return <div style={{ padding: 40, textAlign: 'center', color: '#888880' }}>Loading…</div>;
+  if (auth.access !== 'staff') {
+    return (
+      <>
+        <LoginScreen notStaffEmail={auth.access === 'not_staff' ? auth.email : undefined} onSignOut={signOut} />
+        <Toaster position="top-right" />
+      </>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <div className="app-layout">
-        <Sidebar currentPage={currentPage} onNavigate={navigate} />
+        <Sidebar currentPage={currentPage} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
         <main className="app-main">
           {renderPage()}
         </main>
@@ -138,6 +171,10 @@ function App() {
                 </div>
               );
             })}
+            <button type="button" onClick={signOut}
+              style={{ width: '100%', margin: '4px 0 8px', padding: '10px', borderRadius: 10, border: '0.5px solid #F0C4C4', background: '#FCEBEB', color: '#A32D2D', fontSize: 12, cursor: 'pointer' }}>
+              Sign out {auth.email && `(${auth.email})`}
+            </button>
           </div>
         </>
       )}

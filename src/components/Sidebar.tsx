@@ -4,11 +4,13 @@ import { Page, NAV_ITEMS, SECTIONS, NavItem as Item } from './navItems';
 interface Props {
   currentPage: Page;
   onNavigate: (page: Page) => void;
+  email?: string;
+  onSignOut?: () => void;
 }
 
 const sectionLabel: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: '#AAAAAA', letterSpacing: '0.06em', textTransform: 'uppercase', padding: '12px 10px 4px' };
 
-const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => (
+const Sidebar: React.FC<Props> = ({ currentPage, onNavigate, email, onSignOut }) => (
   <aside className="app-sidebar">
     <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #E5E5E0' }}>
       <img
@@ -31,7 +33,8 @@ const Sidebar: React.FC<Props> = ({ currentPage, onNavigate }) => (
     </nav>
 
     <div style={{ padding: '12px 16px', borderTop: '0.5px solid #E5E5E0', fontSize: 11, color: '#AAAAAA' }}>
-      Shiv Shakti · v1.1
+      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={email}>{email || 'Shiv Shakti · v1.2'}</div>
+      {onSignOut && <button type="button" onClick={onSignOut} style={{ marginTop: 6, background: 'none', border: 'none', color: '#A32D2D', fontSize: 11, cursor: 'pointer', padding: 0 }}>Sign out</button>}
     </div>
   </aside>
 );

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
-import { formatDateIST, todayIST } from '../lib/ist';
+import { todayIST } from '../lib/ist';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBookings } from '../hooks/useBookings';
 import { useMenuItemsFull } from '../hooks/useMenuBuilder';
@@ -9,68 +9,54 @@ import { useDataCenter } from '../hooks/useDataCenter';
 import {
   useQuotations, useCreateQuotation, useUpdateQuotation,
   useUpdateQuotationStatus, useDeleteQuotation,
-  Quotation, QuotationLineItem, MealSlot, EventDay,
+  Quotation, QuotationLineItem, EventDay,
 } from '../hooks/useQuotations';
 import { downloadPDF, getDayNumber } from '../lib/pdf/quotationPdf';
+import { shareQuotation } from '../lib/quotationShare';
+import { Navigate, useNavIntent } from '../hooks/useNavIntent';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import QuotationList from '../components/catering/QuotationList';
+import QuotationItemPanels, { PickerItem, ItemTextField } from '../components/catering/QuotationItemPanels';
+import QuotationMultiDay, { genId } from '../components/catering/QuotationMultiDay';
+import QuotationCharges, { Charge, Discount } from '../components/catering/QuotationCharges';
+import QuotationBookingFields from '../components/catering/QuotationBookingFields';
 
-interface SelectedItem extends QuotationLineItem {}
+interface Props { onNavigate?: Navigate }
 
-const MEAL_TYPES = ['Breakfast', 'Lunch', 'Hi-Tea', 'Snacks', 'Dinner', 'Supper'];
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: '#888880', sent: '#378ADD', accepted: '#639922', rejected: '#CC4444',
-};
-
-const genId = () => Math.random().toString(36).slice(2, 10);
-
-// ─── Component ────────────────────────────────────────────────────────────────
-const Quotations: React.FC = () => {
+const Quotations: React.FC<Props> = () => {
   const { data: bookings = [] }   = useBookings();
   const { data: menuItems = [] }  = useMenuItemsFull();
-  const { data: quotations = [] } = useQuotations();
+  const { data: quotations = [], isFetched: quotationsFetched } = useQuotations();
   const { data: dc }              = useDataCenter();
   const createQuotation = useCreateQuotation();
   const updateQuotation = useUpdateQuotation();
   const qc = useQueryClient();
   const updateStatus    = useUpdateQuotationStatus();
   const deleteQuotation = useDeleteQuotation();
+  const { confirm, dialog } = useConfirm();
+  const intent = useNavIntent('quotations');
+  const intentHandled = useRef(false);
+  const formRef = useRef<HTMLDivElement>(null);
 
-  // ── single-day state ──────────────────────────────────────────────────────
+  // ── form state ────────────────────────────────────────────────────────────
   const [showForm, setShowForm]             = useState(false);
   const [editingId, setEditingId]           = useState<string | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState('');
-  const [selectedItems, setSelectedItems]   = useState<SelectedItem[]>([]);
+  const [selectedItems, setSelectedItems]   = useState<QuotationLineItem[]>([]);
   const [notes, setNotes]                   = useState('');
-  const [searchLeft, setSearchLeft]         = useState('');
   const [perPlate, setPerPlate]             = useState('');
   const [gstChecked, setGstChecked]         = useState(false);
-  const [additionalDiscounts, setAdditionalDiscounts] = useState<{ id: string; description: string; amount: number }[]>([]);
-  const [extraCharges, setExtraCharges]     = useState<{ description: string; amount: number }[]>([]);
-  const [transportationCharges, setTransportationCharges] = useState<{ description: string; amount: number }[]>([]);
+  const [additionalDiscounts, setAdditionalDiscounts] = useState<Discount[]>([]);
+  const [extraCharges, setExtraCharges]     = useState<Charge[]>([]);
+  const [transportationCharges, setTransportationCharges] = useState<Charge[]>([]);
+  const [foodType, setFoodType]             = useState('');
+  const [pdfWithPrices, setPdfWithPrices]   = useState(true);
   const perPlateAutoRef = useRef(true);
 
   // ── multi-day state ───────────────────────────────────────────────────────
   const [isMultiDay, setIsMultiDay]         = useState(false);
   const [eventDays, setEventDays]           = useState<EventDay[]>([]);
   const [activeMealKey, setActiveMealKey]   = useState<string | null>(null);
-  const [mealSearch, setMealSearch]         = useState('');
-  const [pdfWithPrices, setPdfWithPrices]   = useState(true);
-  const [draggedMeal, setDraggedMeal]       = useState<{ dayIdx: number; mealId: string } | null>(null);
-  const [dragOverDayIdx, setDragOverDayIdx] = useState<number | null>(null);
-  const [dragOverMealId, setDragOverMealId] = useState<string | null>(null);
-
-  // item drag-to-reorder (single-day)
-  const [draggedItemIdx, setDraggedItemIdx]   = useState<number | null>(null);
-  const [dragOverItemIdx, setDragOverItemIdx] = useState<number | null>(null);
-
-  // food type & instructions
-  const [foodType, setFoodType] = useState('');
-
-  // item drag-to-reorder (multi-day meal items)  "dayIdx|mealId|itemIdx"
-  const [draggedMealItemKey, setDraggedMealItemKey] = useState<string | null>(null);
-  const [dragOverMealItemKey, setDragOverMealItemKey] = useState<string | null>(null);
-
-  useEffect(() => { setMealSearch(''); }, [activeMealKey]);
 
   // Auto-enable multi-day when selected booking already has an end_date
   useEffect(() => {
@@ -126,34 +112,20 @@ const Quotations: React.FC = () => {
   const transportationChargesTotal = transportationCharges.reduce((s, c) => s + (c.amount || 0), 0);
   const finalTotal               = discountedSubtotal + gstAmount + extraChargesTotal + transportationChargesTotal;
 
-  // ── menu items helpers ────────────────────────────────────────────────────
-  const activeItems = menuItems.filter(
+  // ── menu items + smart default prices ─────────────────────────────────────
+  const activeItems = useMemo(() => menuItems.filter(
     it => it.is_active !== false && it.subcategory?.is_active !== false && it.subcategory?.category?.is_active !== false,
-  );
+  ), [menuItems]);
 
-  const leftItems = useMemo(() => {
-    const chosen = new Set(selectedItems.map(i => i.item_id));
-    const q = searchLeft.trim().toLowerCase();
-    return activeItems.filter(
-      it => !chosen.has(it.id) && (!q || it.name.toLowerCase().includes(q)
-        || it.subcategory?.name.toLowerCase().includes(q)
-        || it.subcategory?.category?.name.toLowerCase().includes(q)),
-    );
-  }, [activeItems, selectedItems, searchLeft]);
-
-  const groupedLeft = useMemo(() => {
-    const map: Record<string, { subcategory: string; items: typeof leftItems }[]> = {};
-    leftItems.forEach(it => {
-      const cat = it.subcategory?.category?.name || 'Uncategorised';
-      const sub = it.subcategory?.name || 'General';
-      if (!map[cat]) map[cat] = [];
-      let sg = map[cat].find(g => g.subcategory === sub);
-      if (!sg) { sg = { subcategory: sub, items: [] }; map[cat].push(sg); }
-      sg.items.push(it);
-    });
+  // Latest priced amount per menu item across saved quotations, newest first.
+  const lastPrices = useMemo(() => {
+    const map = new Map<string, number>();
+    [...quotations].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).forEach(q =>
+      [...(q.items || []), ...(q.event_days || []).flatMap(d => (d.meals || []).flatMap(m => m.items || []))]
+        .forEach(it => { if (it.amount > 0 && !map.has(it.item_id)) map.set(it.item_id, it.amount); }));
     return map;
-  }, [leftItems]);
-
+  }, [quotations]);
+  const priceFor = (itemId: string) => lastPrices.get(itemId) || 0;
 
   const itemsTotal = selectedItems.reduce((s, i) => s + (i.amount || 0), 0);
 
@@ -161,275 +133,46 @@ const Quotations: React.FC = () => {
     if (perPlateAutoRef.current) setPerPlate(itemsTotal > 0 ? String(itemsTotal) : '');
   }, [itemsTotal]);
 
-  // ── meal item picker helpers ──────────────────────────────────────────────
-  const getMealGroupedLeft = (mealItems: QuotationLineItem[]) => {
-    const chosen = new Set(mealItems.map(i => i.item_id));
-    const q = mealSearch.trim().toLowerCase();
-    const filtered = activeItems.filter(
-      it => !chosen.has(it.id) && (!q || it.name.toLowerCase().includes(q)
-        || it.subcategory?.name.toLowerCase().includes(q)
-        || it.subcategory?.category?.name.toLowerCase().includes(q)),
-    );
-    const map: Record<string, { subcategory: string; items: typeof filtered }[]> = {};
-    filtered.forEach(it => {
-      const cat = it.subcategory?.category?.name || 'Uncategorised';
-      const sub = it.subcategory?.name || 'General';
-      if (!map[cat]) map[cat] = [];
-      let sg = map[cat].find(g => g.subcategory === sub);
-      if (!sg) { sg = { subcategory: sub, items: [] }; map[cat].push(sg); }
-      sg.items.push(it);
-    });
-    return map;
+  const toggleMultiDay = (checked: boolean) => {
+    setIsMultiDay(checked);
+    setActiveMealKey(null);
+    if (checked && eventDays.length === 0) {
+      setEventDays([{ day_number: 1, date: selectedBooking?.event_date || '', meals: [], day_subtotal: 0 }]);
+    }
+    if (!checked) { setEventDays([]); }
   };
 
-
-  // ── multi-day helpers ─────────────────────────────────────────────────────
-  const addOccasion = () => {
-    const lastDate = eventDays.length > 0 ? eventDays[eventDays.length - 1].date : (selectedBooking?.event_date || '');
-    setEventDays(prev => [...prev, {
-      day_number: 0, date: lastDate, meals: [], day_subtotal: 0,
+  // ── single-day item helpers ───────────────────────────────────────────────
+  const addItem = (it: PickerItem) =>
+    setSelectedItems(prev => [...prev, {
+      item_id: it.id, item_name: it.name,
+      category_name: it.subcategory?.category?.name || '',
+      subcategory_name: it.subcategory?.name || '', amount: priceFor(it.id),
     }]);
 
-  };
+  const patchItem = (itemId: string, change: Partial<QuotationLineItem>) =>
+    setSelectedItems(prev => prev.map(i => (i.item_id === itemId ? { ...i, ...change } : i)));
 
-  const removeDay = (idx: number) =>
-    setEventDays(prev => prev.filter((_, i) => i !== idx));
-
-  const updateDayDate = (idx: number, date: string) =>
-    setEventDays(prev => prev.map((d, i) => i === idx ? { ...d, date } : d));
-
-  const addMeal = (dayIdx: number) => {
-    const mealId = genId();
-    setEventDays(prev => prev.map((d, i) => i !== dayIdx ? d : {
-      ...d,
-      meals: [...d.meals, {
-        id: mealId, meal_type: 'breakfast', ceremony_name: '', time: '', guest_count: guestCount,
-        per_plate_amount: 0, discount_amount: 0, items: [], subtotal: 0,
-      }],
-    }));
-    setActiveMealKey(`${dayIdx}_${mealId}`);
-  };
-
-  const removeMeal = (dayIdx: number, mealId: string) => {
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.filter(m => m.id !== mealId);
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
-    }));
-    if (activeMealKey === `${dayIdx}_${mealId}`) setActiveMealKey(null);
-  };
-
-  const cloneMeal = (dayIdx: number, mealId: string) => {
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const mealIdx = d.meals.findIndex(m => m.id === mealId);
-      if (mealIdx < 0) return d;
-      const original = d.meals[mealIdx];
-      const cloned: MealSlot = { ...original, id: genId(), items: original.items.map(it => ({ ...it })) };
-      const meals = [...d.meals.slice(0, mealIdx + 1), cloned, ...d.meals.slice(mealIdx + 1)];
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
-    }));
-  };
-
-  const resetDragState = () => {
-    setDraggedMeal(null); setDragOverDayIdx(null); setDragOverMealId(null);
-  };
-
-  const handleMealDragStart = (e: React.DragEvent, dayIdx: number, mealId: string) => {
-    setDraggedMeal({ dayIdx, mealId });
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleMealDragEnd = () => resetDragState();
-
-  // Per-meal drag-over: fires when hovering over a specific meal card
-  const handleMealCardDragOver = (e: React.DragEvent, dayIdx: number, mealId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverMealId !== mealId) setDragOverMealId(mealId);
-    if (dragOverDayIdx !== dayIdx) setDragOverDayIdx(dayIdx);
-  };
-
-  // Per-meal drop: insert dragged meal before the target meal (works within same day and across days)
-  const handleMealCardDrop = (e: React.DragEvent, targetDayIdx: number, targetMealId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!draggedMeal || draggedMeal.mealId === targetMealId) { resetDragState(); return; }
-    const { dayIdx: srcIdx, mealId: srcMealId } = draggedMeal;
-    setEventDays(prev => {
-      const next = prev.map(d => ({ ...d, meals: [...d.meals] }));
-      const srcMeal = next[srcIdx].meals.find(m => m.id === srcMealId);
-      if (!srcMeal) return prev;
-      next[srcIdx].meals = next[srcIdx].meals.filter(m => m.id !== srcMealId);
-      next[srcIdx].day_subtotal = next[srcIdx].meals.reduce((s, m) => s + m.subtotal, 0);
-      const targetIdx = next[targetDayIdx].meals.findIndex(m => m.id === targetMealId);
-      const insertAt = targetIdx < 0 ? next[targetDayIdx].meals.length : targetIdx;
-      next[targetDayIdx].meals = [
-        ...next[targetDayIdx].meals.slice(0, insertAt),
-        srcMeal,
-        ...next[targetDayIdx].meals.slice(insertAt),
-      ];
-      next[targetDayIdx].day_subtotal = next[targetDayIdx].meals.reduce((s, m) => s + m.subtotal, 0);
-      return next;
-    });
-    if (activeMealKey === `${srcIdx}_${srcMealId}`) setActiveMealKey(`${targetDayIdx}_${srcMealId}`);
-    resetDragState();
-  };
-
-  // Day container drag-over: only for cross-day visual highlight (meal cards handle their own)
-  const handleDayDragOver = (e: React.DragEvent, dayIdx: number) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverDayIdx !== dayIdx) setDragOverDayIdx(dayIdx);
-  };
-
-  // Day container drop: append to end (fires only when dropped on empty space inside the day)
-  const handleDayDrop = (e: React.DragEvent, targetDayIdx: number) => {
-    e.preventDefault();
-    if (!draggedMeal) { resetDragState(); return; }
-    const { dayIdx: srcIdx, mealId } = draggedMeal;
-    setEventDays(prev => {
-      const next = prev.map(d => ({ ...d, meals: [...d.meals] }));
-      const meal = next[srcIdx].meals.find(m => m.id === mealId);
-      if (!meal) return prev;
-      next[srcIdx].meals = next[srcIdx].meals.filter(m => m.id !== mealId);
-      next[srcIdx].day_subtotal = next[srcIdx].meals.reduce((s, m) => s + m.subtotal, 0);
-      next[targetDayIdx].meals = [...next[targetDayIdx].meals, meal];
-      next[targetDayIdx].day_subtotal = next[targetDayIdx].meals.reduce((s, m) => s + m.subtotal, 0);
-      return next;
-    });
-    if (activeMealKey === `${srcIdx}_${mealId}`) setActiveMealKey(`${targetDayIdx}_${mealId}`);
-    resetDragState();
-  };
-
-  const updateMealField = (dayIdx: number, mealId: string, field: keyof MealSlot, value: any) => {
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.map(m => {
-        if (m.id !== mealId) return m;
-        const updated = { ...m, [field]: value };
-        updated.subtotal = updated.per_plate_amount * updated.guest_count;
-        return updated;
-      });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
-    }));
-  };
-
-  const addItemToMeal = (dayIdx: number, mealId: string, it: typeof activeItems[0]) => {
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.map(m => {
-        if (m.id !== mealId) return m;
-        const items = [...m.items, {
-          item_id: it.id, item_name: it.name,
-          category_name: it.subcategory?.category?.name || '',
-          subcategory_name: it.subcategory?.name || '', amount: 0,
-        }];
-        const itemsSum = items.reduce((s, x) => s + (x.amount || 0), 0);
-        const per_plate_amount = itemsSum > 0 ? itemsSum : m.per_plate_amount;
-        return { ...m, items, per_plate_amount, subtotal: per_plate_amount * m.guest_count };
-      });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
-    }));
-  };
-
-  const removeItemFromMeal = (dayIdx: number, mealId: string, itemId: string) => {
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.map(m => {
-        if (m.id !== mealId) return m;
-        const items = m.items.filter(x => x.item_id !== itemId);
-        const itemsSum = items.reduce((s, x) => s + (x.amount || 0), 0);
-        const per_plate_amount = itemsSum > 0 ? itemsSum : (items.length ? m.per_plate_amount : 0);
-        return { ...m, items, per_plate_amount, subtotal: per_plate_amount * m.guest_count };
-      });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
-    }));
-  };
-
-  const updateMealItemAmount = (dayIdx: number, mealId: string, itemId: string, amount: number) => {
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.map(m => {
-        if (m.id !== mealId) return m;
-        const items = m.items.map(x => x.item_id === itemId ? { ...x, amount } : x);
-        const itemsSum = items.reduce((s, x) => s + (x.amount || 0), 0);
-        const per_plate_amount = itemsSum > 0 ? itemsSum : m.per_plate_amount;
-        return { ...m, items, per_plate_amount, subtotal: per_plate_amount * m.guest_count };
-      });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
-    }));
-  };
-
-  const resetMealItems = (dayIdx: number, mealId: string) => {
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.map(m => m.id !== mealId ? m : { ...m, items: [], per_plate_amount: 0, subtotal: 0 });
-      return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
-    }));
-  };
-
-  const reorderSelectedItems = (fromIdx: number, toIdx: number) => {
+  const reorderSelectedItems = (fromIdx: number, toIdx: number) =>
     setSelectedItems(prev => {
       const next = [...prev];
       const [removed] = next.splice(fromIdx, 1);
       next.splice(toIdx, 0, removed);
       return next;
     });
-  };
-
-  const reorderMealItems = (dayIdx: number, mealId: string, fromIdx: number, toIdx: number) => {
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.map(m => {
-        if (m.id !== mealId) return m;
-        const items = [...m.items];
-        const [removed] = items.splice(fromIdx, 1);
-        items.splice(toIdx, 0, removed);
-        return { ...m, items };
-      });
-      return { ...d, meals };
-    }));
-  };
-
-  const updateInstruction = (itemId: string, instruction: string) =>
-    setSelectedItems(prev => prev.map(i => i.item_id === itemId ? { ...i, instruction } : i));
-
-  const updateMealItemInstruction = (dayIdx: number, mealId: string, itemId: string, instruction: string) =>
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.map(m => {
-        if (m.id !== mealId) return m;
-        return { ...m, items: m.items.map(x => x.item_id === itemId ? { ...x, instruction } : x) };
-      });
-      return { ...d, meals };
-    }));
-
-  const updateServedWith = (itemId: string, served_with: string) =>
-    setSelectedItems(prev => prev.map(i => i.item_id === itemId ? { ...i, served_with } : i));
-
-  const updateMealItemServedWith = (dayIdx: number, mealId: string, itemId: string, served_with: string) =>
-    setEventDays(prev => prev.map((d, i) => {
-      if (i !== dayIdx) return d;
-      const meals = d.meals.map(m => {
-        if (m.id !== mealId) return m;
-        return { ...m, items: m.items.map(x => x.item_id === itemId ? { ...x, served_with } : x) };
-      });
-      return { ...d, meals };
-    }));
 
   // ── form lifecycle ────────────────────────────────────────────────────────
-  const openCreate = () => {
+  const resetForm = (keepOpen = false) => {
     setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
-    setNotes(''); setSearchLeft(''); setPerPlate('');
+    setNotes(''); setPerPlate('');
     setGstChecked(false); setAdditionalDiscounts([]);
     setExtraCharges([]); setTransportationCharges([]);
     setIsMultiDay(false); setEventDays([]); setActiveMealKey(null);
     setFoodType('');
     perPlateAutoRef.current = true;
-    setShowForm(true);
+    setShowForm(keepOpen);
   };
+  const openCreate = () => resetForm(true);
 
   const openEdit = (q: Quotation) => {
     setEditingId(q.id);
@@ -457,37 +200,54 @@ const Quotations: React.FC = () => {
     setTransportationCharges(q.transportation_charges || []);
     setActiveMealKey(null);
     perPlateAutoRef.current = false;
-    setSearchLeft('');
     setShowForm(true);
   };
 
-  const resetForm = () => {
-    setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
-    setNotes(''); setSearchLeft(''); setPerPlate('');
-    setGstChecked(false); setAdditionalDiscounts([]);
-    setExtraCharges([]); setTransportationCharges([]);
-    setIsMultiDay(false); setEventDays([]); setActiveMealKey(null);
-    setFoodType('');
-    perPlateAutoRef.current = true;
-    setShowForm(false);
-  };
+  // Bring the form into view when it opens or switches quotation.
+  useEffect(() => {
+    if (showForm) formRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [showForm, editingId]);
 
-  // ── single-day item helpers ───────────────────────────────────────────────
-  const addItem = (it: typeof activeItems[0]) =>
-    setSelectedItems(prev => [...prev, {
-      item_id: it.id, item_name: it.name,
-      category_name: it.subcategory?.category?.name || '',
-      subcategory_name: it.subcategory?.name || '', amount: 0,
-    }]);
-
-  const removeItem = (itemId: string) => setSelectedItems(prev => prev.filter(i => i.item_id !== itemId));
-
-  const updateAmount = (itemId: string, value: string) => {
-    const amount = parseFloat(value) || 0;
-    setSelectedItems(prev => prev.map(i => i.item_id === itemId ? { ...i, amount } : i));
-  };
+  // Nav intent: 'new' opens the form (booking preselected); 'open' edits a quotation by its id or booking id.
+  useEffect(() => {
+    if (!intent || intentHandled.current) return;
+    if (intent.action === 'open') {
+      if (!quotationsFetched) return;
+      intentHandled.current = true;
+      const q = intent.id ? quotations.find(x => x.id === intent.id) ?? quotations.find(x => x.booking_id === intent.id) : undefined;
+      if (q) { openEdit(q); return; }
+      if (!intent.id) return;
+    }
+    intentHandled.current = true;
+    openCreate();
+    if (intent.id) setSelectedBookingId(intent.id);
+  }, [intent, quotationsFetched]); // eslint-disable-line
 
   // ── save ──────────────────────────────────────────────────────────────────
+  const buildPayload = () => ({
+    customer_id:      selectedBooking?.customer_id || '',
+    booking_id:       selectedBookingId,
+    items:            isMultiDay ? [] : selectedItems,
+    per_plate_amount: isMultiDay ? 0 : perPlateNum,
+    guest_count:      isMultiDay ? 0 : guestCount,
+    subtotal:         activeSubtotal,
+    discount_amount:  discountAmt,
+    discount_type:    'amount' as const,
+    gst_rate:         gstChecked ? dcGstRate : 0,
+    gst_amount:       gstAmount,
+    extra_charges:    extraCharges.filter(c => c.description.trim() || c.amount > 0),
+    transportation_charges: transportationCharges.filter(c => c.description.trim() || c.amount > 0),
+    additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
+    total_amount:     finalTotal,
+    notes:            notes || undefined,
+    food_type:        foodType || undefined,
+    status:           'draft' as const,
+    is_multi_day:     isMultiDay,
+    event_days:       isMultiDay
+      ? eventDays.map(d => ({ ...d, day_number: getDayNumber(d.date, eventDays) }))
+      : [],
+  });
+
   const handleSave = async () => {
     if (!selectedBookingId) { toast.error('Please select a booking'); return; }
     if (isMultiDay) {
@@ -502,31 +262,7 @@ const Quotations: React.FC = () => {
       if (selectedItems.length === 0) { toast.error('Please add at least one item'); return; }
     }
 
-    const booking = bookings.find(b => b.id === selectedBookingId);
-    const payload = {
-      customer_id:      booking?.customer_id || '',
-      booking_id:       selectedBookingId,
-      items:            isMultiDay ? [] : selectedItems,
-      per_plate_amount: isMultiDay ? 0 : perPlateNum,
-      guest_count:      isMultiDay ? 0 : guestCount,
-      subtotal:         activeSubtotal,
-      discount_amount:  discountAmt,
-      discount_type:    'amount' as const,
-      gst_rate:         gstChecked ? dcGstRate : 0,
-      gst_amount:       gstAmount,
-      extra_charges:    extraCharges.filter(c => c.description.trim() || c.amount > 0),
-      transportation_charges: transportationCharges.filter(c => c.description.trim() || c.amount > 0),
-      additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
-      total_amount:     finalTotal,
-      notes:            notes || undefined,
-      food_type:        foodType || undefined,
-      status:           'draft' as const,
-      is_multi_day:     isMultiDay,
-      event_days:       isMultiDay
-        ? eventDays.map(d => ({ ...d, day_number: getDayNumber(d.date, eventDays) }))
-        : [],
-    };
-
+    const payload = buildPayload();
     try {
       if (editingId) {
         // Editing keeps the current status (sent / accepted) instead of resetting to draft.
@@ -550,75 +286,72 @@ const Quotations: React.FC = () => {
     } catch (e: any) { toast.error(e?.message || 'Failed to save quotation'); }
   };
 
-  const handleDelete = async (id: string, num: string) => {
-    if (!window.confirm(`Delete quotation ${num}?`)) return;
-    try { await deleteQuotation.mutateAsync(id); toast.success('Deleted'); }
-    catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
+  const handleDelete = async (q: Quotation) => {
+    const ok = await confirm({
+      title: 'Delete quotation?',
+      message: `${q.quotation_number}${q.customer?.name ? ` for ${q.customer.name}` : ''} will be deleted permanently.`,
+      confirmLabel: 'Delete', danger: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteQuotation.mutateAsync(q.id);
+      if (editingId === q.id) resetForm();
+      toast.success('Deleted');
+    } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
   };
 
   const handleClone = async (q: Quotation) => {
-    if (!window.confirm(`Clone "${q.quotation_number}"? A new draft will be created with the same details.`)) return;
+    const ok = await confirm({
+      title: 'Clone quotation?',
+      message: `A new draft will be created with the same details as ${q.quotation_number}.`,
+      confirmLabel: 'Clone',
+    });
+    if (!ok) return;
     try {
       await createQuotation.mutateAsync({
-        customer_id:      q.customer_id,
-        booking_id:       q.booking_id || null,
-        items:            q.items || [],
-        per_plate_amount: q.per_plate_amount,
-        guest_count:      q.guest_count,
-        subtotal:         q.subtotal,
-        discount_amount:  q.discount_amount,
-        discount_type:    q.discount_type,
-        gst_rate:         q.gst_rate,
-        gst_amount:       q.gst_amount,
-        extra_charges:    q.extra_charges || [],
-        transportation_charges: q.transportation_charges || [],
-        additional_discounts:   q.additional_discounts || [],
-        total_amount:     q.total_amount,
-        notes:            q.notes,
-        food_type:        q.food_type,
-        status:           'draft' as const,
-        is_multi_day:     q.is_multi_day || false,
-        event_days:       q.event_days || [],
+        customer_id: q.customer_id, booking_id: q.booking_id || null, items: q.items || [],
+        per_plate_amount: q.per_plate_amount, guest_count: q.guest_count, subtotal: q.subtotal,
+        discount_amount: q.discount_amount, discount_type: q.discount_type,
+        gst_rate: q.gst_rate, gst_amount: q.gst_amount,
+        extra_charges: q.extra_charges || [], transportation_charges: q.transportation_charges || [],
+        additional_discounts: q.additional_discounts || [], total_amount: q.total_amount,
+        notes: q.notes, food_type: q.food_type, status: 'draft' as const,
+        is_multi_day: q.is_multi_day || false, event_days: q.event_days || [],
       });
       toast.success('Cloned as new draft');
     } catch (e: any) { toast.error(e?.message || 'Failed to clone'); }
   };
 
+  const handleStatus = async (q: Quotation, status: string) => {
+    try { await updateStatus.mutateAsync({ id: q.id, status }); toast.success('Status updated'); }
+    catch { toast.error('Failed to update'); }
+  };
+
   const isSaving = createQuotation.isPending || updateQuotation.isPending;
+  const editingQuotation = editingId ? quotations.find(q => q.id === editingId) : undefined;
 
   const buildDraftQuotation = (): Quotation => ({
+    ...buildPayload(),
     id: editingId || 'draft',
-    quotation_number: editingId ? (quotations.find(q => q.id === editingId)?.quotation_number || 'DRAFT') : 'DRAFT',
-    customer_id: selectedBooking?.customer_id || '',
+    quotation_number: editingQuotation?.quotation_number || 'DRAFT',
     customer: selectedBooking?.customer || null,
     booking: selectedBooking || null,
     booking_id: selectedBookingId || undefined,
-    items: isMultiDay ? [] : selectedItems,
-    per_plate_amount: isMultiDay ? 0 : perPlateNum,
-    guest_count: isMultiDay ? 0 : guestCount,
-    subtotal: activeSubtotal,
-    discount_amount: discountAmt,
-    discount_type: 'amount' as const,
-    gst_rate: gstChecked ? dcGstRate : 0,
-    gst_amount: gstAmount,
-    extra_charges: extraCharges.filter(c => c.description.trim() || c.amount > 0),
-    transportation_charges: transportationCharges.filter(c => c.description.trim() || c.amount > 0),
-    additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
-    total_amount: finalTotal,
-    notes: notes || undefined,
-    food_type: foodType || undefined,
-    status: 'draft',
     issue_date: todayIST(),
-    is_multi_day: isMultiDay,
-    event_days: isMultiDay ? eventDays.map(d => ({ ...d, day_number: getDayNumber(d.date, eventDays) })) : [],
     created_at: new Date().toISOString(),
   });
 
+  // Form PDF and share use what is on screen, including unsaved edits.
+  const withDraft = (fn: (q: Quotation) => void) => () => {
+    if (!selectedBookingId) { toast.error('Select a booking first'); return; }
+    fn(buildDraftQuotation());
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '20px 24px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '20px 16px', maxWidth: 1100, margin: '0 auto' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Quotations</h2>
           <div style={{ fontSize: 12, color: '#888880', marginTop: 2 }}>{quotations.length} quotation{quotations.length !== 1 ? 's' : ''}</div>
@@ -628,398 +361,44 @@ const Quotations: React.FC = () => {
 
       {/* ── Form ── */}
       {showForm && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '0.5px solid #E5E5E0', marginBottom: 24, overflow: 'hidden' }}>
+        <div key={editingId || 'new'} ref={formRef} style={{ background: '#fff', borderRadius: 12, border: '0.5px solid #E5E5E0', marginBottom: 24, overflow: 'hidden', scrollMarginTop: 12 }}>
           <div style={{ padding: '14px 20px', borderBottom: '0.5px solid #E5E5E0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{editingId ? 'Edit Quotation' : 'New Quotation'}</div>
-            <button onClick={resetForm} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#888880' }}>×</button>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{editingQuotation ? `Edit ${editingQuotation.quotation_number}` : 'New Quotation'}</div>
+            <button onClick={() => resetForm()} aria-label="Close form" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888880' }}>×</button>
           </div>
 
-          <div style={{ padding: '16px 20px' }}>
-            {/* Booking selector */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={lbl}>SELECT BOOKING</label>
-              <select value={selectedBookingId} onChange={e => setSelectedBookingId(e.target.value)} style={{ ...inp, maxWidth: 420 }}>
-                <option value="">— Choose a booking —</option>
-                {eligibleBookings.map(b => (
-                  <option key={b.id} value={b.id}>{b.customer?.name} · {b.event_type} · {b.event_date}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Booking summary */}
-            {selectedBooking && (
-              <div style={{ background: '#F9F8F5', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#444', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 6 }}>
-                <div><span style={{ color: '#888880' }}>Customer: </span>{selectedBooking.customer?.name}</div>
-                <div><span style={{ color: '#888880' }}>Event: </span>{selectedBooking.event_type}</div>
-                <div><span style={{ color: '#888880' }}>Date: </span>{selectedBooking.event_date}</div>
-                {selectedBooking.venue && <div><span style={{ color: '#888880' }}>Venue: </span>{selectedBooking.venue}</div>}
-                <div><span style={{ color: '#888880' }}>Guests: </span><strong>{guestCount}</strong></div>
-              </div>
-            )}
-
-            {/* Food type */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={lbl}>FOOD TYPE</label>
-              <select value={foodType} onChange={e => setFoodType(e.target.value)}
-                style={{ border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 10px', fontSize: 13, background: '#fff', minWidth: 200 }}>
-                <option value="">— Select food type —</option>
-                <option value="Regular">Regular</option>
-                <option value="Jain">Jain</option>
-                <option value="Swaminarayan">Swaminarayan</option>
-              </select>
-            </div>
-
-            {/* Multi-day toggle */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', userSelect: 'none' }}>
-                <input type="checkbox" checked={isMultiDay} onChange={e => {
-                  const checked = e.target.checked;
-                  setIsMultiDay(checked);
-                  setActiveMealKey(null);
-                  if (checked && eventDays.length === 0) {
-                    setEventDays([{ day_number: 1, date: selectedBooking?.event_date || '', meals: [], day_subtotal: 0 }]);
-                  }
-                  if (!checked) { setEventDays([]); }
-                }} style={{ accentColor: '#E8750A', width: 15, height: 15 }} />
-                <span style={{ fontWeight: 600 }}>Multi-day / Multi-meal event</span>
-                <span style={{ fontSize: 11, color: '#888880' }}>(e.g. 2–3 day function with breakfast, lunch, dinner)</span>
-              </label>
-            </div>
+          <div style={{ padding: '16px' }}>
+            <QuotationBookingFields
+              bookings={eligibleBookings} bookingId={selectedBookingId} onBooking={setSelectedBookingId}
+              booking={selectedBooking} foodType={foodType} onFoodType={setFoodType}
+              isMultiDay={isMultiDay} onMultiDay={toggleMultiDay} />
 
             {isMultiDay ? (
-              /* ── MULTI-DAY SECTION ── */
-              <div style={{ marginBottom: 16 }}>
-                {eventDays.map((day, dayIdx) => {
-                  const dayNum = getDayNumber(day.date, eventDays);
-                  return (
-                  <div key={dayIdx} style={{ border: `0.5px solid ${dragOverDayIdx === dayIdx && draggedMeal?.dayIdx !== dayIdx ? '#E8750A' : '#E5E5E0'}`, borderRadius: 10, marginBottom: 14, overflow: 'hidden', transition: 'border-color 0.15s' }}>
-                    {/* Day header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: '#F9F8F5', borderBottom: '0.5px solid #E5E5E0' }}>
-                      <span style={{ fontWeight: 700, color: '#E8750A', fontSize: 13, minWidth: 50 }}>Day {dayNum}</span>
-                      <input type="date" value={day.date} onChange={e => updateDayDate(dayIdx, e.target.value)}
-                        style={{ border: '1px solid #E5E5E0', borderRadius: 7, padding: '5px 8px', fontSize: 13, background: '#fff' }} />
-                      <div style={{ flex: 1 }} />
-                      {day.day_subtotal > 0 && (
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#444' }}>₹{day.day_subtotal.toLocaleString('en-IN')}</span>
-                      )}
-                      <button onClick={() => removeDay(dayIdx)}
-                        style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 4px' }}>×</button>
-                    </div>
-
-                    {/* Meals — drop zone for drag-and-drop */}
-                    <div style={{ padding: '10px 14px', minHeight: draggedMeal && draggedMeal.dayIdx !== dayIdx ? 60 : undefined, transition: 'background 0.15s', background: dragOverDayIdx === dayIdx && draggedMeal?.dayIdx !== dayIdx ? '#FFF8EE' : 'transparent' }}
-                      onDragOver={e => handleDayDragOver(e, dayIdx)}
-                      onDragLeave={() => setDragOverDayIdx(null)}
-                      onDrop={e => handleDayDrop(e, dayIdx)}>
-                      {day.meals.length === 0 && (
-                        <div style={{ fontSize: 12, color: dragOverDayIdx === dayIdx ? '#E8750A' : '#AAAAAA', marginBottom: 8, fontStyle: dragOverDayIdx === dayIdx ? 'normal' : 'normal' }}>
-                          {dragOverDayIdx === dayIdx && draggedMeal ? 'Drop meal here' : 'No meals added for this day'}
-                        </div>
-                      )}
-                      {day.meals.map(meal => {
-                        const mealKey = `${dayIdx}_${meal.id}`;
-                        const isOpen  = activeMealKey === mealKey;
-                        const mealGroupedLeft  = isOpen ? getMealGroupedLeft(meal.items) : {};
-                        const isBeingDragged = draggedMeal?.mealId === meal.id && draggedMeal?.dayIdx === dayIdx;
-                        const isDragTarget = dragOverMealId === meal.id && !isBeingDragged;
-                        return (
-                          <div key={meal.id}
-                            draggable
-                            onDragStart={e => handleMealDragStart(e, dayIdx, meal.id)}
-                            onDragEnd={handleMealDragEnd}
-                            onDragOver={e => handleMealCardDragOver(e, dayIdx, meal.id)}
-                            onDrop={e => handleMealCardDrop(e, dayIdx, meal.id)}
-                            style={{ border: `0.5px solid ${isOpen ? '#E8750A' : '#E5E5E0'}`, borderRadius: 8, marginBottom: 10, overflow: 'hidden', opacity: isBeingDragged ? 0.45 : 1, transition: 'opacity 0.15s, border-top-color 0.1s', borderTop: isDragTarget ? '2.5px solid #E8750A' : undefined }}>
-                            {/* Meal row */}
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', flexWrap: 'wrap', background: isOpen ? '#FFF8EE' : '#fff' }}>
-                              {/* Drag handle */}
-                              <span title="Drag to move meal" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, padding: '0 2px', flexShrink: 0, userSelect: 'none' }}>⠿</span>
-                              <select value={meal.meal_type} onChange={e => updateMealField(dayIdx, meal.id, 'meal_type', e.target.value)}
-                                style={{ border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, background: '#fff', fontWeight: 600, color: '#1A237E' }}>
-                                {MEAL_TYPES.map(t => <option key={t} value={t.toLowerCase()}>{t}</option>)}
-                              </select>
-                              <input
-                                type="text"
-                                value={meal.ceremony_name || ''}
-                                onChange={e => updateMealField(dayIdx, meal.id, 'ceremony_name', e.target.value)}
-                                placeholder="Ceremony name (optional)"
-                                style={{ border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 180, color: '#444' }}
-                              />
-                              <input type="time" value={meal.time} onChange={e => updateMealField(dayIdx, meal.id, 'time', e.target.value)}
-                                style={{ border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, width: 110 }} />
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: 11, color: '#888880' }}>Guests</span>
-                                <input type="number" min="0" value={meal.guest_count || ''}
-                                  onChange={e => updateMealField(dayIdx, meal.id, 'guest_count', parseInt(e.target.value) || 0)}
-                                  placeholder="0" style={{ width: 70, border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' }} />
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: 11, color: '#888880' }}>₹/plate</span>
-                                <input type="number" min="0" value={meal.per_plate_amount || ''}
-                                  onChange={e => updateMealField(dayIdx, meal.id, 'per_plate_amount', parseFloat(e.target.value) || 0)}
-                                  placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' }} />
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <span style={{ fontSize: 11, color: '#888880' }}>Offer ₹/pl</span>
-                                <input type="number" min="0" value={meal.discount_amount || ''}
-                                  onChange={e => updateMealField(dayIdx, meal.id, 'discount_amount', parseFloat(e.target.value) || 0)}
-                                  placeholder="same" style={{ width: 72, border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right', background: '#FFFEF5' }} />
-                              </div>
-                              {meal.subtotal > 0 && (
-                                (meal.discount_amount || 0) > 0 ? (
-                                  <span style={{ fontSize: 12, fontWeight: 600, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.3 }}>
-                                    <span style={{ textDecoration: 'line-through', color: '#AAAAAA', fontSize: 11 }}>₹{meal.subtotal.toLocaleString('en-IN')}</span>
-                                    <span style={{ color: '#E8750A' }}>₹{((meal.discount_amount || 0) * meal.guest_count).toLocaleString('en-IN')}</span>
-                                  </span>
-                                ) : (
-                                  <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 600 }}>= ₹{meal.subtotal.toLocaleString('en-IN')}</span>
-                                )
-                              )}
-                              <button onClick={() => { setActiveMealKey(isOpen ? null : mealKey); }}
-                                style={{ fontSize: 11, color: '#E8750A', background: isOpen ? '#FFF0E0' : 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', marginLeft: 'auto' }}>
-                                {meal.items.length > 0 ? `${meal.items.length} items ` : 'Add Items '}
-                                {isOpen ? '▲' : '▼'}
-                              </button>
-                              <button onClick={() => cloneMeal(dayIdx, meal.id)}
-                                title="Clone this meal"
-                                style={{ background: 'none', border: '1px solid #888880', borderRadius: 5, color: '#555552', fontSize: 11, cursor: 'pointer', padding: '3px 7px' }}>⧉ Clone</button>
-                              <button onClick={() => removeMeal(dayIdx, meal.id)}
-                                style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px' }}>×</button>
-                            </div>
-
-                            {/* Inline item picker */}
-                            {isOpen && (
-                              <div style={{ padding: '10px', borderTop: '0.5px solid #F5E8D0', background: '#FFFCF8' }}>
-                                <div className="quotation-panels">
-                                  {/* LEFT — available */}
-                                  <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-                                    <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #E5E5E0', background: '#F9F8F5' }}>
-                                      <div style={{ fontSize: 11, fontWeight: 600, color: '#444', marginBottom: 5 }}>AVAILABLE ITEMS</div>
-                                      <input placeholder="Search items…" value={mealSearch} onChange={e => setMealSearch(e.target.value)}
-                                        style={{ width: '100%', border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, boxSizing: 'border-box' }} />
-                                    </div>
-                                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: 240, padding: '6px 0' }}>
-                                      {Object.keys(mealGroupedLeft).length === 0 ? (
-                                        <div style={{ padding: '20px 12px', textAlign: 'center', color: '#AAAAAA', fontSize: 12 }}>
-                                          {activeItems.length === 0 ? 'No active menu items' : 'All items selected'}
-                                        </div>
-                                      ) : Object.entries(mealGroupedLeft).map(([cat, subs]) => (
-                                        <div key={cat}>
-                                          <div style={{ padding: '5px 12px 2px', fontSize: 10, fontWeight: 700, color: '#E8750A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{cat}</div>
-                                          {subs.map(sg => (
-                                            <div key={sg.subcategory}>
-                                              <div style={{ padding: '3px 12px 2px 18px', fontSize: 10, fontWeight: 600, color: '#888880', textTransform: 'uppercase' }}>{sg.subcategory}</div>
-                                              {sg.items.map(it => (
-                                                <div key={it.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 12px 4px 24px' }}
-                                                  onMouseEnter={e => (e.currentTarget.style.background = '#F5F5F0')}
-                                                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                                                  <span style={{ fontSize: 12 }}>{it.name}</span>
-                                                  <button onClick={() => addItemToMeal(dayIdx, meal.id, it)}
-                                                    style={{ background: '#E8750A', color: '#fff', border: 'none', borderRadius: 4, width: 20, height: 20, fontSize: 14, cursor: 'pointer', flexShrink: 0 }}>+</button>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                  {/* RIGHT — selected */}
-                                  <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-                                    <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #E5E5E0', background: '#F9F8F5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                      <span style={{ fontSize: 11, fontWeight: 600, color: '#444' }}>SELECTED FOR THIS MEAL</span>
-                                      {meal.items.length > 0 && (
-                                        <button onClick={() => resetMealItems(dayIdx, meal.id)}
-                                          style={{ fontSize: 11, color: '#CC4444', background: 'none', border: '1px solid #CC4444', borderRadius: 4, padding: '2px 7px', cursor: 'pointer' }}>Reset</button>
-                                      )}
-                                    </div>
-                                    <div style={{ flex: 1, overflowY: 'auto', maxHeight: 240, padding: '4px 0' }}>
-                                      {meal.items.length === 0 ? (
-                                        <div style={{ padding: '36px 12px', textAlign: 'center', color: '#AAAAAA', fontSize: 12 }}>Click + on the left to add items</div>
-                                      ) : meal.items.map((it, itemIdx) => {
-                                        const itemKey = `${dayIdx}|${meal.id}|${itemIdx}`;
-                                        const isDraggingItem = draggedMealItemKey === itemKey;
-                                        const isItemTarget  = dragOverMealItemKey === itemKey && !isDraggingItem;
-                                        return (
-                                          <div key={it.item_id}
-                                            draggable
-                                            onDragStart={e => { setDraggedMealItemKey(itemKey); e.dataTransfer.effectAllowed = 'move'; }}
-                                            onDragEnd={() => { setDraggedMealItemKey(null); setDragOverMealItemKey(null); }}
-                                            onDragOver={e => { e.preventDefault(); if (dragOverMealItemKey !== itemKey) setDragOverMealItemKey(itemKey); }}
-                                            onDrop={e => {
-                                              e.preventDefault();
-                                              if (draggedMealItemKey && draggedMealItemKey !== itemKey) {
-                                                const [srcDay, srcMeal, srcIdx] = draggedMealItemKey.split('|');
-                                                if (srcMeal === meal.id && Number(srcDay) === dayIdx)
-                                                  reorderMealItems(dayIdx, meal.id, Number(srcIdx), itemIdx);
-                                              }
-                                              setDraggedMealItemKey(null); setDragOverMealItemKey(null);
-                                            }}
-                                            style={{
-                                              opacity: isDraggingItem ? 0.35 : 1,
-                                              borderTop: isItemTarget ? '2px solid #E8750A' : '2px solid transparent',
-                                              transition: 'border-top-color 0.1s',
-                                              borderBottom: '0.5px solid #F5F5F0',
-                                            }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 12px 3px 8px' }}>
-                                              <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
-                                              <span style={{ fontSize: 12, flex: 1 }}>{it.item_name}</span>
-                                              {it.subcategory_name && <span style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
-                                              <span style={{ fontSize: 11, color: '#888880' }}>₹</span>
-                                              <input type="number" min="0" value={it.amount || ''} placeholder="0"
-                                                onChange={e => updateMealItemAmount(dayIdx, meal.id, it.item_id, parseFloat(e.target.value) || 0)}
-                                                style={{ width: 70, border: '1px solid #E5E5E0', borderRadius: 5, padding: '3px 5px', fontSize: 12, textAlign: 'right' }} />
-                                              <button onClick={() => removeItemFromMeal(dayIdx, meal.id, it.item_id)}
-                                                style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 15, cursor: 'pointer', padding: '0 2px' }}>×</button>
-                                            </div>
-                                            <div style={{ paddingLeft: 26, paddingRight: 12, paddingBottom: 3, display: 'flex', gap: 10 }}>
-                                              <input draggable={false} placeholder="Add instruction (optional)…" value={it.instruction || ''}
-                                                onChange={e => updateMealItemInstruction(dayIdx, meal.id, it.item_id, e.target.value)}
-                                                style={{ flex: 1, border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
-                                              <input draggable={false} placeholder="Served with (optional)…" value={it.served_with || ''}
-                                                onChange={e => updateMealItemServedWith(dayIdx, meal.id, it.item_id, e.target.value)}
-                                                style={{ flex: 1, border: 'none', borderBottom: `1px dashed ${it.served_with ? '#2E7D32' : '#E0E0DC'}`, fontSize: 11, color: it.served_with ? '#1B5E20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                    {meal.items.length > 0 && (
-                                      <div style={{ borderTop: '0.5px solid #E5E5E0', padding: '6px 12px', background: '#F9F8F5', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666' }}>
-                                        <span>Items total → auto per plate</span>
-                                        <span style={{ fontWeight: 600 }}>₹{meal.items.reduce((s, i) => s + (i.amount || 0), 0).toLocaleString('en-IN')}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      <button onClick={() => addMeal(dayIdx)}
-                        style={{ fontSize: 12, color: '#378ADD', background: 'none', border: '1px solid #378ADD', borderRadius: 6, padding: '4px 12px', cursor: 'pointer' }}>
-                        + Add Meal for Day {dayNum}
-                      </button>
-                    </div>
-
-                    {day.meals.length > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 14px', background: '#F9F8F5', borderTop: '0.5px solid #E5E5E0', fontSize: 13, fontWeight: 600, color: '#1A1A18' }}>
-                        Day {dayNum} Total: <span style={{ color: '#E8750A', marginLeft: 8 }}>₹{day.day_subtotal.toLocaleString('en-IN')}</span>
-                      </div>
-                    )}
-                  </div>
-                  );
-                })}
-
-                <button onClick={addOccasion}
-                  style={{ ...btnPrimary, fontSize: 12, padding: '6px 16px', marginTop: 4, background: '#fff', color: '#E8750A', border: '1px dashed #E8750A' }}>
-                  + Add Occasion
-                </button>
-              </div>
+              <QuotationMultiDay
+                eventDays={eventDays} setEventDays={setEventDays}
+                activeMealKey={activeMealKey} setActiveMealKey={setActiveMealKey}
+                guestCount={guestCount} defaultDate={selectedBooking?.event_date || ''}
+                menuItems={activeItems} priceFor={priceFor} />
             ) : (
-              /* ── SINGLE-DAY SECTION ── */
-              <div className="quotation-panels" style={{ marginBottom: 0 }}>
-                {/* LEFT */}
-                <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #E5E5E0', background: '#F9F8F5' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#444', marginBottom: 6 }}>AVAILABLE ITEMS</div>
-                    <input placeholder="Search items…" value={searchLeft} onChange={e => setSearchLeft(e.target.value)}
-                      style={{ width: '100%', border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 8px', fontSize: 12, boxSizing: 'border-box' }} />
-                  </div>
-                  <div style={{ flex: 1, overflowY: 'auto', maxHeight: 300, padding: '8px 0' }}>
-                    {Object.keys(groupedLeft).length === 0 ? (
-                      <div style={{ padding: '20px 12px', textAlign: 'center', color: '#AAAAAA', fontSize: 12 }}>
-                        {activeItems.length === 0 ? 'No active menu items' : 'All items selected'}
-                      </div>
-                    ) : Object.entries(groupedLeft).map(([cat, subs]) => (
-                      <div key={cat}>
-                        <div style={{ padding: '6px 12px 2px', fontSize: 10, fontWeight: 700, color: '#E8750A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{cat}</div>
-                        {subs.map(sg => (
-                          <div key={sg.subcategory}>
-                            <div style={{ padding: '4px 12px 2px 18px', fontSize: 10, fontWeight: 600, color: '#888880', textTransform: 'uppercase' }}>{sg.subcategory}</div>
-                            {sg.items.map(it => (
-                              <div key={it.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 12px 5px 24px' }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#F5F5F0')}
-                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                                <span style={{ fontSize: 13 }}>{it.name}</span>
-                                <button onClick={() => addItem(it)} style={{ background: '#E8750A', color: '#fff', border: 'none', borderRadius: 5, width: 22, height: 22, fontSize: 14, cursor: 'pointer', flexShrink: 0 }}>+</button>
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {/* RIGHT */}
-                <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ padding: '10px 12px', borderBottom: '0.5px solid #E5E5E0', background: '#F9F8F5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#444' }}>SELECTED ITEMS</span>
-                    {selectedItems.length > 0 && (
-                      <button onClick={() => setSelectedItems([])} style={{ fontSize: 11, color: '#CC4444', background: 'none', border: '1px solid #CC4444', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>Reset All</button>
-                    )}
-                  </div>
-                  <div style={{ flex: 1, overflowY: 'auto', maxHeight: 300, padding: '4px 0' }}>
-                    {selectedItems.length === 0 ? (
-                      <div style={{ padding: '40px 12px', textAlign: 'center', color: '#AAAAAA', fontSize: 12 }}>Click + on the left to add items</div>
-                    ) : selectedItems.map((it, idx) => (
-                      <div key={it.item_id}
-                        draggable
-                        onDragStart={e => { setDraggedItemIdx(idx); e.dataTransfer.effectAllowed = 'move'; }}
-                        onDragEnd={() => { setDraggedItemIdx(null); setDragOverItemIdx(null); }}
-                        onDragOver={e => { e.preventDefault(); if (dragOverItemIdx !== idx) setDragOverItemIdx(idx); }}
-                        onDrop={e => {
-                          e.preventDefault();
-                          if (draggedItemIdx !== null && draggedItemIdx !== idx) reorderSelectedItems(draggedItemIdx, idx);
-                          setDraggedItemIdx(null); setDragOverItemIdx(null);
-                        }}
-                        style={{
-                          opacity: draggedItemIdx === idx ? 0.35 : 1,
-                          borderTop: dragOverItemIdx === idx && draggedItemIdx !== idx ? '2px solid #E8750A' : '2px solid transparent',
-                          transition: 'border-top-color 0.1s',
-                          borderBottom: '0.5px solid #F5F5F0',
-                        }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 3px 8px' }}>
-                          <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
-                          <span style={{ fontSize: 13, flex: 1 }}>{it.item_name}</span>
-                          {it.subcategory_name && <span style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
-                          <span style={{ fontSize: 12, color: '#888880' }}>₹</span>
-                          <input type="number" min="0" value={it.amount || ''} onChange={e => updateAmount(it.item_id, e.target.value)}
-                            placeholder="0" style={{ width: 80, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: 13, textAlign: 'right' }} />
-                          <button onClick={() => removeItem(it.item_id)} style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
-                        </div>
-                        <div style={{ paddingLeft: 28, paddingRight: 12, paddingBottom: 4, display: 'flex', gap: 10 }}>
-                          <input draggable={false} placeholder="Add instruction (optional)…" value={it.instruction || ''}
-                            onChange={e => updateInstruction(it.item_id, e.target.value)}
-                            style={{ flex: 1, border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
-                          <input draggable={false} placeholder="Served with (optional)…" value={it.served_with || ''}
-                            onChange={e => updateServedWith(it.item_id, e.target.value)}
-                            style={{ flex: 1, border: 'none', borderBottom: `1px dashed ${it.served_with ? '#2E7D32' : '#E0E0DC'}`, fontSize: 11, color: it.served_with ? '#1B5E20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {selectedItems.length > 0 && (
-                    <div style={{ borderTop: '0.5px solid #E5E5E0', padding: '8px 12px', background: '#F9F8F5', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
-                      <span>Items Total</span>
-                      <span style={{ fontWeight: 600 }}>₹{itemsTotal.toLocaleString('en-IN')}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+              <>
+                <QuotationItemPanels
+                  menuItems={activeItems} items={selectedItems}
+                  selectedTitle="SELECTED ITEMS" totalLabel="Items Total"
+                  onAdd={addItem}
+                  onAmount={(id, amount) => patchItem(id, { amount })}
+                  onRemove={id => setSelectedItems(prev => prev.filter(i => i.item_id !== id))}
+                  onText={(id, field: ItemTextField, value) => patchItem(id, { [field]: value })}
+                  onReorder={reorderSelectedItems}
+                  onReset={() => setSelectedItems([])} />
 
-            {/* ── Per plate + totals (single-day only) ── */}
-            {!isMultiDay && (
-              <div style={{ marginTop: 14, background: '#F9F8F5', borderRadius: 10, padding: '12px 16px', border: '0.5px solid #E5E5E0', marginBottom: 2 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: '#666', whiteSpace: 'nowrap' }}>Per Plate (₹)</label>
-                    <input type="number" min="0" value={perPlate}
+                {/* Per plate × guests */}
+                <div style={{ marginTop: 14, background: '#F9F8F5', borderRadius: 10, padding: '12px 16px', border: '0.5px solid #E5E5E0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#666', whiteSpace: 'nowrap' }}>
+                    Per Plate (₹)
+                    <input type="number" min="0" inputMode="decimal" value={perPlate}
                       onChange={e => { perPlateAutoRef.current = false; setPerPlate(e.target.value); }}
                       placeholder="0" style={{ width: 100, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, textAlign: 'right', background: '#fff' }} />
-                  </div>
+                  </label>
                   <span style={{ fontSize: 13, color: '#888880' }}>×</span>
                   <div style={{ fontSize: 13, color: '#444' }}><strong>{guestCount}</strong> <span style={{ color: '#888880' }}>guests</span></div>
                   <span style={{ fontSize: 13, color: '#888880' }}>=</span>
@@ -1028,173 +407,43 @@ const Quotations: React.FC = () => {
                     <span style={{ fontSize: 11, color: '#888880', fontWeight: 400, marginLeft: 4 }}>(Subtotal)</span>
                   </div>
                 </div>
-              </div>
+              </>
             )}
 
-            {/* ── Common: Discount, Extra Charges, Transportation, GST, Total ── */}
-            <div style={{ marginTop: 14, background: '#F9F8F5', borderRadius: 10, padding: '14px 16px', border: '0.5px solid #E5E5E0' }}>
-
-              {/* Discount */}
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#888880', marginBottom: 6 }}>DISCOUNT</div>
-
-                {/* Meal savings breakdown — auto, read-only */}
-                {isMultiDay && totalMealSavings > 0 && (
-                  <div style={{ background: '#F2FBE9', border: '0.5px solid #B8DCA0', borderRadius: 7, padding: '8px 10px', marginBottom: 8 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', marginBottom: 5, letterSpacing: '0.04em' }}>MEAL OFFER SAVINGS (AUTO)</div>
-                    {eventDays.map((day, di) => {
-                      const dayNum = getDayNumber(day.date, eventDays);
-                      return day.meals.map((meal, mi) => {
-                        const offer = meal.discount_amount || 0;
-                        if (offer <= 0 || meal.per_plate_amount <= offer) return null;
-                        const saving = (meal.per_plate_amount - offer) * meal.guest_count;
-                        return (
-                          <div key={`${di}-${mi}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '2px 0', color: '#3B6D11' }}>
-                            <span>{meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1)} — Day {dayNum}{day.date ? ` · ${formatDateIST(day.date, 'dd-MM')}` : ''}</span>
-                            <span style={{ fontWeight: 600 }}>-₹{saving.toLocaleString('en-IN')}</span>
-                          </div>
-                        );
-                      });
-                    })}
-                  </div>
-                )}
-
-                {/* Additional manual discounts */}
-                <div style={{ marginBottom: 4 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: '#888880' }}>ADDITIONAL DISCOUNTS</span>
-                    <button onClick={() => setAdditionalDiscounts(prev => [...prev, { id: genId(), description: '', amount: 0 }])}
-                      style={{ fontSize: 11, color: '#3B6D11', background: 'none', border: '1px solid #3B6D11', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>
-                      + Add Discount
-                    </button>
-                  </div>
-                  {additionalDiscounts.length === 0 && (
-                    <div style={{ fontSize: 11, color: '#BBBBBB', marginBottom: 4 }}>No additional discounts</div>
-                  )}
-                  {additionalDiscounts.map((d, i) => (
-                    <div key={d.id} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                      <input placeholder="Reason (e.g. Festive Offer)" value={d.description}
-                        onChange={e => setAdditionalDiscounts(prev => prev.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
-                        style={{ flex: 1, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 12, background: '#fff' }} />
-                      <input type="number" min="0" placeholder="₹ Amount" value={d.amount || ''}
-                        onChange={e => setAdditionalDiscounts(prev => prev.map((x, j) => j === i ? { ...x, amount: parseFloat(e.target.value) || 0 } : x))}
-                        style={{ width: 110, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, background: '#fff', textAlign: 'right' as const }} />
-                      <button onClick={() => setAdditionalDiscounts(prev => prev.filter((_, j) => j !== i))}
-                        style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
-                    </div>
-                  ))}
-                </div>
-
-                {discountAmt > 0 && (
-                  <div style={{ fontSize: 12, color: '#3B6D11', textAlign: 'right', fontWeight: 600 }}>
-                    Total Discount: -₹{discountAmt.toLocaleString('en-IN')}
-                  </div>
-                )}
-              </div>
-
-              {/* Extra Charges */}
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#888880' }}>EXTRA CHARGES</span>
-                  <button onClick={() => setExtraCharges(prev => [...prev, { description: '', amount: 0 }])}
-                    style={{ fontSize: 11, color: '#E8750A', background: 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>+ Add</button>
-                </div>
-                {extraCharges.length === 0 && <div style={{ fontSize: 11, color: '#AAAAAA' }}>No extra charges added</div>}
-                {extraCharges.map((ec, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                    <input placeholder="Description" value={ec.description}
-                      onChange={e => setExtraCharges(prev => prev.map((c, j) => j === i ? { ...c, description: e.target.value } : c))}
-                      style={{ flex: 1, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 12, background: '#fff' }} />
-                    <input type="number" min="0" placeholder="₹ Amount" value={ec.amount || ''}
-                      onChange={e => setExtraCharges(prev => prev.map((c, j) => j === i ? { ...c, amount: parseFloat(e.target.value) || 0 } : c))}
-                      style={{ width: 110, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, background: '#fff', textAlign: 'right' as const }} />
-                    <button onClick={() => setExtraCharges(prev => prev.filter((_, j) => j !== i))}
-                      style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
-                  </div>
-                ))}
-                {extraChargesTotal > 0 && <div style={{ fontSize: 12, color: '#444', textAlign: 'right', fontWeight: 600 }}>Total: +₹{extraChargesTotal.toLocaleString('en-IN')}</div>}
-              </div>
-
-              {/* Transportation Charges */}
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#888880' }}>TRANSPORTATION CHARGES</span>
-                  <button onClick={() => setTransportationCharges(prev => [...prev, { description: '', amount: 0 }])}
-                    style={{ fontSize: 11, color: '#E8750A', background: 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>+ Add</button>
-                </div>
-                {transportationCharges.length === 0 && <div style={{ fontSize: 11, color: '#AAAAAA' }}>No transportation charges added</div>}
-                {transportationCharges.map((tc, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                    <input placeholder="Description (e.g. Vehicle, Distance)" value={tc.description}
-                      onChange={e => setTransportationCharges(prev => prev.map((c, j) => j === i ? { ...c, description: e.target.value } : c))}
-                      style={{ flex: 1, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 12, background: '#fff' }} />
-                    <input type="number" min="0" placeholder="₹ Amount" value={tc.amount || ''}
-                      onChange={e => setTransportationCharges(prev => prev.map((c, j) => j === i ? { ...c, amount: parseFloat(e.target.value) || 0 } : c))}
-                      style={{ width: 110, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, background: '#fff', textAlign: 'right' as const }} />
-                    <button onClick={() => setTransportationCharges(prev => prev.filter((_, j) => j !== i))}
-                      style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 18, cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
-                  </div>
-                ))}
-                {transportationChargesTotal > 0 && <div style={{ fontSize: 12, color: '#444', textAlign: 'right', fontWeight: 600 }}>Total: +₹{transportationChargesTotal.toLocaleString('en-IN')}</div>}
-              </div>
-
-              {/* GST */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 12 }}>
-                <input type="checkbox" checked={gstChecked} onChange={e => setGstChecked(e.target.checked)} style={{ accentColor: '#E8750A', width: 15, height: 15 }} />
-                <span>Add GST <strong>@{dcGstRate}%</strong></span>
-                {gstChecked && gstAmount > 0 && <span style={{ color: '#666660', fontSize: 12 }}>(+₹{gstAmount.toLocaleString('en-IN')})</span>}
-              </label>
-
-              {/* Grand total */}
-              <div style={{ borderTop: '0.5px solid #E5E5E0', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                {isMultiDay ? (
-                  <div style={{ fontSize: 12, color: '#666' }}>
-                    {eventDays.map(d => (
-                      <div key={d.day_number} style={{ fontSize: 11, color: '#888880' }}>
-                        Day {d.day_number}{d.date ? ` (${d.date})` : ''}: ₹{d.day_subtotal.toLocaleString('en-IN')}
-                      </div>
-                    ))}
-                    <div style={{ marginTop: 2 }}>Multi-day Subtotal: <strong>₹{multiDaySubtotal.toLocaleString('en-IN')}</strong></div>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, color: '#666' }}>
-                    <div>Per Plate: <strong>₹{perPlateNum.toLocaleString('en-IN')}</strong></div>
-                    <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>Subtotal: ₹{subtotal.toLocaleString('en-IN')}</div>
-                  </div>
-                )}
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 11, color: '#888880' }}>Payable Amount</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: '#E8750A' }}>₹{finalTotal.toLocaleString('en-IN')}</div>
-                </div>
-              </div>
-            </div>
+            <QuotationCharges
+              isMultiDay={isMultiDay} eventDays={eventDays} gstRate={dcGstRate}
+              gstChecked={gstChecked} setGstChecked={setGstChecked}
+              discounts={additionalDiscounts} setDiscounts={setAdditionalDiscounts}
+              extraCharges={extraCharges} setExtraCharges={setExtraCharges}
+              transport={transportationCharges} setTransport={setTransportationCharges}
+              totals={{
+                mealSavings: totalMealSavings, discount: discountAmt, extra: extraChargesTotal,
+                transport: transportationChargesTotal, gst: gstAmount, multiDaySubtotal,
+                perPlate: perPlateNum, subtotal, final: finalTotal,
+              }} />
 
             {/* Notes */}
             <div style={{ marginTop: 14 }}>
               <label style={lbl}>NOTES (OPTIONAL)</label>
               <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-                placeholder="Add any notes…" style={{ width: '100%', border: '1px solid #E5E5E0', borderRadius: 8, padding: '8px 10px', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }} />
+                placeholder="Add any notes…" style={{ ...inp, resize: 'vertical' }} />
             </div>
 
-            {/* Download PDF (draft preview) */}
-            <div style={{ marginTop: 14, padding: '10px 14px', background: '#F5F8FF', border: '0.5px solid #B8C8F4', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
+            {/* PDF + share of what is on screen */}
+            <div style={{ marginTop: 14, padding: '10px 14px', background: '#F5F8FF', border: '0.5px solid #B8C8F4', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', userSelect: 'none', marginRight: 'auto' }}>
                 <input type="checkbox" checked={pdfWithPrices} onChange={e => setPdfWithPrices(e.target.checked)}
                   style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
                 <span>Include item prices in PDF</span>
               </label>
-              <button
-                onClick={() => {
-                  if (!selectedBookingId) { toast.error('Select a booking first'); return; }
-                  downloadPDF(buildDraftQuotation(), pdfWithPrices);
-                }}
-                style={{ background: '#378ADD', color: '#fff', border: 'none', borderRadius: 7, padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                ⬇ Download PDF
-              </button>
+              <button onClick={withDraft(q => downloadPDF(q, pdfWithPrices))} style={{ ...btnSmall, background: '#378ADD' }}>⬇ Download PDF</button>
+              {editingId && (
+                <button onClick={withDraft(q => { shareQuotation(q, pdfWithPrices); })} style={{ ...btnSmall, background: '#1DA851' }}>📤 Share</button>
+              )}
             </div>
 
             <div style={{ marginTop: 10, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={resetForm} style={btnGhost}>Cancel</button>
+              <button onClick={() => resetForm()} style={btnGhost}>Cancel</button>
               <button onClick={handleSave} disabled={isSaving} style={{ ...btnPrimary, opacity: isSaving ? 0.6 : 1 }}>
                 {isSaving ? 'Saving…' : editingId ? 'Update Quotation' : 'Save Quotation'}
               </button>
@@ -1203,75 +452,24 @@ const Quotations: React.FC = () => {
         </div>
       )}
 
-      {/* ── Quotations list ── */}
-      {quotations.length === 0 ? (
-        <div style={{ background: '#fff', borderRadius: 12, border: '0.5px solid #E5E5E0', padding: '48px 24px', textAlign: 'center', color: '#AAAAAA' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📝</div>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>No quotations yet</div>
-          <div style={{ fontSize: 12 }}>Create your first quotation using the button above</div>
-        </div>
-      ) : (
-        <div style={{ background: '#fff', borderRadius: 12, border: '0.5px solid #E5E5E0', overflow: 'hidden' }}>
-          <div className="table-wrap">
-            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
-              <thead>
-                <tr style={{ background: '#F9F8F5', borderBottom: '0.5px solid #E5E5E0' }}>
-                  {['Quotation #', 'Customer', 'Event', 'Type', 'Total', 'Status', 'Date', ''].map(h => (
-                    <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: '#888880', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {quotations.map((q, i) => (
-                  <tr key={q.id} style={{ borderBottom: i < quotations.length - 1 ? '0.5px solid #F0F0EA' : 'none' }}>
-                    <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, color: '#E8750A', whiteSpace: 'nowrap' }}>{q.quotation_number}</td>
-                    <td style={{ padding: '10px 12px', fontSize: 13 }}>{q.customer?.name || '—'}</td>
-                    <td style={{ padding: '10px 12px', fontSize: 12, color: '#666', whiteSpace: 'nowrap' }}>
-                      {q.booking ? `${q.booking.event_type} · ${q.booking.event_date}` : '—'}
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: 12, whiteSpace: 'nowrap' }}>
-                      {q.is_multi_day
-                        ? <span style={{ background: '#E6F1FB', color: '#185FA5', fontSize: 10, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>Multi-day ({q.event_days?.length || 0}d)</span>
-                        : q.per_plate_amount > 0 ? `₹${q.per_plate_amount.toLocaleString('en-IN')}/plate` : '—'}
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>₹{(q.total_amount || 0).toLocaleString('en-IN')}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <select value={q.status}
-                        onChange={async e => {
-                          try { await updateStatus.mutateAsync({ id: q.id, status: e.target.value }); toast.success('Status updated'); }
-                          catch { toast.error('Failed to update'); }
-                        }}
-                        style={{ border: 'none', background: 'transparent', fontSize: 12, fontWeight: 600, color: STATUS_COLORS[q.status] || '#888880', cursor: 'pointer', padding: 0 }}>
-                        {['draft', 'sent', 'accepted', 'rejected'].map(s => (
-                          <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: 12, color: '#888880', whiteSpace: 'nowrap' }}>{formatDateIST(q.issue_date, 'dd-MM-yyyy')}</td>
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
-                      <button onClick={() => downloadPDF(q)} style={actionBtn('#378ADD')}>⬇ PDF</button>
-                      <button onClick={() => openEdit(q)} style={actionBtn('#444')}>✏ Edit</button>
-                      <button onClick={() => handleClone(q)} style={actionBtn('#0F6E56')}>⧉ Clone</button>
-                      <button onClick={() => handleDelete(q.id, q.quotation_number)} style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 14, cursor: 'pointer', padding: '2px 4px' }}>×</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <QuotationList
+        quotations={quotations}
+        onPdf={q => downloadPDF(q)}
+        onShare={q => { shareQuotation(q); }}
+        onEdit={openEdit}
+        onClone={handleClone}
+        onDelete={handleDelete}
+        onStatus={handleStatus} />
+
+      {dialog}
     </div>
   );
 };
 
 const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' };
 const btnGhost:   React.CSSProperties = { border: '1px solid #E5E5E0', background: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, cursor: 'pointer' };
+const btnSmall:   React.CSSProperties = { color: '#fff', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' };
 const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#888880', display: 'block', marginBottom: 4 };
-const inp: React.CSSProperties = { width: '100%', border: '1px solid #E5E5E0', borderRadius: 8, padding: '8px 10px', fontSize: 13, boxSizing: 'border-box' as const };
-const actionBtn = (color: string): React.CSSProperties => ({
-  background: 'none', border: '1px solid #E5E5E0', borderRadius: 5,
-  padding: '3px 8px', fontSize: 11, cursor: 'pointer', marginRight: 5, color,
-});
+const inp: React.CSSProperties = { width: '100%', border: '1px solid #E5E5E0', borderRadius: 8, padding: '8px 10px', fontSize: 13, boxSizing: 'border-box', background: '#fff' };
 
 export default Quotations;

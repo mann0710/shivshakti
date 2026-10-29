@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import jsPDF from 'jspdf';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, parseISO, addMonths, subMonths } from 'date-fns';
 import { useBookings } from '../hooks/useBookings';
 import { useQuotations } from '../hooks/useQuotations';
 import StatusPill from '../components/StatusPill';
 import { formatDateIST } from '../lib/ist';
+import { Navigate } from '../hooks/useNavIntent';
 
 const eventColors = ['#E8750A', '#378ADD', '#639922', '#7F77DD', '#D4537E', '#BA7517', '#0F6E56'];
 
@@ -198,11 +199,19 @@ const downloadEventMenuPDF = (booking: any, quotation: any | undefined) => {
   doc.save(`${custName}_${formatDateIST(booking.event_date, 'dd-MM-yyyy')}_menu.pdf`);
 };
 
-const CalendarPage: React.FC = () => {
+interface Props { onNavigate?: Navigate }
+
+const CalendarPage: React.FC<Props> = ({ onNavigate }) => {
   const { data: bookings = [] } = useBookings();
   const { data: quotations = [] } = useQuotations();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const dayPanel = useRef<HTMLDivElement>(null);
+  // On phones the day panel sits below the calendar, so bring it into view.
+  const pickDay = (day: Date) => {
+    setSelectedDay(day);
+    if (window.innerWidth <= 1024) setTimeout(() => dayPanel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -283,7 +292,7 @@ const CalendarPage: React.FC = () => {
                 const isToday = isSameDay(day, new Date());
                 const isSelected = selectedDay && isSameDay(day, selectedDay);
                 return (
-                  <div key={day.toISOString()} onClick={() => setSelectedDay(day)}
+                  <div key={day.toISOString()} onClick={() => pickDay(day)}
                     style={{ minHeight: 72, borderRight: '0.5px solid #F0F0EC', borderBottom: '0.5px solid #F0F0EC', padding: 5, cursor: 'pointer',
                       background: isSelected ? '#FFFBF5' : isToday ? '#FFF8EE' : 'transparent' }}>
                     <div style={{ fontSize: 12, fontWeight: isToday ? 600 : 400, color: isToday ? '#E8750A' : '#1A1A18', marginBottom: 3 }}>
@@ -309,9 +318,15 @@ const CalendarPage: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {/* Selected day details */}
             {selectedDay && (
-              <div style={card}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
-                  {format(selectedDay, 'EEEE, dd-MM-yyyy')}
+              <div style={card} ref={dayPanel}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{format(selectedDay, 'EEEE, dd-MM-yyyy')}</span>
+                  {onNavigate && (
+                    <button onClick={() => onNavigate('bookings', { action: 'new' })}
+                      style={{ fontSize: 11, background: '#E8750A', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      + New booking
+                    </button>
+                  )}
                 </div>
                 {selectedBookings.length === 0 ? (
                   <div style={{ fontSize: 12, color: '#888880' }}>No bookings on this day</div>

@@ -128,7 +128,7 @@ const SeasonalItems: React.FC = () => {
           <div style={empty}>{items.length ? 'No items match these filters.' : 'No items yet. Click "+ Add item" and enter the price per kg.'}</div>
         ) : (
           <div className="table-wrap" style={{ background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 12 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
+            <table className="stack-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 720 }}>
               <thead>
                 <tr style={{ background: '#F9F8F5', borderBottom: '0.5px solid #E5E5E0' }}>
                   <th style={{ ...th, width: 32 }}><input type="checkbox" aria-label="Select all" checked={allPicked} onChange={() => setPicked(allPicked ? new Set() : new Set(shown.map(i => i.id)))} /></th>
@@ -144,7 +144,7 @@ const SeasonalItems: React.FC = () => {
                       <div style={{ fontWeight: 600 }}>{i.name}</div>
                       {i.category && <div style={{ fontSize: 11, color: '#888880' }}>{i.category}</div>}
                     </td>
-                    <td style={{ ...td, fontWeight: 600, whiteSpace: 'nowrap' }}>{rateLabel(i.rate, i.unit)}</td>
+                    <td data-label="Price" style={{ ...td, fontWeight: 600, whiteSpace: 'nowrap' }}>{rateLabel(i.rate, i.unit)}</td>
                     <td style={td}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {itemPacks(i, defaults).map(p => (
@@ -152,7 +152,7 @@ const SeasonalItems: React.FC = () => {
                         ))}
                       </div>
                     </td>
-                    <td style={td}>{occName(i.occasion_id) ? <span style={pill('#EEF0FB', NAVY)}>{occName(i.occasion_id)}</span> : <span style={{ color: '#AAAAAA', fontSize: 12 }}>All year</span>}</td>
+                    <td data-label="Occasion" style={td}>{occName(i.occasion_id) ? <span style={pill('#EEF0FB', NAVY)}>{occName(i.occasion_id)}</span> : <span style={{ color: '#AAAAAA', fontSize: 12 }}>All year</span>}</td>
                     <td style={td}><span style={pill(i.is_active ? '#EAF3DE' : '#F5F5F0', i.is_active ? SUCCESS : '#888880')}>{i.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
                       <button style={btnSm} onClick={() => setDialog({ kind: 'form', item: i })}>Edit</button>{' '}

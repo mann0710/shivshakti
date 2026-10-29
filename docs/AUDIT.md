@@ -42,7 +42,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | 12 | `Billing.tsx` | Negative or zero payments were possible, and Save Payment could be double-tapped. | **Fixed.** Editing a payment still has no balance check: **Open** |
 | 13 | `Dashboard.tsx` | Today's events were missing from Upcoming. | **Fixed** |
 | 14 | `Customers.tsx` | "Last event" showed the oldest event; "Total spend" included cancelled bookings. | **Open** |
-| 15 | `Finance.tsx` | Month labels broke on the 29th–31st; revenue used estimates including cancelled bookings; the event-type list was hard-coded. | **Open** |
+| 15 | `Finance.tsx` | Month labels broke on the 29th–31st; revenue used estimates including cancelled bookings; the event-type list was hard-coded. | **Fixed** (still based on booking estimates for event types and top customers) |
 | 16 | `DataCenter.tsx` | 0% GST could not be saved. | **Fixed** |
 | 17 | `DataCenter.tsx` | The old FSSAI file was deleted before the new upload succeeded. | **Fixed** |
 | 18 | `Quotations.tsx` | Days added with "Add Occasion" show as "Day 0" in the totals panel. | **Open** |
@@ -54,6 +54,33 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | 24 | `Billing.tsx` | Invoice WhatsApp links had no country code. | **Fixed** |
 | 25 | `useQuotations.ts`, `useInvoices.ts` | Quotation and invoice numbers are computed in the browser, so two devices can clash. | **Open** (sweets bills now use a database sequence) |
 
+## App-wide UX pass (second round, after owner feedback)
+
+| Finding | Status |
+|---|---|
+| Forms rendered below long lists (Bookings new/edit, Packages edit, Customers), so the buttons looked dead | **Fixed.** Dialogs (bottom sheets on phones) |
+| `window.confirm` was used for deletes (bookings, customers, invoices, quotations, menu categories, occasions, sweets customers, FSSAI). Many phone WebViews block it silently, so "nothing happens" | **Fixed.** In-app confirmation everywhere; also added for item, payment, team-member and event-type deletes that had none |
+| Booking confirmation auto-opened Google Calendar after a network call (blocked as a popup) | **Fixed.** Explicit button |
+| Quotations could not be sent on WhatsApp | **Fixed.** PDF share (phone share sheet; desktop download + WhatsApp) |
+| Phone Back button left the app (no URL routing) | **Fixed.** Hash routes per screen |
+| Tables cut off actions on phones (bookings, quotations, invoices, sweets customers, occasions, items) | **Fixed.** Card layouts on phones |
+| Menu Builder forced three columns on phones | **Fixed** |
+| Dashboard stacked eight full-width stat cards on phones | **Fixed.** Two per row |
+| Dashboard "+ New Booking" and quick actions only switched screens | **Fixed.** They open the form |
+| Deactivated packages could never be reactivated | **Fixed** |
+| No search on quotations and invoices | **Fixed** |
+| Every quotation item started at ₹0 | **Improved.** The last used price is pre-filled (catalog items still have no stored default price) |
+
+## Security (Supabase Security Advisor: 22 errors, 1 warning)
+
+| Finding | Status |
+|---|---|
+| RLS disabled on all 17 public tables; anyone with the public anon key could read, change or delete all data | **Fixed** by `20261031_security_rls.sql`: RLS on every table, staff-only policy (`public.is_staff()` checks the signed-in email against `public.staff`) |
+| "Policy Exists RLS Disabled": `allow_all` policies (true/true for everyone) on bookings, customers, invoices, menus, payments | **Fixed** (dropped) |
+| Storage bucket `documents` allowed public list/upload/update/delete | **Fixed.** Only staff can manage files; direct links still work |
+| No login in the app | **Fixed.** Email + password sign-in, sign-out, "access not set up" screen for non-staff |
+| Public sign-ups are on in Supabase Auth | **Owner action:** turn off "Allow new users to sign up" (new sign-ups get no data access anyway) |
+
 ## Catering — UX and missing basics (open)
 
 - Two unrelated menu systems (Packages and Menu Builder); catalog items have no default price.
@@ -63,7 +90,6 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 - No search on the Quotations and Invoices lists. Quotations can't be shared on WhatsApp.
 - Business name, address and terms are hard-coded in the PDFs (now centralised for receipts in `lib/shop.ts`).
 - The invoice is not GST-complete (no CGST/SGST split, SAC code or customer GSTIN).
-- **No login.** The app uses only the public anon key, so data is protected only by Supabase row-level security, whose setup is unknown. Supabase Auth + RLS is recommended before wider use.
 - No URL routing, so the phone Back button leaves the app.
 
 ## Code quality

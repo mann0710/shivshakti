@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, subMonths } from 'date-fns';
 import { useBookings } from '../hooks/useBookings';
 import { useInvoices } from '../hooks/useInvoices';
 import { useCustomers } from '../hooks/useCustomers';
@@ -17,11 +17,8 @@ const Finance: React.FC = () => {
   const collectionRate = totalRevenue ? Math.round((totalCollected / totalRevenue) * 100) : 0;
 
   // Monthly revenue - last 6 months
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - (5 - i));
-    return d;
-  });
+  // From the 1st of the month so the 29th–31st can't skip or repeat a month.
+  const months = Array.from({ length: 6 }, (_, i) => subMonths(startOfMonth(new Date()), 5 - i));
 
   const monthlyData = months.map(m => {
     const start = startOfMonth(m);
@@ -33,19 +30,20 @@ const Finance: React.FC = () => {
   });
   const maxRevenue = Math.max(...monthlyData.map(m => m.revenue), 1);
 
-  // Revenue by event type
-  const eventTypes = ['Wedding', 'Corporate', 'Birthday', 'Anniversary', 'Reception', 'Other'];
+  // Revenue by event type: every type in use, cancelled bookings excluded
+  const liveBookings = bookings.filter(b => b.status !== 'cancelled');
+  const eventTypes = Array.from(new Set(liveBookings.map(b => b.event_type)));
   const eventRevenue = eventTypes.map(type => ({
     type,
-    revenue: bookings.filter(b => b.event_type === type).reduce((s, b) => s + b.estimated_cost, 0),
+    revenue: liveBookings.filter(b => b.event_type === type).reduce((s, b) => s + b.estimated_cost, 0),
   })).filter(e => e.revenue > 0).sort((a, b) => b.revenue - a.revenue);
   const maxEventRev = Math.max(...eventRevenue.map(e => e.revenue), 1);
 
   // Top customers
   const customerSpend = customers.map(c => ({
     customer: c,
-    spend: bookings.filter(b => b.customer_id === c.id).reduce((s, b) => s + b.estimated_cost, 0),
-    count: bookings.filter(b => b.customer_id === c.id).length,
+    spend: liveBookings.filter(b => b.customer_id === c.id).reduce((s, b) => s + b.estimated_cost, 0),
+    count: liveBookings.filter(b => b.customer_id === c.id).length,
   })).sort((a, b) => b.spend - a.spend).slice(0, 5);
 
   // Overdue invoices
@@ -100,7 +98,7 @@ const Finance: React.FC = () => {
         </div>
         {/* KPI Row 2 */}
         <div className="g3" style={{ marginBottom: 20 }}>
-          <KPI label="GST collected" value={`₹${totalGST.toLocaleString()}`} sub="@18% all invoices" />
+          <KPI label="GST collected" value={`₹${totalGST.toLocaleString()}`} sub="Across all invoices" />
           <KPI label="Avg. booking value" value={`₹${avgBookingValue.toLocaleString()}`} sub="Per invoice" />
           <KPI label="Total bookings" value={bookings.length} sub={`${customers.length} customers`} />
         </div>

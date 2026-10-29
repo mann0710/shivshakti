@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../components/ui/ConfirmDialog';
 import {
   useSeasonalOccasions, useCreateSeasonalOccasion, useUpdateSeasonalOccasion, useDeleteSeasonalOccasion,
   SeasonalOccasion,
 } from '../hooks/useSeasonalOccasions';
 
 const SeasonalOccasions: React.FC = () => {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const { data: occasions = [], isLoading } = useSeasonalOccasions();
   const createOccasion = useCreateSeasonalOccasion();
   const updateOccasion = useUpdateSeasonalOccasion();
@@ -54,7 +56,7 @@ const SeasonalOccasions: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this occasion? Items linked to it will be unlinked.')) return;
+    if (!(await confirm({ title: 'Delete occasion?', message: 'Items linked to it become all-year items. Deactivate it instead to hide it for now.', confirmLabel: 'Delete', danger: true }))) return;
     try {
       await deleteOccasion.mutateAsync(id);
       toast.success('Deleted');
@@ -106,7 +108,7 @@ const SeasonalOccasions: React.FC = () => {
           </div>
         ) : (
           <div style={{ background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 12, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table className="stack-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#F9F8F5', borderBottom: '0.5px solid #E5E5E0' }}>
                   <th style={th}>Occasion Name</th>
@@ -177,6 +179,7 @@ const SeasonalOccasions: React.FC = () => {
           </div>
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 };

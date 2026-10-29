@@ -1,512 +1,188 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useBookings, useCreateBooking, useUpdateBooking, useDeleteBooking } from '../hooks/useBookings';
-import { useCustomers, useCreateCustomer } from '../hooks/useCustomers';
-import { useMenus } from '../hooks/useMenus';
-import { useTeamMembers, useEventTypes, useCreateEventType, DEFAULT_EVENTS } from '../hooks/useDataCenter';
+import { useBookings, useUpdateBooking, useDeleteBooking } from '../hooks/useBookings';
+import { useTeamMembers } from '../hooks/useDataCenter';
 import StatusPill from '../components/StatusPill';
 import { Booking } from '../types';
 import { formatDateIST } from '../lib/ist';
+import { inr } from '../lib/money';
+import { Navigate, useNavIntent } from '../hooks/useNavIntent';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import BookingFormModal from '../components/catering/BookingFormModal';
+import BookingCards, { dateRange } from '../components/catering/BookingCards';
+import BookingActions, { BookingHandlers, StatusSelect, cap } from '../components/catering/BookingActions';
+import { calendarUrl, promptCalendar, fmtTime } from '../components/catering/BookingCalendar';
 
 type StatusFilter = 'all' | 'inquiry' | 'followup' | 'confirmed' | 'completed' | 'cancelled';
-const BOOKING_STATUSES = ['inquiry', 'followup', 'confirmed', 'completed', 'cancelled'];
+const FILTERS: StatusFilter[] = ['all', 'inquiry', 'followup', 'confirmed', 'completed', 'cancelled'];
 
-const emptyForm = {
-  customer_id: '', newCustomerName: '', newCustomerPhone: '', customerEmail: '',
-  event_type: 'Wedding', event_date: '', event_time: '',
-  venue: '', guest_count: '', menu_id: '', special_instructions: '',
+// Legacy "pending" bookings count as inquiries.
+const inFilter = (b: Booking, f: StatusFilter) =>
+  f === 'all' || b.status === f || (f === 'inquiry' && b.status === 'pending');
+
+const matchesSearch = (b: Booking, q: string) => {
+  if (!q) return true;
+  const text = [b.customer?.name, b.customer?.phone, b.venue, b.event_type].join(' ').toLowerCase();
+  const digits = q.replace(/\D/g, '');
+  return text.includes(q) || (digits.length >= 3 && (b.customer?.phone ?? '').replace(/\D/g, '').includes(digits));
 };
 
-// Google Maps venue autocomplete — graceful fallback if no API key
-const VenueInput: React.FC<{ value: string; onChange: (v: string) => void; style: React.CSSProperties }> = ({ value, onChange, style }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const apiKey = process.env.REACT_APP_GOOGLE_MAPS_KEY;
-  const [gmReady, setGmReady] = useState(false);
+interface Props { onNavigate?: Navigate }
 
-  useEffect(() => {
-    if (!apiKey || !inputRef.current) return;
-    const gm = (window as any).google;
-    if (gm?.maps?.places) { initAC(); setGmReady(true); return; }
-    const existing = document.querySelector('script[data-gm="1"]') as HTMLScriptElement | null;
-    const onLoad = () => { initAC(); setGmReady(true); };
-    if (existing) { existing.addEventListener('load', onLoad); return; }
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.setAttribute('data-gm', '1');
-    script.async = true;
-    script.onload = onLoad;
-    document.head.appendChild(script);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey]);
-
-  const initAC = () => {
-    if (!inputRef.current) return;
-    const gm = (window as any).google;
-    if (!gm?.maps?.places) return;
-    const ac = new gm.maps.places.Autocomplete(inputRef.current, { componentRestrictions: { country: 'in' } });
-    ac.addListener('place_changed', () => {
-      const place = ac.getPlace();
-      onChange(place.formatted_address || place.name || '');
-    });
-  };
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <input ref={inputRef} style={style} value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={apiKey ? 'Start typing to search on Google Maps…' : 'Hall name, area'} />
-      {gmReady && <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, pointerEvents: 'none' }}>📍</span>}
-    </div>
-  );
-};
-
-const Bookings: React.FC = () => {
+const Bookings: React.FC<Props> = ({ onNavigate }) => {
   const { data: bookings = [], isLoading } = useBookings();
-  const { data: customers = [] } = useCustomers();
-  const { data: menus = [] } = useMenus();
   const { data: teamMembers = [] } = useTeamMembers();
-  const { data: eventTypesList = [] } = useEventTypes();
-  const createBooking = useCreateBooking();
   const updateBooking = useUpdateBooking();
   const deleteBooking = useDeleteBooking();
-  const createCustomer = useCreateCustomer();
-  const createEventType = useCreateEventType();
-
-  const eventTypes = eventTypesList.length > 0 ? eventTypesList.map(e => e.name) : DEFAULT_EVENTS;
+  const { confirm, dialog } = useConfirm();
+  const intent = useNavIntent('bookings');
 
   const [filter, setFilter] = useState<StatusFilter>('all');
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ ...emptyForm, event_type: eventTypes[0] || 'Wedding' });
+  const [search, setSearch] = useState('');
+  // 'new' = empty form, a Booking = edit form, null = closed
+  const [formFor, setFormFor] = useState<Booking | 'new' | null>(intent?.action === 'new' ? 'new' : null);
+  const [presetCustomerId, setPresetCustomerId] = useState(intent?.action === 'new' ? intent.id : undefined);
 
-  // Edit booking state
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({
-    event_type: '', event_date: '', event_time: '', venue: '',
-    guest_count: '', menu_id: '', special_instructions: '', status: 'inquiry',
-  });
-  const [isMultiDayNew, setIsMultiDayNew] = useState(false);
-  const [newEndDate, setNewEndDate]       = useState('');
-  const [isMultiDayEdit, setIsMultiDayEdit] = useState(false);
-  const [editEndDate, setEditEndDate]       = useState('');
-  const [customEventType, setCustomEventType] = useState('');
-  const [editCustomEventType, setEditCustomEventType] = useState('');
-
+  // "open" intent: edit that booking once the list has loaded.
+  const openId = useRef(intent?.action === 'open' ? intent.id : undefined);
   useEffect(() => {
-    if (eventTypes.length > 0 && !form.event_type) {
-      setForm(f => ({ ...f, event_type: eventTypes[0] }));
-    }
-  }, [eventTypes]); // eslint-disable-line
+    const b = openId.current ? bookings.find(x => x.id === openId.current) : undefined;
+    if (b) { openId.current = undefined; setFormFor(b); }
+  }, [bookings]);
 
-  const filtered = bookings.filter(b => {
-    if (filter === 'all') return true;
-    if (filter === 'inquiry') return b.status === 'inquiry' || b.status === 'pending';
-    return b.status === filter;
-  });
+  const teamEmails = useMemo(() => teamMembers.map(t => t.email).filter(Boolean) as string[], [teamMembers]);
+  const q = search.trim().toLowerCase();
+  const searched = bookings.filter(b => matchesSearch(b, q));
+  const filtered = searched.filter(b => inFilter(b, filter));
 
-  const selectedMenu = menus.find(m => m.id === form.menu_id);
-  const estimatedCost = selectedMenu && form.guest_count
-    ? selectedMenu.price_per_plate * parseInt(form.guest_count) : 0;
+  const closeForm = () => { setFormFor(null); setPresetCustomerId(undefined); };
 
-  const editMenu = menus.find(m => m.id === editForm.menu_id);
-  const editEstimatedCost = editMenu && editForm.guest_count
-    ? editMenu.price_per_plate * parseInt(editForm.guest_count) : 0;
-
-  const filterCount = (s: StatusFilter) => {
-    if (s === 'all') return bookings.length;
-    if (s === 'inquiry') return bookings.filter(b => b.status === 'inquiry' || b.status === 'pending').length;
-    return bookings.filter(b => b.status === s).length;
-  };
-
-  const openGoogleCalendar = (booking: Booking) => {
-    const customer = booking.customer;
-    if (!customer) return;
-    const emails: string[] = [];
-    if (customer.email) emails.push(customer.email);
-    teamMembers.forEach(t => { if (t.email) emails.push(t.email); });
-    const dateStr = booking.event_date.replace(/-/g, '');
-    const title = encodeURIComponent(`${booking.event_type} – ${customer.name}`);
-    const details = encodeURIComponent(
-      `Event: ${booking.event_type}\nCustomer: ${customer.name}\nVenue: ${booking.venue}\nGuests: ${booking.guest_count}`
-    );
-    const guestParam = emails.length ? `&add=${emails.map(e => encodeURIComponent(e)).join(',')}` : '';
-    window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateStr}/${dateStr}&details=${details}${guestParam}`, '_blank');
-    toast.success('Google Calendar opened — save the event!');
-  };
-
-  const handleSubmit = async () => {
-    if (!form.event_date) { toast.error('Event date is required'); return; }
-    if (form.customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.customerEmail)) {
-      toast.error('Enter a valid email address'); return;
-    }
-    const resolvedEventType = form.event_type === 'Other'
-      ? customEventType.trim()
-      : form.event_type;
-    if (form.event_type === 'Other' && !resolvedEventType) {
-      toast.error('Please enter a custom event name'); return;
-    }
+  const handleStatus = async (b: Booking, status: Booking['status']) => {
     try {
-      let customerId = form.customer_id;
-      if (!customerId && form.newCustomerName) {
-        const c = await createCustomer.mutateAsync({
-          name: form.newCustomerName, phone: form.newCustomerPhone,
-          email: form.customerEmail || undefined,
-        });
-        customerId = c.id;
-        // Keep the id so a failed booking retry doesn't create the customer twice.
-        setForm(f => ({ ...f, customer_id: c.id }));
-      }
-      if (!customerId) { toast.error('Select or add a customer'); return; }
-      await createBooking.mutateAsync({
-        customer_id: customerId, event_type: resolvedEventType,
-        event_date: form.event_date, event_time: form.event_time || undefined,
-        venue: form.venue, guest_count: parseInt(form.guest_count) || 0,
-        menu_id: form.menu_id || undefined,
-        special_instructions: form.special_instructions,
-        status: 'inquiry', estimated_cost: estimatedCost,
-        end_date: isMultiDayNew && newEndDate ? newEndDate : undefined,
-      });
-      if (form.event_type === 'Other' && resolvedEventType) {
-        createEventType.mutateAsync(resolvedEventType).catch(() => {});
-      }
-      toast.success('Booking created!');
-      setShowForm(false);
-      setIsMultiDayNew(false); setNewEndDate('');
-      setCustomEventType('');
-      setForm({ ...emptyForm, event_type: eventTypes[0] || 'Wedding' });
-    } catch (e: any) { toast.error(e.message || 'Failed to create booking'); }
-  };
-
-  const handleStatusChange = async (id: string, newStatus: string, booking: Booking) => {
-    try {
-      await updateBooking.mutateAsync({ id, status: newStatus as Booking['status'] });
-      toast.success('Status updated');
-      if (newStatus === 'confirmed') openGoogleCalendar({ ...booking, status: 'confirmed' });
+      const saved: Booking = await updateBooking.mutateAsync({ id: b.id, status });
+      if (status === 'confirmed' && b.status !== 'confirmed') promptCalendar(saved ?? { ...b, status }, teamEmails);
+      else toast.success('Status updated');
     } catch (e: any) { toast.error(e?.message || 'Failed to update status'); }
   };
 
-  const startEdit = (b: Booking) => {
-    setEditingId(b.id);
-    const isKnownType = eventTypes.includes(b.event_type);
-    setEditCustomEventType(isKnownType ? '' : b.event_type);
-    setEditForm({
-      event_type: isKnownType ? b.event_type : 'Other', event_date: b.event_date,
-      event_time: b.event_time || '', venue: b.venue,
-      guest_count: String(b.guest_count), menu_id: b.menu_id || '',
-      special_instructions: b.special_instructions || '', status: b.status,
+  const handleDelete = async (b: Booking) => {
+    const ok = await confirm({
+      title: 'Delete booking?',
+      message: <><b>{b.event_type}</b> for <b>{b.customer?.name ?? 'this customer'}</b> on {dateRange(b)} will be removed. This cannot be undone.</>,
+      confirmLabel: 'Delete', danger: true,
     });
-    const hasEndDate = !!(b.end_date && b.end_date !== b.event_date);
-    setIsMultiDayEdit(hasEndDate);
-    setEditEndDate(b.end_date || '');
-    setShowForm(false);
-  };
-
-  const handleUpdate = async () => {
-    if (!editingId) return;
-    if (!editForm.event_date) { toast.error('Event date is required'); return; }
-    const resolvedEditEventType = editForm.event_type === 'Other'
-      ? editCustomEventType.trim()
-      : editForm.event_type;
-    if (editForm.event_type === 'Other' && !resolvedEditEventType) {
-      toast.error('Please enter a custom event name'); return;
-    }
+    if (!ok) return;
     try {
-      const booking = bookings.find(b => b.id === editingId)!;
-      const updated = await updateBooking.mutateAsync({
-        id: editingId,
-        event_type: resolvedEditEventType,
-        event_date: editForm.event_date,
-        event_time: editForm.event_time || null,
-        venue: editForm.venue,
-        guest_count: parseInt(editForm.guest_count) || 0,
-        menu_id: editForm.menu_id || null,
-        special_instructions: editForm.special_instructions,
-        status: editForm.status as Booking['status'],
-        estimated_cost: editEstimatedCost || booking.estimated_cost,
-        end_date: isMultiDayEdit && editEndDate ? editEndDate : null,
-      });
-      if (editForm.event_type === 'Other' && resolvedEditEventType) {
-        createEventType.mutateAsync(resolvedEditEventType).catch(() => {});
-      }
-      toast.success('Booking updated!');
-      if (editForm.status === 'confirmed' && booking.status !== 'confirmed') {
-        openGoogleCalendar(updated);
-      }
-      setEditingId(null);
-    } catch (e: any) { toast.error(e.message || 'Failed to update'); }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this booking? This cannot be undone.')) return;
-    try {
-      await deleteBooking.mutateAsync(id);
+      await deleteBooking.mutateAsync(b.id);
       toast.success('Booking deleted');
-      if (editingId === id) setEditingId(null);
-    } catch (e: any) { toast.error(e.message || 'Failed to delete'); }
+    } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
+  };
+
+  const handlers: BookingHandlers = {
+    onStatus: handleStatus,
+    onEdit: b => setFormFor(b),
+    onDelete: handleDelete,
+    onQuote: onNavigate ? b => onNavigate('quotations', { action: 'new', id: b.id }) : undefined,
+    calendarHref: b => calendarUrl(b, teamEmails),
   };
 
   return (
     <div>
       <div className="page-topbar">
         <div style={{ fontSize: 16, fontWeight: 600 }}>Bookings</div>
-        <button style={btnPrimary} onClick={() => { setShowForm(!showForm); setEditingId(null); }}>+ New Booking</button>
+        <button style={btnPrimary} onClick={() => setFormFor('new')}>+ New Booking</button>
       </div>
       <div className="page-content">
-        {/* Filters */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          {(['all', 'inquiry', 'followup', 'confirmed', 'completed', 'cancelled'] as StatusFilter[]).map(s => (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input type="search" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search bookings"
+            placeholder="🔍 Search name, phone, venue, event" style={searchInp} />
+          {FILTERS.map(s => (
             <button key={s} onClick={() => setFilter(s)}
-              style={{ padding: '4px 14px', borderRadius: 20, fontSize: 12, cursor: 'pointer', border: '0.5px solid',
+              style={{ padding: '6px 14px', borderRadius: 20, fontSize: 12, cursor: 'pointer', border: '0.5px solid',
                 background: filter === s ? '#E8750A' : 'transparent',
                 color: filter === s ? '#fff' : '#666660',
                 borderColor: filter === s ? '#E8750A' : '#D0D0CC' }}>
-              {s.charAt(0).toUpperCase() + s.slice(1)} ({filterCount(s)})
+              {cap(s)} ({searched.filter(b => inFilter(b, s)).length})
             </button>
           ))}
         </div>
 
-        {/* Table */}
-        <div style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 20 }} className="table-wrap">
-          {isLoading ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#888880' }}>Loading bookings...</div>
-          ) : filtered.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#888880' }}>No bookings found</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#FAFAF8', borderBottom: '0.5px solid #E5E5E0' }}>
-                  {['Customer', 'Event', 'Date', 'Venue', 'Guests', 'Amount', 'Status', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 500, color: '#888880', fontSize: 12 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(b => (
-                  <tr key={b.id} style={{ borderBottom: '0.5px solid #F0F0EC', background: editingId === b.id ? '#FFFBF5' : 'transparent' }}>
-                    <td style={{ padding: '10px 12px' }}>
-                      <div style={{ fontWeight: 500 }}>{b.customer?.name}</div>
-                      <div style={{ fontSize: 11, color: '#888880' }}>{b.customer?.phone}</div>
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>{b.event_type}</td>
-                    <td style={{ padding: '10px 12px', color: '#666660' }}>
-                      {formatDateIST(b.event_date, 'dd-MM-yyyy')}
-                      {b.end_date && b.end_date !== b.event_date && (
-                        <div style={{ fontSize: 11, color: '#E8750A', marginTop: 1 }}>to {formatDateIST(b.end_date, 'dd-MM-yyyy')}</div>
-                      )}
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#666660', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.venue || '—'}</td>
-                    <td style={{ padding: '10px 12px' }}>{b.guest_count}</td>
-                    <td style={{ padding: '10px 12px', fontWeight: 500 }}>₹{b.estimated_cost.toLocaleString()}</td>
-                    <td style={{ padding: '10px 12px' }}><StatusPill status={b.status} /></td>
-                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
-                      <select value={b.status} onChange={e => handleStatusChange(b.id, e.target.value, b)}
-                        style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, border: '0.5px solid #D0D0CC', background: '#fff', cursor: 'pointer', marginRight: 6 }}>
-                        {BOOKING_STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                      </select>
-                      <button onClick={() => startEdit(b)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#378ADD', fontSize: 12, marginRight: 4 }}>✏</button>
-                      <button onClick={() => handleDelete(b.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#A32D2D', fontSize: 16 }}>×</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* Edit Booking Form */}
-        {editingId && (
-          <div style={{ ...card, marginBottom: 20, border: '0.5px solid #FAC775' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-              <span>Edit Booking</span>
-              <button onClick={() => setEditingId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888880', fontSize: 18, lineHeight: 1 }}>×</button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-              <div>
-                <label style={lbl}>Event type</label>
-                <select style={inp} value={editForm.event_type} onChange={e => setEditForm({ ...editForm, event_type: e.target.value })}>
-                  {eventTypes.filter(t => t !== 'Other').map(t => <option key={t}>{t}</option>)}
-                  <option value="Other">Other</option>
-                </select>
-                {editForm.event_type === 'Other' && (
-                  <input style={{ ...inp, marginTop: 6 }} placeholder="Enter custom event name"
-                    value={editCustomEventType} onChange={e => setEditCustomEventType(e.target.value)} />
-                )}
-              </div>
-              <div>
-                <label style={lbl}>Status</label>
-                <select style={inp} value={editForm.status} onChange={e => setEditForm({ ...editForm, status: e.target.value })}>
-                  {BOOKING_STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={lbl}>Event date *</label>
-                <input type="date" style={inp} value={editForm.event_date} onChange={e => setEditForm({ ...editForm, event_date: e.target.value })} />
-              </div>
-              <div>
-                <label style={lbl}>Event time</label>
-                <input type="time" style={inp} value={editForm.event_time} onChange={e => setEditForm({ ...editForm, event_time: e.target.value })} />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', userSelect: 'none' as const, marginBottom: isMultiDayEdit ? 8 : 0 }}>
-                  <input type="checkbox" checked={isMultiDayEdit}
-                    onChange={e => { setIsMultiDayEdit(e.target.checked); if (!e.target.checked) setEditEndDate(''); }}
-                    style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
-                  <span style={{ fontWeight: 500 }}>Multi-day event</span>
-                </label>
-                {isMultiDayEdit && (
-                  <div style={{ maxWidth: 220 }}>
-                    <label style={lbl}>End date *</label>
-                    <input type="date" style={inp} value={editEndDate}
-                      min={editForm.event_date || undefined}
-                      onChange={e => setEditEndDate(e.target.value)} />
-                  </div>
-                )}
-              </div>
-              <div>
-                <label style={lbl}>Venue / Location</label>
-                <VenueInput style={inp} value={editForm.venue} onChange={v => setEditForm(prev => ({ ...prev, venue: v }))} />
-              </div>
-              <div>
-                <label style={lbl}>Guest count</label>
-                <input type="number" style={inp} value={editForm.guest_count} onChange={e => setEditForm({ ...editForm, guest_count: e.target.value })} />
-              </div>
-              <div>
-                <label style={lbl}>Menu / Package</label>
-                <select style={inp} value={editForm.menu_id} onChange={e => setEditForm({ ...editForm, menu_id: e.target.value })}>
-                  <option value="">-- Select menu --</option>
-                  {menus.map(m => <option key={m.id} value={m.id}>{m.name} (₹{m.price_per_plate}/plate)</option>)}
-                </select>
-              </div>
-              {editEstimatedCost > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{ background: '#EAF3DE', padding: '10px 14px', borderRadius: 8, fontSize: 13 }}>
-                    <div style={{ fontSize: 11, color: '#3B6D11' }}>Estimated total</div>
-                    <div style={{ fontWeight: 600, color: '#3B6D11', fontSize: 16 }}>₹{editEstimatedCost.toLocaleString()}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Special instructions</label>
-              <textarea style={{ ...inp, height: 60, resize: 'vertical' } as any} value={editForm.special_instructions} onChange={e => setEditForm({ ...editForm, special_instructions: e.target.value })} />
-            </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={btnGhost} onClick={() => setEditingId(null)}>Cancel</button>
-              <button style={btnPrimary} onClick={handleUpdate} disabled={updateBooking.isPending}>
-                {updateBooking.isPending ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
+        {isLoading ? (
+          <div style={emptyBox}>Loading bookings...</div>
+        ) : filtered.length === 0 ? (
+          <div style={emptyBox}>
+            No bookings found
+            {q && <div><button style={{ ...btnGhost, marginTop: 10 }} onClick={() => setSearch('')}>Clear search</button></div>}
           </div>
-        )}
-
-        {/* New Booking Form */}
-        {showForm && (
-          <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 16 }}>New Booking</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-              <div>
-                <label style={lbl}>Existing customer</label>
-                <select style={inp} value={form.customer_id} onChange={e => {
-                  const cust = customers.find(c => c.id === e.target.value);
-                  setForm(prev => ({ ...prev, customer_id: e.target.value, customerEmail: cust?.email || '' }));
-                }}>
-                  <option value="">-- Select customer --</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
-                </select>
+        ) : (
+          <>
+            <div className="only-desktop">
+              <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#FAFAF8', borderBottom: '0.5px solid #E5E5E0' }}>
+                      {['Customer', 'Event', 'Date', 'Venue', 'Guests', 'Amount', 'Status', 'Actions'].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '10px 12px', fontWeight: 500, color: '#888880', fontSize: 12 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(b => (
+                      <tr key={b.id} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
+                        <td style={td}>
+                          <div style={{ fontWeight: 500 }}>{b.customer?.name}</div>
+                          <div style={{ fontSize: 11, color: '#888880' }}>{b.customer?.phone}</div>
+                        </td>
+                        <td style={td}>{b.event_type}</td>
+                        <td style={{ ...td, color: '#666660', whiteSpace: 'nowrap' }}>
+                          {formatDateIST(b.event_date, 'dd-MM-yyyy')}
+                          {b.end_date && b.end_date !== b.event_date && (
+                            <div style={{ fontSize: 11, color: '#E8750A', marginTop: 1 }}>to {formatDateIST(b.end_date, 'dd-MM-yyyy')}</div>
+                          )}
+                          {b.event_time && <div style={{ fontSize: 11, marginTop: 1 }}>{fmtTime(b.event_time)}</div>}
+                        </td>
+                        <td style={{ ...td, color: '#666660', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={b.venue}>{b.venue || '—'}</td>
+                        <td style={td}>{b.guest_count}</td>
+                        <td style={{ ...td, fontWeight: 500, whiteSpace: 'nowrap' }}>{inr(b.estimated_cost)}</td>
+                        <td style={td}><StatusPill status={b.status} /></td>
+                        <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                          <StatusSelect value={b.status} onChange={s => handleStatus(b, s)} style={{ marginRight: 6 }} />
+                          <BookingActions booking={b} handlers={handlers} compact />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div>
-                <label style={lbl}>Or new customer name</label>
-                <input style={inp} placeholder="Full name" value={form.newCustomerName} onChange={e => setForm(prev => ({ ...prev, newCustomerName: e.target.value }))} />
-              </div>
-              <div>
-                <label style={lbl}>New customer phone</label>
-                <input style={inp} placeholder="+91 98765 43210" value={form.newCustomerPhone} onChange={e => setForm(prev => ({ ...prev, newCustomerPhone: e.target.value }))} />
-              </div>
-              <div>
-                <label style={lbl}>Customer email (optional)</label>
-                <input type="email" style={inp} placeholder="customer@example.com"
-                  value={form.customerEmail} onChange={e => setForm(prev => ({ ...prev, customerEmail: e.target.value }))} />
-              </div>
-              <div>
-                <label style={lbl}>Event type</label>
-                <select style={inp} value={form.event_type} onChange={e => setForm(prev => ({ ...prev, event_type: e.target.value }))}>
-                  {eventTypes.filter(t => t !== 'Other').map(t => <option key={t}>{t}</option>)}
-                  <option value="Other">Other</option>
-                </select>
-                {form.event_type === 'Other' && (
-                  <input style={{ ...inp, marginTop: 6 }} placeholder="Enter custom event name"
-                    value={customEventType} onChange={e => setCustomEventType(e.target.value)} />
-                )}
-              </div>
-              <div>
-                <label style={lbl}>Event date *</label>
-                <input type="date" style={inp} value={form.event_date} onChange={e => setForm(prev => ({ ...prev, event_date: e.target.value }))} />
-              </div>
-              <div>
-                <label style={lbl}>Event time</label>
-                <input type="time" style={inp} value={form.event_time} onChange={e => setForm(prev => ({ ...prev, event_time: e.target.value }))} />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', userSelect: 'none' as const, marginBottom: isMultiDayNew ? 8 : 0 }}>
-                  <input type="checkbox" checked={isMultiDayNew}
-                    onChange={e => { setIsMultiDayNew(e.target.checked); if (!e.target.checked) setNewEndDate(''); }}
-                    style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
-                  <span style={{ fontWeight: 500 }}>Multi-day event</span>
-                  <span style={{ fontSize: 11, color: '#888880' }}>(spans more than one day)</span>
-                </label>
-                {isMultiDayNew && (
-                  <div style={{ maxWidth: 220 }}>
-                    <label style={lbl}>End date *</label>
-                    <input type="date" style={inp} value={newEndDate}
-                      min={form.event_date || undefined}
-                      onChange={e => setNewEndDate(e.target.value)} />
-                  </div>
-                )}
-              </div>
-              <div>
-                <label style={lbl}>Venue / Location</label>
-                <VenueInput style={inp} value={form.venue} onChange={v => setForm(prev => ({ ...prev, venue: v }))} />
-              </div>
-              <div>
-                <label style={lbl}>Guest count</label>
-                <input type="number" style={inp} placeholder="e.g. 200" value={form.guest_count} onChange={e => setForm(prev => ({ ...prev, guest_count: e.target.value }))} />
-              </div>
-              <div>
-                <label style={lbl}>Menu / Package</label>
-                <select style={inp} value={form.menu_id} onChange={e => setForm(prev => ({ ...prev, menu_id: e.target.value }))}>
-                  <option value="">-- Select menu --</option>
-                  {menus.map(m => <option key={m.id} value={m.id}>{m.name} (₹{m.price_per_plate}/plate)</option>)}
-                </select>
-              </div>
-              {estimatedCost > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{ background: '#EAF3DE', padding: '10px 14px', borderRadius: 8, fontSize: 13 }}>
-                    <div style={{ fontSize: 11, color: '#3B6D11' }}>Estimated total</div>
-                    <div style={{ fontWeight: 600, color: '#3B6D11', fontSize: 16 }}>₹{estimatedCost.toLocaleString()}</div>
-                  </div>
-                </div>
-              )}
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={lbl}>Special instructions</label>
-              <textarea style={{ ...inp, height: 70, resize: 'vertical' } as any} placeholder="e.g. Jain food for 50 guests..." value={form.special_instructions} onChange={e => setForm(prev => ({ ...prev, special_instructions: e.target.value }))} />
+            <div className="only-mobile">
+              <BookingCards bookings={filtered} handlers={handlers} />
             </div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button style={btnGhost} onClick={() => setShowForm(false)}>Cancel</button>
-              <button style={btnPrimary} onClick={handleSubmit} disabled={createBooking.isPending}>
-                {createBooking.isPending ? 'Saving...' : 'Create Booking'}
-              </button>
-            </div>
-          </div>
+          </>
         )}
       </div>
+
+      {formFor && (
+        <BookingFormModal
+          booking={formFor === 'new' ? null : formFor}
+          presetCustomerId={presetCustomerId}
+          onClose={closeForm}
+          onSaved={(saved, confirmedNow) => {
+            closeForm();
+            if (confirmedNow) promptCalendar(saved, teamEmails);
+          }}
+        />
+      )}
+      {dialog}
     </div>
   );
 };
 
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
+const emptyBox: React.CSSProperties = { ...card, padding: 40, textAlign: 'center', color: '#888880', fontSize: 13 };
+const td: React.CSSProperties = { padding: '10px 12px' };
 const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
 const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
-const lbl: React.CSSProperties = { fontSize: 11, color: '#888880', display: 'block', marginBottom: 4 };
-const inp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 7, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
+const searchInp: React.CSSProperties = { flex: '1 1 220px', maxWidth: 320, padding: '7px 12px', borderRadius: 20, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
 
 export default Bookings;

@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useSeasonalOrders } from '../hooks/useSeasonalOrders';
 import { useSeasonalPreorders } from '../hooks/useSeasonalPreorders';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
-import { Page } from '../App';
+import { Navigate } from '../hooks/useNavIntent';
+import { Page } from '../components/navItems';
 
-interface Props { onNavigate: (page: Page) => void; }
+interface Props { onNavigate: Navigate; }
 
 const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
@@ -32,7 +33,9 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
   // Pre-order stats
   const activePreorders   = preorders.filter(p => p.status === 'pending' || p.status === 'confirmed');
   const totalPreorderVal  = activePreorders.reduce((s, p) => s + p.total_amount, 0);
-  const totalAdvance      = preorders.reduce((s, p) => s + p.advance_paid, 0);
+  const totalAdvance      = preorders.filter(p => p.status !== 'cancelled').reduce((s, p) => s + p.advance_paid, 0);
+  // Balance only on open pre-orders; delivered ones are already settled.
+  const openBalance       = activePreorders.reduce((s, p) => s + Math.max(0, p.total_amount - p.advance_paid), 0);
 
   // Occasion breakdown
   const occBreakdown = occasions.map(occ => {
@@ -84,7 +87,7 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
           <StatCard label="Active Pre-orders" value={String(activePreorders.length)} sub="Pending + Confirmed" subColor="#1565C0" />
           <StatCard label="Pre-order Value" value={`₹${totalPreorderVal.toLocaleString()}`} sub="Open pre-orders" />
           <StatCard label="Advance Collected" value={`₹${totalAdvance.toLocaleString()}`} sub="From pre-orders" subColor="#3B6D11" />
-          <StatCard label="Balance (Pre-orders)" value={`₹${Math.max(0, totalPreorderVal - totalAdvance).toLocaleString()}`} sub="Yet to collect" subColor="#E65100" />
+          <StatCard label="Balance (Pre-orders)" value={`₹${openBalance.toLocaleString('en-IN')}`} sub="Yet to collect" subColor="#E65100" />
         </div>
 
         <div className="g2" style={{ marginBottom: 14 }}>

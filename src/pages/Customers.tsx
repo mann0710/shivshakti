@@ -1,232 +1,141 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from '../hooks/useCustomers';
+import { useCustomers, useDeleteCustomer } from '../hooks/useCustomers';
 import { useBookings } from '../hooks/useBookings';
-import StatusPill from '../components/StatusPill';
-import { Page } from '../App';
-import { formatDateIST } from '../lib/ist';
+import { Navigate, useNavIntent } from '../hooks/useNavIntent';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import { Booking, Customer } from '../types';
+import CustomerFormModal from '../components/catering/CustomerFormModal';
+import CustomerDetail from '../components/catering/CustomerDetail';
+import { Avatar, ORANGE, btnPrimary, card, input, revealOnPhone } from '../components/catering/CustomerUi';
 
-interface Props { onNavigate: (page: Page) => void; }
+interface Props { onNavigate: Navigate; }
 
-const emptyForm = { name: '', phone: '', email: '', address: '', notes: '' };
+const NO_BOOKINGS: Booking[] = [];
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-const Customers: React.FC<Props> = () => {
+const Customers: React.FC<Props> = ({ onNavigate }) => {
+  const intent = useNavIntent('customers');
   const { data: customers = [], isLoading } = useCustomers();
   const { data: bookings = [] } = useBookings();
-  const createCustomer = useCreateCustomer();
-  const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
+  const { confirm, dialog } = useConfirm();
 
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState(emptyForm);
+  const [selected, setSelected] = useState<string | null>(intent?.action === 'open' ? intent.id ?? null : null);
+  const [editing, setEditing] = useState<Customer | 'new' | null>(intent?.action === 'new' ? 'new' : null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
 
-  const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone?.includes(search) ||
-    c.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const bookingsByCustomer = useMemo(() => {
+    const map = new Map<string, Booking[]>();
+    bookings.forEach(b => map.set(b.customer_id, [...(map.get(b.customer_id) ?? []), b]));
+    return map;
+  }, [bookings]);
+  const bookingsOf = (id?: string) => (id && bookingsByCustomer.get(id)) || NO_BOOKINGS;
 
-  const selectedCustomer = customers.find(c => c.id === selected) || filtered[0];
-  const customerBookings = bookings.filter(b => b.customer_id === selectedCustomer?.id);
-  const totalSpend = customerBookings.reduce((s, b) => s + (b.estimated_cost || 0), 0);
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const digits = term.replace(/\D/g, '');
+    if (!term) return customers;
+    return customers.filter(c =>
+      c.name.toLowerCase().includes(term) ||
+      c.email?.toLowerCase().includes(term) ||
+      (digits.length >= 3 && (c.phone ?? '').replace(/\D/g, '').includes(digits))
+    );
+  }, [customers, search]);
 
-  const handleAdd = async () => {
-    if (!form.name) { toast.error('Name is required'); return; }
-    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      toast.error('Enter a valid email address'); return;
-    }
-    try {
-      await createCustomer.mutateAsync(form);
-      toast.success('Customer added!');
-      setShowForm(false);
-      setForm(emptyForm);
-    } catch (e: any) { toast.error(e?.message || 'Failed to add customer'); }
-  };
+  const current = customers.find(c => c.id === selected) || filtered[0];
 
-  const openEdit = () => {
-    if (!selectedCustomer) return;
-    setEditForm({ name: selectedCustomer.name, phone: selectedCustomer.phone || '', email: selectedCustomer.email || '', address: selectedCustomer.address || '', notes: selectedCustomer.notes || '' });
-    setEditingId(selectedCustomer.id);
-  };
-
-  const handleUpdate = async () => {
-    if (!editingId || !editForm.name) { toast.error('Name is required'); return; }
-    if (editForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) {
-      toast.error('Enter a valid email address'); return;
-    }
-    try {
-      await updateCustomer.mutateAsync({ id: editingId, ...editForm });
-      toast.success('Customer updated!');
-      setEditingId(null);
-    } catch (e: any) { toast.error(e?.message || 'Failed to update customer'); }
-  };
+  const select = (id: string) => { setSelected(id); revealOnPhone(detailRef); };
 
   const handleDelete = async () => {
-    if (!selectedCustomer) return;
-    if (!window.confirm(`Delete ${selectedCustomer.name}? This cannot be undone.`)) return;
+    if (!current) return;
+    const n = bookingsOf(current.id).length;
+    const ok = await confirm({
+      title: `Delete ${current.name}?`,
+      message: n
+        ? `${current.name} has ${plural(n, 'booking')} on record. A customer with bookings can't be deleted until those bookings are removed.`
+        : 'This customer will be removed permanently. This cannot be undone.',
+      confirmLabel: 'Delete', danger: true,
+    });
+    if (!ok) return;
     try {
-      await deleteCustomer.mutateAsync(selectedCustomer.id);
+      await deleteCustomer.mutateAsync(current.id);
       toast.success('Customer deleted');
       setSelected(null);
-      setEditingId(null);
-    } catch (e: any) { toast.error(e?.message || 'Failed to delete customer'); }
+    } catch (e: any) {
+      toast.error(e?.code === '23503' ? "Can't delete: this customer still has bookings or quotations" : e?.message || 'Failed to delete customer');
+    }
   };
-
-  const initials = (name: string) => name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-  const avatarColors = ['#FFF0E0', '#E6F1FB', '#EAF3DE', '#EEEDFE'];
-  const textColors = ['#BA7517', '#185FA5', '#3B6D11', '#534AB7'];
 
   return (
     <div>
       <div className="page-topbar">
         <div style={{ fontSize: 16, fontWeight: 600 }}>Customers</div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <input style={{ padding: '6px 12px', borderRadius: 8, border: '0.5px solid #D0D0CC', fontSize: 13, width: 200 }}
-            placeholder="Search by name, phone or email..." value={search} onChange={e => setSearch(e.target.value)} />
-          <button style={btnPrimary} onClick={() => { setShowForm(!showForm); setEditingId(null); }}>+ Add Customer</button>
+        <div style={{ display: 'flex', gap: 10, flex: '1 1 320px', justifyContent: 'flex-end' }}>
+          <input type="search" style={{ ...input, flex: '1 1 160px', maxWidth: 280, minWidth: 0 }}
+            placeholder="Search name, phone or email" value={search} onChange={e => setSearch(e.target.value)} />
+          <button type="button" style={{ ...btnPrimary, flexShrink: 0 }} onClick={() => setEditing('new')}>+ Add Customer</button>
         </div>
       </div>
       <div className="page-content">
-        {/* Add form */}
-        {showForm && (
-          <div style={{ ...card, marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>New Customer</div>
-            <div className="g3" style={{ marginBottom: 10 }}>
-              <div><label style={label}>Full name *</label><input style={input} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Rajesh Patel" /></div>
-              <div><label style={label}>Phone</label><input style={input} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 98765 43210" /></div>
-              <div><label style={label}>Email</label><input type="email" style={input} value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="customer@example.com" /></div>
-            </div>
-            <div className="g2" style={{ marginBottom: 10 }}>
-              <div><label style={label}>Address</label><input style={input} value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Area, City" /></div>
-              <div><label style={label}>Notes</label><input style={input} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes about this customer" /></div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button style={btnGhost} onClick={() => { setShowForm(false); setForm(emptyForm); }}>Cancel</button>
-              <button style={btnPrimary} onClick={handleAdd} disabled={createCustomer.isPending}>
-                {createCustomer.isPending ? 'Saving...' : 'Save Customer'}
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className="g-customer">
-          {/* Customer list */}
-          <div>
-            <div style={{ fontSize: 11, color: '#888880', marginBottom: 8, fontWeight: 500 }}>{filtered.length} customers</div>
+          <div ref={listRef}>
+            <div style={{ fontSize: 11, color: '#888880', marginBottom: 8, fontWeight: 500 }}>{plural(filtered.length, 'customer')}</div>
             {isLoading && <div style={{ color: '#888880', fontSize: 12 }}>Loading...</div>}
-            {filtered.map((c, i) => {
-              const idx = i % 4;
+            {!isLoading && filtered.length === 0 && (
+              <div style={{ color: '#888880', fontSize: 12, padding: '12px 0' }}>
+                {search ? `No customers match "${search}".` : 'No customers yet. Add your first one.'}
+              </div>
+            )}
+            {filtered.map(c => {
+              const active = current?.id === c.id;
               return (
-                <div key={c.id} onClick={() => { setSelected(c.id); setEditingId(null); }}
-                  style={{ ...card, padding: '10px 12px', marginBottom: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
-                    borderColor: selectedCustomer?.id === c.id ? '#E8750A' : '#E5E5E0' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: avatarColors[idx], color: textColors[idx], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
-                    {initials(c.name)}
-                  </div>
+                <button key={c.id} type="button" onClick={() => select(c.id)}
+                  style={{ ...card, ...listItem, border: `0.5px solid ${active ? ORANGE : '#E5E5E0'}`, background: active ? '#FFFBF5' : '#FFFFFF' }}>
+                  <Avatar name={c.name} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
-                    <div style={{ fontSize: 11, color: '#888880' }}>{bookings.filter(b => b.customer_id === c.id).length} bookings</div>
+                    <div style={{ fontSize: 11, color: '#888880' }}>{c.phone ? `${c.phone} · ` : ''}{plural(bookingsOf(c.id).length, 'booking')}</div>
                   </div>
-                </div>
+                  <span style={{ color: '#BBBBBB', fontSize: 16 }}>›</span>
+                </button>
               );
             })}
           </div>
 
-          {/* Customer detail */}
-          {selectedCustomer ? (
-            <div>
-              {/* Edit form */}
-              {editingId === selectedCustomer.id ? (
-                <div style={{ ...card, marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Edit Customer</div>
-                  <div className="g3" style={{ marginBottom: 10 }}>
-                    <div><label style={label}>Full name *</label><input style={input} value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} /></div>
-                    <div><label style={label}>Phone</label><input style={input} value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} /></div>
-                    <div><label style={label}>Email</label><input type="email" style={input} value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} /></div>
-                  </div>
-                  <div className="g2" style={{ marginBottom: 10 }}>
-                    <div><label style={label}>Address</label><input style={input} value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} /></div>
-                    <div><label style={label}>Notes</label><input style={input} value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })} /></div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button style={btnGhost} onClick={() => setEditingId(null)}>Cancel</button>
-                    <button style={btnPrimary} onClick={handleUpdate} disabled={updateCustomer.isPending}>
-                      {updateCustomer.isPending ? 'Saving...' : 'Update Customer'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ ...card, marginBottom: 14 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
-                    <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#FFF0E0', color: '#BA7517', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 600, flexShrink: 0 }}>
-                      {initials(selectedCustomer.name)}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 17, fontWeight: 600 }}>{selectedCustomer.name}</div>
-                      <div style={{ fontSize: 12, color: '#888880', marginTop: 2 }}>
-                        {selectedCustomer.phone}
-                        {selectedCustomer.email && <> · {selectedCustomer.email}</>}
-                        {selectedCustomer.address && <> · {selectedCustomer.address}</>}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                      <button style={btnGhost} onClick={openEdit}>✏ Edit</button>
-                      <button style={{ ...btnGhost, color: '#CC4444', borderColor: '#CC4444' }} onClick={handleDelete}>Delete</button>
-                    </div>
-                  </div>
-                  <div className="g3">
-                    <div style={statCard}><div style={statLabel}>Total bookings</div><div style={statVal}>{customerBookings.length}</div></div>
-                    <div style={statCard}><div style={statLabel}>Total spend</div><div style={statVal}>₹{(totalSpend / 100000).toFixed(1)}L</div></div>
-                    <div style={statCard}><div style={statLabel}>Last event</div><div style={statVal}>{customerBookings[0] ? formatDateIST(customerBookings[0].event_date, 'dd-MM') : '—'}</div></div>
-                  </div>
-                  {selectedCustomer.notes && <div style={{ marginTop: 12, fontSize: 12, color: '#888880', background: '#FAFAF8', padding: '8px 12px', borderRadius: 8 }}>📝 {selectedCustomer.notes}</div>}
-                </div>
-              )}
-
-              <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-wrap">
-                <div style={{ padding: '12px 14px', borderBottom: '0.5px solid #E5E5E0', fontSize: 13, fontWeight: 600 }}>Booking history</div>
-                {customerBookings.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#888880', fontSize: 12 }}>No bookings yet for this customer</div>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                    <tbody>
-                      {customerBookings.map(b => (
-                        <tr key={b.id} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
-                          <td style={{ padding: '9px 14px', fontWeight: 500 }}>{b.event_type}</td>
-                          <td style={{ padding: '9px 8px', color: '#888880' }}>{formatDateIST(b.event_date, 'dd-MM-yyyy')}</td>
-                          <td style={{ padding: '9px 8px' }}>{b.venue}</td>
-                          <td style={{ padding: '9px 8px' }}>{b.guest_count} guests</td>
-                          <td style={{ padding: '9px 8px', fontWeight: 500 }}>₹{b.estimated_cost.toLocaleString()}</td>
-                          <td style={{ padding: '9px 14px' }}><StatusPill status={b.status} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+          <div ref={detailRef}>
+            {current ? (
+              <CustomerDetail
+                customer={current}
+                bookings={bookingsOf(current.id)}
+                onEdit={() => setEditing(current)}
+                onDelete={handleDelete}
+                onBack={() => listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                onNavigate={onNavigate}
+              />
+            ) : (
+              <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888880', fontSize: 13, minHeight: 120 }}>
+                Select a customer to view details
               </div>
-            </div>
-          ) : (
-            <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888880', fontSize: 13 }}>
-              Select a customer to view details
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
+
+      {editing && (
+        <CustomerFormModal
+          customer={editing === 'new' ? undefined : editing}
+          onClose={() => setEditing(null)}
+          onSaved={id => { setEditing(null); if (id) select(id); }}
+        />
+      )}
+      {dialog}
     </div>
   );
 };
 
-const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
-const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
-const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
-const label: React.CSSProperties = { fontSize: 11, color: '#888880', display: 'block', marginBottom: 4 };
-const input: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 7, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
-const statCard: React.CSSProperties = { background: '#FAFAF8', borderRadius: 8, padding: '10px 12px' };
-const statLabel: React.CSSProperties = { fontSize: 11, color: '#888880', marginBottom: 4 };
-const statVal: React.CSSProperties = { fontSize: 18, fontWeight: 600 };
+const listItem: React.CSSProperties = { width: '100%', padding: '10px 12px', marginBottom: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left', color: 'inherit' };
 
 export default Customers;

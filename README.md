@@ -21,6 +21,25 @@ REACT_APP_SUPABASE_URL=https://<project>.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=<anon key>
 ```
 
+### Security: staff login (do this first)
+
+The Supabase Security Advisor reported 22 errors and 1 warning:
+- row-level security was off on every table;
+- the five existing policies allowed everything to everyone;
+- the `documents` storage bucket let anyone list, upload or delete files.
+
+Because the anon key is public (it ships inside the website), anyone could read or wipe all data. The app now requires a staff login, and the database only serves signed-in staff.
+
+1. Supabase → **Authentication → Users → Add user → Create new user**: your email and a password, with **Auto Confirm User** ticked.
+2. Optional but recommended: Authentication → Sign In / Providers → turn off **Allow new users to sign up**.
+3. SQL Editor: open [`supabase/migrations/20261031_security_rls.sql`](supabase/migrations/20261031_security_rls.sql), replace `owner@example.com` with your login email (add a line per staff member), and run it.
+   - Every table gets row-level security with a single rule: only signed-in emails listed in the `staff` table can read or write.
+   - The open policies are removed.
+   - The documents bucket stays viewable by direct link, but only staff can list, upload, replace or delete files.
+4. Open the app and sign in. To add staff later, run `insert into public.staff (email) values ('name@example.com');` and create their user in Authentication.
+
+A signed-in email that isn't on the staff list sees an "Access not set up" screen. Sign out is at the bottom of the sidebar, and in the phone **More** menu.
+
 ### One-time database update (required for the new sweets features)
 
 Open Supabase → **SQL Editor**, paste and run
@@ -88,6 +107,21 @@ The grid-and-bill layout follows NodeDR POS.
 
 The phone bottom bar now has a **POS** button.
 
+## Easier to use, especially on phones
+
+- **Popups that always show:** forms open in dialogs, bottom sheets on phones. Before, they rendered below long lists and looked dead. This covers new/edit booking, customer and package. Deletes and other risky actions use an in-app confirmation instead of the browser's confirm box, which many phone home-screen setups block silently.
+- **Back button works:** each screen has its own address (`#bookings`, `#quotations`, …), so the phone Back button returns to the previous screen instead of leaving the app.
+- **One tap to the form:** dashboard quick actions (New booking, New quotation, Add customer, Create invoice) open the form directly. A booking's **Quote** action opens a new quotation with that booking already selected.
+- **Share on WhatsApp:**
+  - quotations and invoices can be shared as a PDF;
+  - on a phone the PDF itself goes into WhatsApp through the share sheet;
+  - on a computer the PDF downloads and WhatsApp opens with the message ready.
+- **Phone layouts:** booking, quotation, invoice and Sweets admin lists turn into cards on phones, so no actions are cut off. Stats show two per row. Menu Builder stacks its columns instead of squeezing three onto a phone screen.
+- **Search:** bookings, quotations and invoices can be searched by name, phone or number.
+- **Smarter quotations:** adding an item pre-fills the price you last used for it.
+- **Packages** can be reactivated ("Show inactive"). The Calendar day panel scrolls into view on phones and has a "+ New booking" shortcut.
+- **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked.
+
 ## Catering fixes in this release
 
 - New invoices include the quotation's extra charges in the total. They were under-billed before.
@@ -108,6 +142,10 @@ The phone bottom bar now has a **POS** button.
   - 0% GST can be saved;
   - the old FSSAI file is deleted only after the new one uploads.
 - An error after start-up is logged instead of replacing the whole app with a stack trace.
+- Finance:
+  - month labels no longer skip or repeat a month on the 29th–31st;
+  - revenue by event type covers every event type and leaves out cancelled bookings;
+  - the GST card no longer claims everything is at 18%.
 
 The full audit, with what is fixed and what is still open, is in [docs/AUDIT.md](docs/AUDIT.md).
 
@@ -117,6 +155,9 @@ The full audit, with what is fixed and what is still open, is in [docs/AUDIT.md]
 src/
   App.tsx, components/navItems.ts   app shell, one nav config (sidebar + phone bar + drawer)
   components/ui/                    Modal, ConfirmDialog (useConfirm), shared styles
+  components/catering/              booking, quotation, customer and invoice pieces (dialogs, lists, cards)
+  hooks/useAuth.ts, components/LoginScreen.tsx   staff sign-in and the staff-list check
+  hooks/useNavIntent.ts             "open the new form" / "preselect this booking" between screens
   components/pos/                   ProductGrid, ProductTile, PackPicker, TicketPanel, TicketLines,
                                     CustomerFields, CheckoutFields, SaleDone
   components/sessional/             PosTab, OrdersTab, PreordersTab, PrepList, ReportsTab,
@@ -128,12 +169,13 @@ src/
   lib/cart.ts, lib/posForm.ts       bill lines, totals, validation, save payloads
   lib/receipt.ts, sessionalReceipts.ts   thermal receipt, print, WhatsApp text
   lib/sessionalReportPdf.ts         sweets report PDFs
-  lib/pdf/                          quotation and invoice PDFs
+  lib/pdf/                          quotation and invoice PDFs (build + download)
+  lib/sharePdf.ts                   share a PDF to WhatsApp (share sheet on phones, download + WhatsApp on desktop)
   lib/quoteMath.ts                  shared catering money math
   pages/                            one file per screen
 supabase/
   schema.sql                        baseline schema (inferred from the code, for local dev)
-  migrations/                       SQL to run on the live database
+  migrations/                       SQL to run on the live database (pack sizes, security/RLS)
 ```
 
 ## Tests and checks

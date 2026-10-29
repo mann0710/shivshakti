@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
+import { useConfirm } from '../components/ui/ConfirmDialog';
+import Modal from '../components/ui/Modal';
 import {
   useSeasonalCustomers,
   useCreateSeasonalCustomer,
@@ -12,6 +14,7 @@ const emptyForm = { name: '', phone: '', address: '', notes: '' };
 type FormState = typeof emptyForm;
 
 const SeasonalCustomers: React.FC = () => {
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const { data: customers = [], isLoading } = useSeasonalCustomers();
   const createCustomer = useCreateSeasonalCustomer();
   const updateCustomer = useUpdateSeasonalCustomer();
@@ -79,7 +82,7 @@ const SeasonalCustomers: React.FC = () => {
   };
 
   const handleDelete = async (customer: SeasonalCustomer) => {
-    if (!window.confirm(`Delete "${customer.name}"? This cannot be undone.`)) return;
+    if (!(await confirm({ title: `Delete ${customer.name}?`, message: 'Their old bills stay; only the saved contact is removed.', confirmLabel: 'Delete', danger: true }))) return;
     try {
       await deleteCustomer.mutateAsync(customer.id);
       toast.success('Customer deleted');
@@ -103,60 +106,6 @@ const SeasonalCustomers: React.FC = () => {
       </div>
 
       <div className="page-content">
-        {/* Inline add / edit form */}
-        {showForm && (
-          <div style={formCard}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
-              {editingId ? 'Edit Customer' : 'New Customer'}
-            </div>
-            <div className="g3" style={{ marginBottom: 10 }}>
-              <div>
-                <label style={lbl}>Customer Name *</label>
-                <input
-                  style={inp}
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Rajesh Patel"
-                />
-              </div>
-              <div>
-                <label style={lbl}>Phone (10 digits)</label>
-                <input
-                  style={inp}
-                  value={form.phone}
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                  placeholder="9876543210"
-                  maxLength={10}
-                />
-              </div>
-              <div>
-                <label style={lbl}>Address</label>
-                <input
-                  style={inp}
-                  value={form.address}
-                  onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
-                  placeholder="Area, City"
-                />
-              </div>
-            </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={lbl}>Notes</label>
-              <input
-                style={{ ...inp, width: '100%', boxSizing: 'border-box' }}
-                value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Any notes about this customer"
-              />
-            </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button style={btnGhost} onClick={closeForm}>Cancel</button>
-              <button style={btnPrimary} onClick={handleSave} disabled={isPending}>
-                {isPending ? 'Saving...' : editingId ? 'Update Customer' : 'Save Customer'}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Customers table */}
         {isLoading ? (
           <div style={{ color: '#888880', fontSize: 13 }}>Loading...</div>
@@ -166,7 +115,7 @@ const SeasonalCustomers: React.FC = () => {
           </div>
         ) : (
           <div style={{ background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 12, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table className="stack-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: '#F9F8F5', borderBottom: '0.5px solid #E5E5E0' }}>
                   <th style={th}>Name / Phone</th>
@@ -213,6 +162,37 @@ const SeasonalCustomers: React.FC = () => {
           </div>
         )}
       </div>
+      {showForm && (
+        <Modal title={editingId ? 'Edit Customer' : 'New Customer'} onClose={closeForm} width={560}
+          footer={<>
+            <button style={btnGhost} onClick={closeForm}>Cancel</button>
+            <button style={btnPrimary} onClick={handleSave} disabled={isPending}>
+              {isPending ? 'Saving...' : editingId ? 'Update Customer' : 'Save Customer'}
+            </button>
+          </>}>
+          <div className="g3" style={{ marginBottom: 10 }}>
+            <div>
+              <label style={lbl}>Customer Name *</label>
+              <input style={inp} value={form.name} autoFocus placeholder="e.g. Rajesh Patel"
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div>
+              <label style={lbl}>Phone (10 digits)</label>
+              <input style={inp} value={form.phone} placeholder="9876543210" maxLength={10} inputMode="tel"
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            </div>
+            <div>
+              <label style={lbl}>Address</label>
+              <input style={inp} value={form.address} placeholder="Area, City"
+                onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+            </div>
+          </div>
+          <label style={lbl}>Notes</label>
+          <input style={{ ...inp, width: '100%', boxSizing: 'border-box' }} value={form.notes} placeholder="Any notes about this customer"
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+        </Modal>
+      )}
+      {confirmDialog}
     </div>
   );
 };
@@ -228,10 +208,6 @@ const btnGhost: React.CSSProperties = {
 const btnSm: React.CSSProperties = {
   background: '#F5F5F0', border: '0.5px solid #E5E5E0',
   padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#444',
-};
-const formCard: React.CSSProperties = {
-  background: '#fff', border: '0.5px solid #E5E5E0',
-  borderRadius: 12, padding: 16, marginBottom: 16,
 };
 const lbl: React.CSSProperties = { fontSize: 11, color: '#888880', fontWeight: 500, display: 'block', marginBottom: 4 };
 const inp: React.CSSProperties = {
