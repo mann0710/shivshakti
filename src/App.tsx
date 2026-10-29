@@ -17,50 +17,24 @@ import SeasonalBilling from './pages/SeasonalBilling';
 import SeasonalOccasions from './pages/SeasonalOccasions';
 import SeasonalDashboard from './pages/SeasonalDashboard';
 import SeasonalCustomers from './pages/SeasonalCustomers';
+import { Page, NAV_ITEMS, SECTIONS, PINNED, isPage } from './components/navItems';
 
 const queryClient = new QueryClient();
 
-export type Page = 'dashboard' | 'bookings' | 'customers' | 'menus' | 'billing' | 'finance' | 'calendar' | 'datacenter' | 'menubuilder' | 'quotations' | 'seasonal_items' | 'seasonal_billing' | 'seasonal_dashboard' | 'seasonal_occasions' | 'seasonal_customers';
-
-// 3 pinned items in bottom nav
-const pinnedNav: { page: Page; icon: string; label: string }[] = [
-  { page: 'dashboard',  icon: '🏠', label: 'Home' },
-  { page: 'quotations', icon: '📝', label: 'Quotes' },
-  { page: 'calendar',   icon: '📅', label: 'Calendar' },
-];
-
-// All pages shown in hamburger drawer
-const allNavItems: { page: Page; icon: string; label: string; section: string }[] = [
-  { page: 'dashboard',   icon: '🏠', label: 'Dashboard',          section: 'Main' },
-  { page: 'customers',   icon: '👥', label: 'Customers',           section: 'Main' },
-  { page: 'bookings',    icon: '📋', label: 'Bookings',            section: 'Main' },
-  { page: 'quotations',  icon: '📝', label: 'Quotations',          section: 'Main' },
-  { page: 'billing',     icon: '🧾', label: 'Billing',             section: 'Main' },
-  { page: 'menubuilder', icon: '🏗', label: 'Menu Builder',        section: 'Operations' },
-  { page: 'menus',       icon: '🍽', label: 'Packages',            section: 'Operations' },
-  { page: 'finance',     icon: '📊', label: 'Finance & Analytics', section: 'Operations' },
-  { page: 'calendar',    icon: '📅', label: 'Calendar',            section: 'Operations' },
-  { page: 'datacenter',          icon: '⚙️', label: 'Data Center',        section: 'Settings' },
-  { page: 'seasonal_dashboard', icon: '🏪', label: 'Sessional Dashboard', section: 'Sessional' },
-  { page: 'seasonal_occasions', icon: '🎊', label: 'Occasions',           section: 'Sessional' },
-  { page: 'seasonal_items',     icon: '🪔', label: 'Sessional Items',     section: 'Sessional' },
-  { page: 'seasonal_billing',   icon: '🍬', label: 'Sessional Billing',   section: 'Sessional' },
-  { page: 'seasonal_customers', icon: '👤', label: 'Sess. Customers',      section: 'Sessional' },
-];
-
-const validPages = new Set<Page>(allNavItems.map(i => i.page));
+export type { Page };
 
 function App() {
   // Restore the last-viewed page on refresh (falls back to dashboard).
   const [currentPage, setCurrentPage] = useState<Page>(() => {
-    const saved = localStorage.getItem('currentPage') as Page | null;
-    return saved && validPages.has(saved) ? saved : 'dashboard';
+    let saved: string | null = null;
+    try { saved = localStorage.getItem('currentPage'); } catch { /* storage blocked */ }
+    return isPage(saved) ? saved : 'dashboard';
   });
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const navigate = (page: Page) => {
     setCurrentPage(page);
-    localStorage.setItem('currentPage', page);
+    try { localStorage.setItem('currentPage', page); } catch { /* storage blocked */ }
     setShowMobileMenu(false);
   };
 
@@ -85,9 +59,6 @@ function App() {
     }
   };
 
-  // Group allNavItems by section for drawer
-  const sections = ['Main', 'Operations', 'Sessional', 'Settings'];
-
   return (
     <QueryClientProvider client={queryClient}>
       <div className="app-layout">
@@ -99,7 +70,7 @@ function App() {
 
       {/* ── Mobile bottom nav ── */}
       <nav className="bottom-nav">
-        {pinnedNav.map(item => (
+        {PINNED.map(item => (
           <div
             key={item.page}
             className={`bn-item${currentPage === item.page ? ' active' : ''}`}
@@ -138,8 +109,8 @@ function App() {
             {/* Handle bar */}
             <div style={{ width: 36, height: 4, borderRadius: 2, background: '#E0E0DA', margin: '0 auto 16px' }} />
 
-            {sections.map(section => {
-              const items = allNavItems.filter(i => i.section === section);
+            {SECTIONS.map(section => {
+              const items = NAV_ITEMS.filter(i => i.section === section);
               return (
                 <div key={section} style={{ marginBottom: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: '#AAAAAA', letterSpacing: '0.07em', textTransform: 'uppercase', padding: '2px 8px 6px' }}>

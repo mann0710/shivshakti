@@ -1,11 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { LineUnit } from '../lib/units';
 
+// One bill line: a pack (or loose weight) of an item, priced at the time of sale.
 export interface SeasonalOrderItem {
   item_id: string;
   item_name: string;
   weight: number;
-  weight_unit: 'gm' | 'ltr';
+  weight_unit: LineUnit;
   price: number;
   qty: number;
   line_total: number;
@@ -13,6 +15,7 @@ export interface SeasonalOrderItem {
 
 export interface SeasonalOrder {
   id: string;
+  bill_no?: number | null;
   occasion_id?: string;
   customer_name: string;
   phone: string;
@@ -29,7 +32,7 @@ export interface SeasonalOrder {
   created_at: string;
 }
 
-type SeasonalOrderPayload = Omit<SeasonalOrder, 'id' | 'created_at'>;
+export type SeasonalOrderPayload = Omit<SeasonalOrder, 'id' | 'created_at' | 'bill_no'>;
 
 export const useSeasonalOrders = (year?: number) =>
   useQuery({
@@ -53,12 +56,9 @@ export const useCreateSeasonalOrder = () => {
         .select()
         .single();
       if (error) throw error;
-      return data;
+      return data as SeasonalOrder;
     },
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['seasonal_orders'] });
-      qc.invalidateQueries({ queryKey: ['seasonal_orders', vars.year] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['seasonal_orders'] }),
   });
 };
 

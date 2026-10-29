@@ -2,24 +2,28 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Invoice, Payment } from '../types';
 import { todayIST } from '../lib/ist';
+import { sumCharges } from '../lib/quoteMath';
 
 // Recalculate invoice totals from all payments + mark booking completed if fully paid
 const recalculateInvoice = async (invoiceId: string) => {
-  const { data: payments } = await supabase
+  const { data: payments, error: payErr } = await supabase
     .from('payments').select('amount').eq('invoice_id', invoiceId);
-  const totalPaid = (payments || []).reduce((s: number, p: any) => s + p.amount, 0);
+  if (payErr) throw payErr;
+  const totalPaid = (payments || []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0);
 
-  const { data: inv } = await supabase
+  const { data: inv, error: invErr } = await supabase
     .from('invoices').select('total_amount, booking_id').eq('id', invoiceId).single();
+  if (invErr) throw invErr;
   if (!inv) return;
 
-  const newBalance = Math.max(0, inv.total_amount - totalPaid);
-  const newStatus = newBalance <= 0 ? 'paid' : totalPaid > 0 ? 'sent' : 'draft';
-  await supabase.from('invoices')
+  const newBalance = Math.max(0, Number(inv.total_amount) - totalPaid);
+  const newStatus = newBalance <= 0 && totalPaid > 0 ? 'paid' : totalPaid > 0 ? 'sent' : 'draft';
+  const { error } = await supabase.from('invoices')
     .update({ advance_paid: totalPaid, balance_due: newBalance, status: newStatus })
     .eq('id', invoiceId);
+  if (error) throw error;
 
-  if (newBalance <= 0 && inv.booking_id) {
+  if (newStatus === 'paid' && inv.booking_id) {
     await supabase.from('bookings').update({ status: 'completed' }).eq('id', inv.booking_id);
   }
 };
@@ -40,7 +44,7 @@ export const useInvoices = () =>
 export const useCreateInvoice = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (invoice: Partial<Invoice>) => {
+    mutationFn: async ({ advance_mode = 'cash', ...invoice }: Partial<Invoice> & { advance_mode?: Payment['payment_mode'] }) => {
       const { data: latest } = await supabase
         .from('invoices').select('invoice_number').order('invoice_number', { ascending: false }).limit(1).maybeSingle();
       const nextNum = latest?.invoice_number
@@ -56,8 +60,9 @@ export const useCreateInvoice = () => {
       const gst_amount = invoice.gst_amount || 0;
       const transportation_charges = (invoice.transportation_charges || []) as { amount: number }[];
       const transportation_charge = transportation_charges.reduce((s, c) => s + (c.amount || 0), 0) || invoice.transportation_charge || 0;
-      const total_amount = discountedSubtotal + gst_amount + transportation_charge;
-      const balance_due = Math.max(0, total_amount - (invoice.advance_paid || 0));
+      const total_amount = discountedSubtotal + gst_amount + transportation_charge + sumCharges(invoice.extra_charges);
+      const advance = Math.max(0, invoice.advance_paid || 0);
+      const balance_due = Math.max(0, total_amount - advance);
 
       const { data, error } = await supabase
         .from('invoices')
@@ -76,9 +81,21 @@ export const useCreateInvoice = () => {
         .select('*, booking:bookings(*, customer:customers(*), menu:menus(*))')
         .single();
       if (error) throw error;
+      // The advance becomes a real payment row so later payments don't overwrite it.
+      if (advance > 0) {
+        const { error: payErr } = await supabase.from('payments').insert({
+          invoice_id: data.id, amount: advance, payment_type: 'advance', payment_mode: advance_mode,
+          notes: 'Advance received before invoice', payment_date: todayIST(),
+        });
+        if (payErr) throw payErr;
+        await recalculateInvoice(data.id);
+      }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      qc.invalidateQueries({ queryKey: ['all_payments'] });
+    },
   });
 };
 
@@ -101,6 +118,7 @@ export const useRecordPayment = () => {
     onSuccess: (_, { invoiceId }) => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['payments', invoiceId] });
+      qc.invalidateQueries({ queryKey: ['all_payments'] });
       qc.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
@@ -124,6 +142,7 @@ export const useUpdatePayment = () => {
     onSuccess: (_, { invoiceId }) => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['payments', invoiceId] });
+      qc.invalidateQueries({ queryKey: ['all_payments'] });
       qc.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
@@ -140,6 +159,7 @@ export const useDeletePayment = () => {
     onSuccess: (_, { invoiceId }) => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['payments', invoiceId] });
+      qc.invalidateQueries({ queryKey: ['all_payments'] });
       qc.invalidateQueries({ queryKey: ['bookings'] });
     },
   });

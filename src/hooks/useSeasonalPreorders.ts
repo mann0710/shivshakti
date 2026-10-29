@@ -24,7 +24,7 @@ export interface SeasonalPreorder {
   created_at: string;
 }
 
-type SeasonalPreorderPayload = Omit<SeasonalPreorder, 'id' | 'created_at'>;
+export type SeasonalPreorderPayload = Omit<SeasonalPreorder, 'id' | 'created_at'>;
 
 export const useSeasonalPreorders = (year?: number) =>
   useQuery({
@@ -48,7 +48,7 @@ export const useCreateSeasonalPreorder = () => {
         .select()
         .single();
       if (error) throw error;
-      return data;
+      return data as SeasonalPreorder;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['seasonal_preorders'] }),
   });

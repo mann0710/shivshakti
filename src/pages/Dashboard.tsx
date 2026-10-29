@@ -18,7 +18,8 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
   const { data: allPayments = [] } = useAllPayments();
   const [seasonalYear, setSeasonalYear] = useState(currentYear);
   const { data: seasonalOrders = [] } = useSeasonalOrders(seasonalYear);
-  const today = new Date();
+  // Start of today, so events happening today still count as upcoming.
+  const today = new Date(new Date().setHours(0, 0, 0, 0));
 
   const activeBookings = bookings.filter(b => b.status !== 'cancelled' && b.status !== 'completed');
   const thisMonthEvents = bookings.filter(b => {

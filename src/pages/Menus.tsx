@@ -132,7 +132,7 @@ const Menus: React.FC = () => {
 
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button style={{ ...btnGhost, flex: 1, fontSize: 12 }} onClick={() => handleEdit(m)}>Edit</button>
-                  <button onClick={() => updateMenu.mutateAsync({ id: m.id, is_active: false }).then(() => toast.success('Menu deactivated'))}
+                  <button onClick={() => updateMenu.mutateAsync({ id: m.id, is_active: false }).then(() => toast.success('Menu deactivated')).catch((e: any) => toast.error(e?.message || 'Failed'))}
                     style={{ ...btnGhost, flex: 1, fontSize: 12, color: '#A32D2D' }}>Deactivate</button>
                 </div>
               </div>

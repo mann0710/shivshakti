@@ -152,6 +152,8 @@ const Bookings: React.FC = () => {
           email: form.customerEmail || undefined,
         });
         customerId = c.id;
+        // Keep the id so a failed booking retry doesn't create the customer twice.
+        setForm(f => ({ ...f, customer_id: c.id }));
       }
       if (!customerId) { toast.error('Select or add a customer'); return; }
       await createBooking.mutateAsync({
@@ -175,9 +177,11 @@ const Bookings: React.FC = () => {
   };
 
   const handleStatusChange = async (id: string, newStatus: string, booking: Booking) => {
-    await updateBooking.mutateAsync({ id, status: newStatus as Booking['status'] });
-    toast.success('Status updated');
-    if (newStatus === 'confirmed') openGoogleCalendar({ ...booking, status: 'confirmed' });
+    try {
+      await updateBooking.mutateAsync({ id, status: newStatus as Booking['status'] });
+      toast.success('Status updated');
+      if (newStatus === 'confirmed') openGoogleCalendar({ ...booking, status: 'confirmed' });
+    } catch (e: any) { toast.error(e?.message || 'Failed to update status'); }
   };
 
   const startEdit = (b: Booking) => {
@@ -211,14 +215,14 @@ const Bookings: React.FC = () => {
         id: editingId,
         event_type: resolvedEditEventType,
         event_date: editForm.event_date,
-        event_time: editForm.event_time || undefined,
+        event_time: editForm.event_time || null,
         venue: editForm.venue,
         guest_count: parseInt(editForm.guest_count) || 0,
-        menu_id: editForm.menu_id || undefined,
+        menu_id: editForm.menu_id || null,
         special_instructions: editForm.special_instructions,
         status: editForm.status as Booking['status'],
         estimated_cost: editEstimatedCost || booking.estimated_cost,
-        end_date: isMultiDayEdit && editEndDate ? editEndDate : undefined,
+        end_date: isMultiDayEdit && editEndDate ? editEndDate : null,
       });
       if (editForm.event_type === 'Other' && resolvedEditEventType) {
         createEventType.mutateAsync(resolvedEditEventType).catch(() => {});

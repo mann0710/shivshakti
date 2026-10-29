@@ -25,11 +25,11 @@ export interface Booking {
   customer?: Customer;
   event_type: string;
   event_date: string;
-  end_date?: string;
-  event_time?: string;
+  end_date?: string | null;
+  event_time?: string | null;
   venue: string;
   guest_count: number;
-  menu_id?: string;
+  menu_id?: string | null;
   menu?: Menu;
   special_instructions?: string;
   status: 'inquiry' | 'followup' | 'confirmed' | 'completed' | 'cancelled' | 'pending';
@@ -86,6 +86,8 @@ export interface DataCenter {
   gst_number?: string;
   gst_rate?: number;
   fssai_certificate_url?: string;
+  // Default sweet pack sizes per unit (grams / ml / pieces)
+  pack_sizes?: Partial<Record<'kg' | 'ltr' | 'pc', number[]>> | null;
   updated_at?: string;
 }
 

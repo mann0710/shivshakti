@@ -61,7 +61,7 @@ export interface Quotation {
 
 type QuotationPayload = {
   customer_id: string;
-  booking_id?: string;
+  booking_id?: string | null;
   items: QuotationLineItem[];
   per_plate_amount: number;
   guest_count: number;
@@ -118,7 +118,7 @@ export const useCreateQuotation = () => {
 export const useUpdateQuotation = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (q: QuotationPayload & { id: string }) => {
+    mutationFn: async (q: Omit<QuotationPayload, 'status'> & { status?: string; id: string }) => {
       const { id, ...updates } = q;
       const { data, error } = await supabase
         .from('quotations')

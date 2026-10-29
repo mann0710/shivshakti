@@ -4,15 +4,15 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
-// Catch any error before React mounts and show it on the page
-window.onerror = (msg, _src, _line, _col, err) => {
+// Before React mounts, a crash shows on the page; afterwards errors are only logged so the app keeps running.
+let mounted = false;
+const showFatal = (text: string) => {
+  if (mounted) { console.error(text); return; }
   document.getElementById('root')!.innerHTML =
-    `<pre style="color:#A32D2D;background:#FCEBEB;padding:24px;margin:24px;border-radius:8px;font-size:13px;white-space:pre-wrap">${msg}\n\n${err?.stack || ''}</pre>`;
+    `<pre style="color:#A32D2D;background:#FCEBEB;padding:24px;margin:24px;border-radius:8px;font-size:13px;white-space:pre-wrap">${text}</pre>`;
 };
-window.addEventListener('unhandledrejection', e => {
-  document.getElementById('root')!.innerHTML =
-    `<pre style="color:#A32D2D;background:#FCEBEB;padding:24px;margin:24px;border-radius:8px;font-size:13px;white-space:pre-wrap">Unhandled promise rejection:\n${e.reason?.stack || e.reason}</pre>`;
-});
+window.onerror = (msg, _src, _line, _col, err) => showFatal(`${msg}\n\n${err?.stack || ''}`);
+window.addEventListener('unhandledrejection', e => showFatal(`Unhandled promise rejection:\n${e.reason?.stack || e.reason}`));
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
   state = { error: null };
@@ -41,6 +41,7 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+mounted = true;
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))

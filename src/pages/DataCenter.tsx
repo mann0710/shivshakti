@@ -8,6 +8,9 @@ import {
   DEFAULT_EVENTS,
 } from '../hooks/useDataCenter';
 
+// Allows 0% GST; only blank or invalid input falls back to 18%.
+const gstRateValue = (v: string) => { const n = parseFloat(v); return Number.isFinite(n) && n >= 0 ? n : 18; };
+
 const DataCenter: React.FC = () => {
   const { data: dc } = useDataCenter();
   const { data: teamMembers = [] } = useTeamMembers();
@@ -52,7 +55,7 @@ const DataCenter: React.FC = () => {
 
   const handleSaveInfo = async () => {
     try {
-      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: fssaiUrl });
+      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: gstRateValue(gstRate), fssai_certificate_url: fssaiUrl });
       toast.success('Business info saved!');
     } catch (e: any) { toast.error(e?.message || 'Failed to save'); }
   };
@@ -67,11 +70,7 @@ const DataCenter: React.FC = () => {
     if (!file) return;
     setUploading(true);
     try {
-      // Delete old file from storage before replacing
-      if (fssaiUrl) {
-        const oldPath = extractStoragePath(fssaiUrl);
-        if (oldPath) await supabase.storage.from('documents').remove([oldPath]).catch(() => {});
-      }
+      const oldPath = fssaiUrl ? extractStoragePath(fssaiUrl) : null;
       const path = `fssai/${Date.now()}_${file.name}`;
       const { error: upErr } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
       if (upErr) {
@@ -84,7 +83,9 @@ const DataCenter: React.FC = () => {
       }
       const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path);
       setFssaiUrl(publicUrl);
-      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: publicUrl });
+      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: gstRateValue(gstRate), fssai_certificate_url: publicUrl });
+      // Old file goes only after the new one is uploaded and saved.
+      if (oldPath && oldPath !== path) await supabase.storage.from('documents').remove([oldPath]).catch(() => {});
       toast.success(fssaiUrl ? 'Certificate replaced!' : 'Certificate uploaded!');
     } catch (e: any) {
       toast.error(e?.message || 'Upload failed');
@@ -100,7 +101,7 @@ const DataCenter: React.FC = () => {
       const oldPath = extractStoragePath(fssaiUrl);
       if (oldPath) await supabase.storage.from('documents').remove([oldPath]).catch(() => {});
       setFssaiUrl('');
-      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: parseFloat(gstRate) || 18, fssai_certificate_url: '' });
+      await upsertDC.mutateAsync({ gst_number: gst, gst_rate: gstRateValue(gstRate), fssai_certificate_url: '' });
       toast.success('Certificate removed');
     } catch (e: any) { toast.error(e?.message || 'Failed to remove'); }
   };

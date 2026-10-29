@@ -19,13 +19,14 @@ export const useCreateBooking = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (booking: Partial<Booking>) => {
-      // Check for date conflict first
-      const { data: existing } = await supabase
+      // Same named venue on the same date is a clash; blank venues are not.
+      const venue = booking.venue?.trim();
+      const { data: existing } = venue ? await supabase
         .from('bookings')
         .select('id, venue')
         .eq('event_date', booking.event_date!)
-        .eq('venue', booking.venue!)
-        .neq('status', 'cancelled');
+        .eq('venue', venue)
+        .neq('status', 'cancelled') : { data: [] };
       if (existing && existing.length > 0) {
         throw new Error('Another booking already exists at this venue on the same date.');
       }
