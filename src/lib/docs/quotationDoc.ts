@@ -3,7 +3,7 @@ import { DocContext, docContext } from './context';
 import { scheduleAmounts } from './settings';
 import { page, esc, money, cap } from './theme';
 import { header, facts, sectionHead, sumRows, SumRow, banner, paySteps, chips, terms, upiBox, signatures, endLine, footerText } from './parts';
-import { courseGrid, coursesOf, hasItemPrices, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText, dayLabel } from './menu';
+import { courseGrid, coursesOf, hasItemPrices, priceShow, PriceShow, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText, dayLabel } from './menu';
 import { plateRange, choiceGroups, pickedOf, dishCount } from '../quoteChoices';
 import { optionTitle, statusText } from '../quoteOptions';
 import { formatDateIST } from '../ist';
@@ -32,7 +32,7 @@ function whenText(q: Quotation): string {
 }
 
 // Price table + adjustments + closing banner, for per-plate, per-item, "choose any" and multi-meal quotes.
-function priceSection(q: Quotation, itemPrices: boolean, title = 'Price'): string {
+function priceSection(q: Quotation, itemPrices: PriceShow, title = 'Price'): string {
   const multi = isMulti(q);
   const guests = q.guest_count || q.booking?.guest_count || 0;
   const rows: string[] = [];
@@ -51,23 +51,26 @@ function priceSection(q: Quotation, itemPrices: boolean, title = 'Price'): strin
     adj.push(...(q.additional_discounts ?? []).filter(d => Number(d.amount) > 0).map(d => ({ label: d.description || 'Discount', value: Number(d.amount), sign: '-' as const })));
     const meals = daysOf(q.event_days).reduce((s, g) => s + g.meals.length, 0);
     detail = `${meals} meal${meals === 1 ? '' : 's'} over ${daysOf(q.event_days).length} day${daysOf(q.event_days).length === 1 ? '' : 's'} · ${guestsText(q.event_days, guests)} guests`;
-  } else if (itemPrices && range.max > 0) {
-    coursesOf((q.items ?? []).filter(i => !i.choice)).forEach(c => rows.push(row(c.name, `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}`, guests, money(c.sum), money(c.sum * guests))));
+  } else if (itemPrices === true && range.max > 0) {
+    // Dish prices make up the plate price: one row per priced course and choice, ₹0 rows left out.
+    coursesOf((q.items ?? []).filter(i => !i.choice)).filter(c => c.sum > 0).forEach(c => rows.push(row(c.name, `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}`, guests, money(c.sum), money(c.sum * guests))));
     choiceGroups(q.items).filter(g => !g.meta.included).forEach(g => {
       const r = plateRange(g.items.map(i => ({ ...i, choice: { ...g.meta } })));
       const decided = pickedOf(g).length > 0;
-      rows.push(row(g.meta.label, decided ? 'your choice' : `choose any ${g.meta.pick}`, guests, rangeText(r.min, r.max), rangeText(r.min * guests, r.max * guests)));
+      if (r.max > 0) rows.push(row(g.meta.label, decided ? 'your choice' : `choose any ${g.meta.pick}`, guests, rangeText(r.min, r.max), rangeText(r.min * guests, r.max * guests)));
     });
     const diff = range.min * guests - q.subtotal;
-    first = { label: isRange(q) ? 'Menu value (lowest picks)' : 'Menu value', value: range.min * guests, cls: '' };
+    first = { label: 'Menu value', value: range.min * guests, max: isRange(q) ? range.max * guests : undefined, cls: '' };
     if (diff > 0) adj.push({ label: `Special price · ${money(range.min - q.per_plate_amount)} off per plate`, value: diff, sign: '-' });
-    else if (diff < 0) adj.push({ label: 'Plate price adjustment', value: -diff, sign: '+' });
     detail = isRange(q) ? `${rangeText(q.per_plate_amount, q.per_plate_max ?? 0)} per plate × ${guests} guests · final once you choose`
       : diff > 0 ? `Menu value <s>${money(range.min)}</s> · your price ${money(q.per_plate_amount)} per plate × ${guests} guests`
       : `${money(q.per_plate_amount)} per plate × ${guests} guests`;
   } else {
-    rows.push(row(`Catering${q.booking?.event_type ? ` — ${q.booking.event_type}` : ''}`, `${dishCount(q.items)}-dish ${q.food_type || ''} menu`, guests, money(q.per_plate_amount), money(q.subtotal)));
-    detail = `${money(q.per_plate_amount)} per plate × ${guests} guests`;
+    // Your own plate price: one catering line, a range while choices are open.
+    const top = isRange(q) ? q.per_plate_max ?? 0 : 0;
+    rows.push(row(`Catering${q.booking?.event_type ? ` — ${q.booking.event_type}` : ''}`, `${dishCount(q.items)}-dish ${q.food_type || ''} menu`, guests, rangeText(q.per_plate_amount, top), rangeText(q.subtotal, top * guests)));
+    first = { label: 'Subtotal', value: q.subtotal, max: top * guests, cls: '' };
+    detail = `${rangeText(q.per_plate_amount, top)} per plate × ${guests} guests${top ? ' · final once you choose' : ''}`;
   }
   if (!multi && q.discount_amount > 0) adj.push({ label: 'Discount', value: q.discount_amount, sign: '-' });
   const saved = adj.filter(a => a.sign === '-').reduce((s, a) => s + a.value, 0);
@@ -81,13 +84,13 @@ function priceSection(q: Quotation, itemPrices: boolean, title = 'Price'): strin
 </section>`;
 }
 
-const menuSection = (q: Quotation, itemPrices: boolean, title: string, breakBefore = false) => {
+const menuSection = (q: Quotation, itemPrices: PriceShow, title: string, breakBefore = false) => {
   const dishes = dishesOf(q);
   const note = isMulti(q)
     ? `${daysOf(q.event_days).length} day(s) · ${daysOf(q.event_days).reduce((n, g) => n + g.meals.length, 0)} meal(s)`
-    : [`${dishCount(dishes)} dishes`, itemPrices ? 'prices per plate' : '', q.food_type].filter(Boolean).join(' · ');
+    : [`${dishCount(dishes)} dishes`, itemPrices === true ? 'prices per plate' : '', q.food_type].filter(Boolean).join(' · ');
   return `<section${breakBefore ? ' style="break-before:page"' : ''}>${sectionHead(title, note)}${
-    isMulti(q) ? mealSchedule(q.event_days, { amounts: true, itemPrices }) : courseGrid(q.items ?? [], itemPrices)}</section>`;
+    isMulti(q) ? mealSchedule(q.event_days, { amounts: true, itemPrices: !!itemPrices }) : courseGrid(q.items ?? [], itemPrices)}</section>`;
 };
 
 // Side-by-side cards for options A / B / C.
@@ -105,7 +108,7 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   // Unsaved edits of the open option replace its saved copy.
   const options = (opts.options?.length ?? 0) > 1 ? opts.options!.map(o => (o.id === q.id ? { ...o, ...q } : o)) : [q];
   const grouped = options.length > 1;
-  const prices = (o: Quotation) => opts.withPrices !== false && hasItemPrices(dishesOf(o));
+  const prices = (o: Quotation) => priceShow(opts.withPrices !== false && hasItemPrices(dishesOf(o)), o.per_plate_amount, o.items);
   const issued = (q.issue_date || q.created_at || '').slice(0, 10);
   const validTill = issued ? addDays(issued, s.quote_valid_days) : '';
   const guests = guestsText(isMulti(q) ? q.event_days : [], q.guest_count || b?.guest_count || 0);

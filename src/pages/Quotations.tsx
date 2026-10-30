@@ -172,7 +172,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
                     <input type="number" min="0" inputMode="decimal" value={f.perPlate} onChange={e => f.typePerPlate(e.target.value)}
                       placeholder="0" style={{ width: 100, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, textAlign: 'right', background: '#fff' }} />
                   </label>
-                  {f.perPlateMax != null && <span style={{ fontSize: 12.5, fontWeight: 600, color: '#A84F00' }}>to {rupees(f.perPlateMax)} until the customer picks</span>}
+                  {f.perPlateMax != null && <span style={{ fontSize: 12.5, fontWeight: 600, color: '#A84F00' }}>customer pays {rupees(f.plateLow)} – {rupees(f.perPlateMax)} by their picks</span>}
                   <span style={{ fontSize: 13, color: '#888880' }}>×</span>
                   <div style={{ fontSize: 13, color: '#444' }}><strong>{f.guestCount}</strong> <span style={{ color: '#888880' }}>guests</span></div>
                   <span style={{ fontSize: 13, color: '#888880' }}>=</span>
@@ -181,9 +181,9 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
                     <span style={{ fontSize: 11, color: '#888880', fontWeight: 400, marginLeft: 4 }}>(Subtotal)</span>
                   </div>
                   {f.showPrices && (
-                    <label title="On: one price whatever the customer picks. Off: price follows the dishes." style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginLeft: 'auto', cursor: 'pointer' }}>
+                    <label title="On: the price you typed. Off: adds up the dish prices. Either way, alternatives add or take off their price difference." style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginLeft: 'auto', cursor: 'pointer' }}>
                       <input type="checkbox" checked={!f.autoPrice} onChange={e => f.setAutoPrice(!e.target.checked)} style={{ accentColor: '#E8750A', width: 15, height: 15 }} />
-                      Fixed plate price
+                      Own price
                     </label>
                   )}
                 </div>
@@ -201,7 +201,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
                 extra: f.extraCharges.reduce((s, c) => s + (c.amount || 0), 0),
                 transport: f.transportationCharges.reduce((s, c) => s + (c.amount || 0), 0),
                 gst: f.totals.gst, multiDaySubtotal: f.isMultiDay ? f.totals.subtotal : 0,
-                perPlate: f.perPlateNum, subtotal: f.isMultiDay ? 0 : f.totals.subtotal, final: f.totals.final,
+                perPlate: f.plateLow, subtotal: f.isMultiDay ? 0 : f.totals.subtotal, final: f.totals.final,
               }} />
             {f.totalMax != null && (
               <div style={{ marginTop: 6, textAlign: 'right', fontSize: 12.5, color: '#A84F00', fontWeight: 600 }}>

@@ -2,7 +2,7 @@ import type { QuotationLineItem, EventDay, MealSlot } from '../../hooks/useQuota
 import { mealNet } from '../quoteMath';
 import { formatDateIST } from '../ist';
 import { esc, money, cap } from './theme';
-import { choiceGroups, pickedOf, servedItems, ChoiceGroup } from '../quoteChoices';
+import { choiceGroups, pickedOf, servedItems, plateRange, ChoiceGroup } from '../quoteChoices';
 import { planCourses, Course } from '../menuOrder';
 
 // Menu blocks shared by quotations, invoices and the event menu.
@@ -12,29 +12,38 @@ export const coursesOf = (items: QuotationLineItem[]): Course[] => planCourses(i
 export const itemsTotal = (items: QuotationLineItem[]) => (items ?? []).reduce((s, i) => s + (Number(i.amount) || 0), 0);
 export const hasItemPrices = (items: QuotationLineItem[]) => (items ?? []).some(i => (Number(i.amount) || 0) > 0);
 
-const dish = (it: QuotationLineItem, prices: boolean) => `<div class="dish"><span>${esc(it.item_name)}</span>${
-  prices && Number(it.amount) > 0 ? `<span class="p num">${money(it.amount)}</span>` : ''}</div>${
+// true: dish prices make up the plate price. 'diff': your own higher price, so only choice differences print.
+export type PriceShow = boolean | 'diff';
+export const priceShow = (on: boolean, plate: number, items: QuotationLineItem[] | undefined): PriceShow =>
+  on && hasItemPrices(items ?? []) && plate > plateRange(items).min ? 'diff' : on;
+
+const dish = (it: QuotationLineItem, prices: PriceShow) => `<div class="dish"><span>${esc(it.item_name)}</span>${
+  prices === true && Number(it.amount) > 0 ? `<span class="p num">${money(it.amount)}</span>` : ''}</div>${
   it.served_with ? `<div class="note with">Served with ${esc(it.served_with)}</div>` : ''}${
   it.instruction ? `<div class="note">Note: ${esc(it.instruction)}</div>` : ''}`;
 
 // "Choose any N" block: tick boxes for the customer, picked dishes ticked once decided.
-function choiceBlock(g: ChoiceGroup, prices: boolean): string {
+// With your own plate price ('diff') each dish shows what it adds over the cheapest one.
+function choiceBlock(g: ChoiceGroup, prices: PriceShow): string {
   const n = Math.min(Math.max(1, g.meta.pick), g.items.length);
   const decided = pickedOf(g).length > 0;
   const a = g.items.map(i => Number(i.amount) || 0).sort((x, y) => x - y);
   const lo = a.slice(0, n).reduce((s, x) => s + x, 0);
   const hi = a.slice(a.length - n).reduce((s, x) => s + x, 0);
-  const priced = prices && !g.meta.included && hi > 0;
-  const meta = decided ? 'chosen' : priced ? (lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`) : 'included';
+  const diff = prices === 'diff';
+  const priced = !!prices && !g.meta.included && (diff ? hi > lo : hi > 0);
+  const price = (i: QuotationLineItem) => (diff ? (Number(i.amount) || 0) - a[0] : Number(i.amount) || 0);
+  const meta = decided ? 'chosen' : !priced ? 'included' : diff ? `up to +${money(hi - lo)} / plate`
+    : lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`;
   return `<div class="choice-box"><div class="choice-h">${esc(g.meta.label)} · ${decided ? 'your choice' : `choose any ${n}`}<span class="num">${meta}</span></div>${
     decided ? '' : '<div class="note" style="padding-left:0">Tick your choice.</div>'}${
     g.items.map(i => `<div class="dish"><span><span class="tick">${i.chosen ? '✓' : ''}</span>${esc(i.item_name)}</span>${
-      priced && Number(i.amount) > 0 ? `<span class="p num">${money(i.amount)}</span>` : ''}</div>`).join('')}</div>`;
+      priced && price(i) > 0 ? `<span class="p num">${diff ? '+' : ''}${money(price(i))}</span>` : ''}</div>`).join('')}</div>`;
 }
 
 // Two-column course list; per-item prices and course subtotals when `prices`.
 // "quote" shows choice groups to tick; "served" shows only what will be served.
-export function courseGrid(all: QuotationLineItem[], prices: boolean, mode: 'quote' | 'served' = 'quote'): string {
+export function courseGrid(all: QuotationLineItem[], prices: PriceShow, mode: 'quote' | 'served' = 'quote'): string {
   const items = mode === 'served' ? servedItems(all) : all;
   // Served copies list decided picks as normal dishes; open groups stay as a choice.
   const decided = new Set(choiceGroups(items).filter(g => pickedOf(g).length).map(g => g.meta.id));
@@ -42,7 +51,7 @@ export function courseGrid(all: QuotationLineItem[], prices: boolean, mode: 'quo
   // Decided picks print as normal dishes; open choices sit inside their own course.
   const list = items.map(i => (i.choice && !groups.some(g => g.meta.id === i.choice!.id) ? { ...i, choice: undefined } : i));
   return `<div class="courses">${planCourses(list, { pair: true, groups }).map(c => {
-    const meta = prices && c.sum > 0 ? `${money(c.sum)} / plate` : c.count ? `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}` : '';
+    const meta = prices === true && c.sum > 0 ? `${money(c.sum)} / plate` : c.count ? `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}` : '';
     const plain = c.subs.filter(x => !x.choice);
     const showSub = c.subs.length > 1 || (!!plain[0]?.name && plain[0].name !== c.name);
     return `<div class="course"><div class="course-h">${esc(c.name)}<span class="num">${meta}</span></div>${
@@ -81,7 +90,7 @@ export function mealSchedule(days: EventDay[] | undefined, opts: { amounts: bool
     g.meals.map(m => `<div class="meal"><div class="meal-h"><div><b>${esc(mealTitle(m))}</b><div class="muted num" style="font-size:12px">${
       m.guest_count || 0} guests${opts.amounts && m.per_plate_amount ? ` · ${rateText(m)}` : ''}</div></div>${
       opts.amounts ? `<b class="num">${money(mealNet(m))}${!offerOf(m) && m.per_plate_max ? ` – ${money(m.per_plate_max * (m.guest_count || 0))}` : ''}</b>` : ''}</div>
-      <div class="meal-b">${(m.items ?? []).length ? courseGrid(m.items, opts.itemPrices, opts.mode) : '<span class="muted">Menu to be decided</span>'}${
+      <div class="meal-b">${(m.items ?? []).length ? courseGrid(m.items, priceShow(opts.itemPrices, m.per_plate_amount, m.items), opts.mode) : '<span class="muted">Menu to be decided</span>'}${
       opts.amounts && mealSaving(m) ? `<div class="save num">Offer price saves ${money(mealSaving(m))} on this meal</div>` : ''}</div></div>`).join('')}`).join('');
 }
 

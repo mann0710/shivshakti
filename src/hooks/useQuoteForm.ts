@@ -11,7 +11,7 @@ import { useItemPrices } from './useItemPrices';
 import { useDataCenter } from './useDataCenter';
 import { useQuotations, useCreateQuotation, useUpdateQuotation, Quotation, QuotationLineItem, EventDay } from './useQuotations';
 import { getDayNumber, quoteTotals } from '../lib/quoteMath';
-import { plateRange, atMaxPrices } from '../lib/quoteChoices';
+import { plateRange, atMaxPrices, basePlate, ownRange, typedPrice } from '../lib/quoteChoices';
 import { genId } from '../components/catering/QuotationMultiDay';
 import type { PickerItem } from '../components/catering/QuotationItemPanels';
 import type { Charge, Discount } from '../components/catering/QuotationCharges';
@@ -80,17 +80,21 @@ export const useQuoteForm = () => {
   const priceFor = (itemId: string) => (showPrices ? lookupPrice(itemId) : 0);
 
   const range = plateRange(selectedItems);
+  const listed = basePlate(selectedItems);
   useEffect(() => {
-    if (autoPrice && showPrices) setPerPlate(range.min > 0 ? String(range.min) : '');
-  }, [range.min, autoPrice, showPrices]);
+    if (autoPrice && showPrices) setPerPlate(listed > 0 ? String(listed) : '');
+  }, [listed, autoPrice, showPrices]);
+  // The per-plate box is the menu as listed; open alternatives give the customer a range around it.
+  const plate = ownRange(perPlateNum, selectedItems);
+  const plateLow = isMultiDay ? 0 : Math.max(0, plate.low);
 
   const base = {
     additional: additionalDiscounts, gstRate: gstChecked ? dcGstRate : 0,
     extra: extraCharges.reduce((s, c) => s + (c.amount || 0), 0), transport: transportationCharges.reduce((s, c) => s + (c.amount || 0), 0),
   };
-  const totals = quoteTotals({ ...base, isMultiDay, eventDays, perPlate: perPlateNum, guests: guestCount });
+  const totals = quoteTotals({ ...base, isMultiDay, eventDays, perPlate: plateLow, guests: guestCount });
   // Top of the price range while "choose any" picks are open.
-  const perPlateMax = !isMultiDay && autoPrice && showPrices && range.max > range.min ? range.max : null;
+  const perPlateMax = !isMultiDay && plate.high != null && plate.high > plateLow ? plate.high : null;
   const multiMax = isMultiDay && eventDays.some(d => d.meals.some(m => m.per_plate_max != null));
   const totalMax = perPlateMax != null
     ? quoteTotals({ ...base, isMultiDay: false, eventDays: [], perPlate: perPlateMax, guests: guestCount }).final
@@ -144,7 +148,9 @@ export const useQuoteForm = () => {
     } else {
       setEventDays([]);
       setSelectedItems(q.items || []);
-      setPerPlate(q.per_plate_amount > 0 ? String(q.per_plate_amount) : '');
+      const typed = typedPrice(q.per_plate_amount, q.per_plate_max, q.items);
+      setPerPlate(typed > 0 ? String(typed) : '');
+      setAutoPrice(typed > 0 && typed === basePlate(q.items));
       // Older quotes kept the discount only as a total.
       setAdditionalDiscounts((q.additional_discounts || []).length ? q.additional_discounts
         : q.discount_amount > 0 ? [{ id: genId(), description: 'Discount', amount: q.discount_amount }] : []);
@@ -153,7 +159,7 @@ export const useQuoteForm = () => {
     setGstChecked(q.gst_rate > 0); setSavedGstRate(q.gst_rate > 0 ? q.gst_rate : null);
     setExtraCharges(q.extra_charges || []); setTransportationCharges(q.transportation_charges || []);
     setActiveMealKey(null);
-    setAutoPrice(q.per_plate_max != null);
+    if (q.is_multi_day) setAutoPrice(false);
     setShowForm(true);
   };
 
@@ -161,7 +167,7 @@ export const useQuoteForm = () => {
     customer_id: ids?.customerId ?? selectedBooking?.customer_id ?? '',
     booking_id: ids?.bookingId ?? selectedBookingId,
     items: isMultiDay ? [] : selectedItems,
-    per_plate_amount: isMultiDay ? 0 : perPlateNum,
+    per_plate_amount: plateLow,
     per_plate_max: perPlateMax,
     guest_count: isMultiDay ? 0 : guestCount,
     subtotal: totals.subtotal,
@@ -246,7 +252,7 @@ export const useQuoteForm = () => {
     quotations, quotationsFetched, bookings, eligibleBookings, selectedBooking, activeItems, ev,
     showForm, editingId, editingQuotation, dirty, isSaving: createQuotation.isPending || updateQuotation.isPending,
     selectedItems, setSelectedItems, addItem, applyPackage, patchItem, reorderItems,
-    notes, setNotes, perPlate, typePerPlate, autoPrice, setAutoPrice, range, perPlateMax, totalMax, perPlateNum, guestCount,
+    notes, setNotes, perPlate, typePerPlate, autoPrice, setAutoPrice, range, perPlateMax, totalMax, plateLow, guestCount,
     gstChecked, setGstChecked, dcGstRate, additionalDiscounts, setAdditionalDiscounts, extraCharges, setExtraCharges,
     transportationCharges, setTransportationCharges, foodType, setFoodType, optionName, setOptionName,
     isMultiDay, toggleMultiDay, eventDays, setEventDays, activeMealKey, setActiveMealKey, totals,

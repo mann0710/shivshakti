@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
 import { getDayNumber } from '../../lib/quoteMath';
 import QuotationItemPanels, { PickerItem, ItemTextField } from './QuotationItemPanels';
-import { plateRange } from '../../lib/quoteChoices';
+import { basePlate, ownRange, typedPrice } from '../../lib/quoteChoices';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Hi-Tea', 'Snacks', 'Dinner', 'Supper'];
 
@@ -22,13 +22,17 @@ interface Props {
 
 const sumMeals = (meals: MealSlot[]) => meals.reduce((s, m) => s + m.subtotal, 0);
 
-// Item changes re-derive per plate from item prices when any are priced ("choose any" groups give a range).
+// A meal price is for its menu as listed; open alternatives give a range around it.
+const priceMeal = (m: MealSlot, items: QuotationLineItem[], price: number): MealSlot => {
+  const p = ownRange(price, items);
+  return { ...m, items, per_plate_amount: p.low, per_plate_max: p.high, subtotal: p.low * m.guest_count };
+};
+const typedOf = (m: MealSlot) => typedPrice(m.per_plate_amount, m.per_plate_max, m.items ?? []);
+
+// Item changes keep a typed meal price; otherwise the meal adds up its dish prices.
 const withItems = (m: MealSlot, items: QuotationLineItem[]): MealSlot => {
-  const priced = items.some(x => (x.amount || 0) > 0);
-  const r = plateRange(items);
-  const per_plate_amount = priced ? r.min : (items.length ? m.per_plate_amount : 0);
-  const per_plate_max = priced && r.max > r.min ? r.max : null;
-  return { ...m, items, per_plate_amount, per_plate_max, subtotal: per_plate_amount * m.guest_count };
+  const own = typedOf(m) > 0 && typedOf(m) !== basePlate(m.items ?? []);
+  return priceMeal(m, items, !items.length ? 0 : own ? typedOf(m) : basePlate(items));
 };
 
 const smallInp: React.CSSProperties = { border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' };
@@ -85,9 +89,8 @@ const QuotationMultiDay: React.FC<Props> = ({
 
   const updateMealField = (dayIdx: number, mealId: string, field: keyof MealSlot, value: any) =>
     patchMeal(dayIdx, mealId, m => {
+      if (field === 'per_plate_amount') return priceMeal(m, m.items ?? [], value);
       const updated = { ...m, [field]: value };
-      // A typed plate price is fixed, so no range.
-      if (field === 'per_plate_amount') updated.per_plate_max = null;
       updated.subtotal = updated.per_plate_amount * updated.guest_count;
       return updated;
     });
@@ -222,7 +225,7 @@ const QuotationMultiDay: React.FC<Props> = ({
                       </label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ fontSize: 11, color: '#888880' }}>₹/plate</span>
-                        <input type="number" min="0" inputMode="decimal" value={meal.per_plate_amount || ''} placeholder="0"
+                        <input type="number" min="0" inputMode="decimal" value={typedOf(meal) || ''} placeholder="0"
                           onChange={e => updateMealField(dayIdx, meal.id, 'per_plate_amount', parseFloat(e.target.value) || 0)}
                           style={{ ...smallInp, width: 80 }} />
                       </label>

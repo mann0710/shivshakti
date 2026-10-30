@@ -24,10 +24,10 @@ export const facts = (list: Fact[], cols = 2) =>
 
 export const sectionHead = (title: string, note = '') => `<div class="sec-h"><h2>${esc(title)}</h2>${note ? `<span>${esc(note)}</span>` : ''}</div>`;
 
-export interface SumRow { label: string; value: number; sign?: '+' | '-'; cls?: string }
+export interface SumRow { label: string; value: number; max?: number; sign?: '+' | '-'; cls?: string }
 
 export const sumRows = (rows: SumRow[]) => rows.map(r =>
-  `<div class="${r.cls ?? (r.sign === '-' ? 'good' : '')}"><span>${esc(r.label)}</span><span class="num">${r.sign === '-' ? '− ' : ''}${money(r.value)}</span></div>`).join('');
+  `<div class="${r.cls ?? (r.sign === '-' ? 'good' : '')}"><span>${esc(r.label)}</span><span class="num">${r.sign === '-' ? '− ' : ''}${money(r.value)}${r.max && r.max > r.value ? ` – ${money(r.max)}` : ''}</span></div>`).join('');
 
 // The navy closing price band.
 export const banner = (label: string, detail: string, amount: number | string, chip = '') =>

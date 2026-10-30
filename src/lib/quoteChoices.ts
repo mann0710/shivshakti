@@ -39,6 +39,30 @@ export function plateRange(items: QuotationLineItem[] | undefined): { min: numbe
   return { min, max };
 }
 
+// Plate price of the menu as listed: fixed dishes plus the first N dishes of each priced group.
+export function basePlate(items: QuotationLineItem[] | undefined): number {
+  const list = items ?? [];
+  return sum(list.filter(i => !i.choice)) + choiceGroups(list).filter(g => !g.meta.included)
+    .reduce((s, g) => s + sum(g.items.slice(0, Math.min(Math.max(1, g.meta.pick), g.items.length))), 0);
+}
+
+// A typed price is for the menu as listed; open alternatives move it by their price difference.
+export function ownRange(price: number, items: QuotationLineItem[] | undefined): { low: number; high: number | null } {
+  const r = plateRange(items);
+  const shift = price - basePlate(items);
+  return { low: r.min + shift, high: r.max > r.min ? r.max + shift : null };
+}
+
+// Saved low end → the price as typed; older fixed-price quotes kept one price for every pick.
+export function typedPrice(low: number, max: number | null | undefined, items: QuotationLineItem[] | undefined): number {
+  const r = plateRange(items);
+  return max == null && r.max > r.min ? low : low + basePlate(items) - r.min;
+}
+
+// Price once picks are locked: the quoted low end moved by the picked dishes' difference.
+const lockPrice = (low: number, max: number | null | undefined, before: QuotationLineItem[], after: QuotationLineItem[]) =>
+  max != null ? low + plateRange(after).min - plateRange(before).min : low;
+
 // What is actually served: only the picked dishes of groups the customer has decided.
 export const servedItems = (items: QuotationLineItem[] | undefined) => {
   const decided = new Set(choiceGroups(items).filter(g => pickedOf(g).length).map(g => g.meta.id));
@@ -115,7 +139,7 @@ export function acceptPatch(q: Quotation, picked: Set<string>, guests?: number):
     const event_days = q.event_days.map(d => {
       const meals = d.meals.map(m => {
         const items = withPicks(m.items ?? [], picked, m.id);
-        const pp = m.per_plate_max != null ? plateRange(items).min : m.per_plate_amount;
+        const pp = lockPrice(m.per_plate_amount, m.per_plate_max, m.items ?? [], items);
         return { ...m, items, per_plate_amount: pp, per_plate_max: null, subtotal: pp * m.guest_count };
       });
       return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
@@ -125,7 +149,7 @@ export function acceptPatch(q: Quotation, picked: Set<string>, guests?: number):
   }
   const items = withPicks(q.items ?? [], picked);
   const g = guests ?? q.guest_count;
-  const pp = q.per_plate_max != null ? plateRange(items).min : q.per_plate_amount;
+  const pp = lockPrice(q.per_plate_amount, q.per_plate_max, q.items ?? [], items);
   const additional = q.additional_discounts?.length ? q.additional_discounts : q.discount_amount > 0 ? [{ amount: q.discount_amount }] : [];
   const t = quoteTotals({ ...base, isMultiDay: false, eventDays: [], perPlate: pp, guests: g, additional });
   return { items, per_plate_amount: pp, guest_count: g, subtotal: t.subtotal, discount_amount: t.discount, gst_amount: t.gst, total_amount: t.final, per_plate_max: null, total_max: null };
