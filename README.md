@@ -187,6 +187,7 @@ One screen, three views (the switch at the top remembers your choice; on phones 
 - **Summary tiles** (desktop): upcoming events and the next one, confirmed value, and how many next steps are waiting (invoices, quotes, decisions, payments, to close).
 - **Calendar:** a month coloured by stage (dots on phones), multi-day events on each of their days, today highlighted. Tap a day to see its events with meals (multi-day quotes), food type, next step, **Menu PDF** and ⋯, plus **+ New booking on that day** (the form opens on that date). The old Calendar page is folded in: the phone bar's **Bookings** button and any "Calendar" link open this view.
 - **Pipeline:** columns Inquiry → Quoted → Confirmed → Invoiced → Paid (last 60 days) with counts and totals; past-dated cards are flagged "Date passed" with the step that closes them.
+- **Delete booking** (⋯ menu): if it has quotations, the dialog names them ("QTN-0024, QTN-0025 will be deleted too") and **Delete all** removes them and the booking. A booking with an invoice is never deleted here (the live database would delete the invoice with it); the dialog offers **Mark cancelled** instead.
 - Search (name, phone, venue, event) works in all three views. Design: the "Shiv Shakti Bookings Redesign" canvas.
 
 ## Quotation options, "choose any" dishes and the quote calendar

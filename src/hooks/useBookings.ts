@@ -74,13 +74,21 @@ export const useUpdateBooking = () => {
   });
 };
 
+// Quotations block a booking's delete on the live database, so the ones the user agreed to lose go first.
 export const useDeleteBooking = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, withQuotes }: { id: string; withQuotes: boolean }) => {
+      if (withQuotes) {
+        const { error: qe } = await supabase.from('quotations').delete().eq('booking_id', id);
+        if (qe) throw qe;
+      }
       const { error } = await supabase.from('bookings').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['bookings'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bookings'] });
+      qc.invalidateQueries({ queryKey: ['quotations'] });
+    },
   });
 };

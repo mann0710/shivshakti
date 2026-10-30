@@ -78,15 +78,25 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
       else toast.success('Status updated');
     } catch (e: any) { toast.error(e?.message || 'Failed to update status'); }
   };
+  // Quotations are named and deleted with the booking; an invoice (money received) is never deleted from here.
   const remove = async (b: Booking) => {
+    const what = <><b>{b.event_type}</b> for <b>{b.customer?.name ?? 'this customer'}</b> on {dateRangeText(b)}</>;
+    const invoice = invoices.find(i => i.booking_id === b.id);
+    if (invoice) {
+      if (await confirm({ title: 'This booking has an invoice', message: <>{what} has invoice <b>{invoice.invoice_number}</b>, so it can't be deleted here and its payments stay safe. Mark the booking Cancelled instead?</>, confirmLabel: 'Mark cancelled' })) setStatus(b, 'cancelled');
+      return;
+    }
+    const linked = quotes.filter(q => q.booking_id === b.id);
     const ok = await confirm({
-      title: 'Delete booking?',
-      message: <><b>{b.event_type}</b> for <b>{b.customer?.name ?? 'this customer'}</b> on {dateRangeText(b)} will be removed. This cannot be undone.</>,
-      confirmLabel: 'Delete', danger: true,
+      title: linked.length ? 'Delete booking and its quotations?' : 'Delete booking?',
+      message: <>{what} will be removed.{linked.length > 0 && <> Its {linked.length === 1 ? 'quotation' : `${linked.length} quotations`} <b>{linked.map(q => q.quotation_number).join(', ')}</b> will be deleted too.</>} This cannot be undone.</>,
+      confirmLabel: linked.length ? 'Delete all' : 'Delete', danger: true,
     });
     if (!ok) return;
-    try { await deleteBooking.mutateAsync(b.id); toast.success('Booking deleted'); }
-    catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
+    try {
+      await deleteBooking.mutateAsync({ id: b.id, withQuotes: linked.length > 0 });
+      toast.success(linked.length ? `Booking and ${linked.length === 1 ? 'its quotation' : `${linked.length} quotations`} deleted` : 'Booking deleted');
+    } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
   };
   const go: Navigate = (page, i) => onNavigate?.(page, i);
 
