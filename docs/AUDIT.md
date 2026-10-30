@@ -137,6 +137,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | No venue, address, validity, payment amounts or way to pay on the quotation | **Fixed.** Facts block, valid-till, schedule in rupees, UPI QR |
 | Document details hard-coded | **Fixed.** Data Center → Documents |
 | Four separate jsPDF builders (quotation, invoice, calendar menu, reports) | **Fixed.** One theme + shared parts in `lib/docs` |
+| Menu order on paper: dal/rice shown as separate courses, accompaniments in the middle, chutney away from its farsan | **Fixed.** `lib/menuOrder`: set order, one Main Course, accompaniments last, chutney served with the snack, alternatives inside their course |
 
 ## Quotation options and calendar (owner request, 31 Oct 2026)
 

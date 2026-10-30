@@ -90,6 +90,10 @@ export function togglePicked(items: QuotationLineItem[], itemId: string): Quotat
   return items.map(i => (i.item_id === itemId ? { ...i, chosen: true } : single && i.choice?.id === g.meta.id ? { ...i, chosen: undefined } : i));
 }
 
+// Dishes a guest actually gets: fixed dishes plus N from each "choose N" group.
+export const dishCount = (items: QuotationLineItem[] | undefined) =>
+  (items ?? []).filter(i => !i.choice).length + choiceGroups(items).reduce((s, g) => s + Math.min(g.meta.pick, g.items.length), 0);
+
 // Key of a dish within a quote: meal id (multi-day) + item id.
 export const pickKey = (itemId: string, mealId = '') => `${mealId}:${itemId}`;
 const withPicks = (items: QuotationLineItem[], picked: Set<string>, mealId = '') =>

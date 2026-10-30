@@ -4,7 +4,7 @@ import { scheduleAmounts } from './settings';
 import { page, esc, money, cap } from './theme';
 import { header, facts, sectionHead, sumRows, SumRow, banner, paySteps, chips, terms, upiBox, signatures, endLine, footerText } from './parts';
 import { courseGrid, coursesOf, hasItemPrices, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText, dayLabel } from './menu';
-import { plateRange, choiceGroups, pickedOf } from '../quoteChoices';
+import { plateRange, choiceGroups, pickedOf, dishCount } from '../quoteChoices';
 import { optionTitle, statusText } from '../quoteOptions';
 import { formatDateIST } from '../ist';
 import { addDays } from '../reports/model';
@@ -66,7 +66,7 @@ function priceSection(q: Quotation, itemPrices: boolean, title = 'Price'): strin
       : diff > 0 ? `Menu value <s>${money(range.min)}</s> · your price ${money(q.per_plate_amount)} per plate × ${guests} guests`
       : `${money(q.per_plate_amount)} per plate × ${guests} guests`;
   } else {
-    rows.push(row(`Catering${q.booking?.event_type ? ` — ${q.booking.event_type}` : ''}`, `${(q.items ?? []).length}-dish ${q.food_type || ''} menu`, guests, money(q.per_plate_amount), money(q.subtotal)));
+    rows.push(row(`Catering${q.booking?.event_type ? ` — ${q.booking.event_type}` : ''}`, `${dishCount(q.items)}-dish ${q.food_type || ''} menu`, guests, money(q.per_plate_amount), money(q.subtotal)));
     detail = `${money(q.per_plate_amount)} per plate × ${guests} guests`;
   }
   if (!multi && q.discount_amount > 0) adj.push({ label: 'Discount', value: q.discount_amount, sign: '-' });
@@ -85,7 +85,7 @@ const menuSection = (q: Quotation, itemPrices: boolean, title: string, breakBefo
   const dishes = dishesOf(q);
   const note = isMulti(q)
     ? `${daysOf(q.event_days).length} day(s) · ${daysOf(q.event_days).reduce((n, g) => n + g.meals.length, 0)} meal(s)`
-    : [`${dishes.length} dishes`, itemPrices ? 'prices per plate' : '', q.food_type].filter(Boolean).join(' · ');
+    : [`${dishCount(dishes)} dishes`, itemPrices ? 'prices per plate' : '', q.food_type].filter(Boolean).join(' · ');
   return `<section${breakBefore ? ' style="break-before:page"' : ''}>${sectionHead(title, note)}${
     isMulti(q) ? mealSchedule(q.event_days, { amounts: true, itemPrices }) : courseGrid(q.items ?? [], itemPrices)}</section>`;
 };

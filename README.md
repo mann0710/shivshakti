@@ -213,6 +213,7 @@ One look ("Navy & Leaf", from the logo) for everything that is printed or shared
   - register sheet and kitchen prep list in the same style.
 - **Reports:** the same header, headline tiles and tables.
 - **Data Center → Documents:** accent colour, shop address, UPI ID, bank details, contact person, quote validity, payment schedule (must add up to 100%), "on request" list, terms, and switches for the QR codes, invoice payments, invoice menu page and the slip stub, plus the bill footer line.
+- **Menu layout on paper:** courses follow the order you arranged the dishes in; dal, rice, breads, sabji / shaak, kathod and kadhi are grouped under **Main Course** (each as a sub-heading); "Including" / accompaniments always come last; a chutney is printed as "Served with …" under the farsan or starter (a "Served with" you type yourself always wins); "choose any" alternatives print inside their own course.
 - Gujarati names print correctly (Noto Sans Gujarati); amounts use the real ₹ sign.
 
 ## Catering fixes in this release

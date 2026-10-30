@@ -3,26 +3,11 @@ import { mealNet } from '../quoteMath';
 import { formatDateIST } from '../ist';
 import { esc, money, cap } from './theme';
 import { choiceGroups, pickedOf, servedItems, ChoiceGroup } from '../quoteChoices';
+import { planCourses, Course } from '../menuOrder';
 
 // Menu blocks shared by quotations, invoices and the event menu.
-interface Course { name: string; subs: { name: string; items: QuotationLineItem[] }[]; sum: number; count: number }
-
-// Category → subcategory, both in first-appearance order.
-export function coursesOf(items: QuotationLineItem[]): Course[] {
-  const out: Course[] = [];
-  for (const it of items ?? []) {
-    const name = (it.category_name || it.subcategory_name || 'Menu').trim();
-    let c = out.find(x => x.name === name);
-    if (!c) { c = { name, subs: [], sum: 0, count: 0 }; out.push(c); }
-    const subName = (it.subcategory_name || '').trim();
-    let s = c.subs.find(x => x.name === subName);
-    if (!s) { s = { name: subName, items: [] }; c.subs.push(s); }
-    s.items.push(it);
-    c.sum += Number(it.amount) || 0;
-    c.count += 1;
-  }
-  return out;
-}
+// Courses in the owner's order with one Main Course and accompaniments last (lib/menuOrder).
+export const coursesOf = (items: QuotationLineItem[]): Course[] => planCourses(items);
 
 export const itemsTotal = (items: QuotationLineItem[]) => (items ?? []).reduce((s, i) => s + (Number(i.amount) || 0), 0);
 export const hasItemPrices = (items: QuotationLineItem[]) => (items ?? []).some(i => (Number(i.amount) || 0) > 0);
@@ -41,7 +26,7 @@ function choiceBlock(g: ChoiceGroup, prices: boolean): string {
   const hi = a.slice(a.length - n).reduce((s, x) => s + x, 0);
   const priced = prices && !g.meta.included && hi > 0;
   const meta = decided ? 'chosen' : priced ? (lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`) : 'included';
-  return `<div class="course choice"><div class="course-h">${esc(g.meta.label)} · ${decided ? 'your choice' : `choose any ${n}`}<span class="num">${meta}</span></div>${
+  return `<div class="choice-box"><div class="choice-h">${esc(g.meta.label)} · ${decided ? 'your choice' : `choose any ${n}`}<span class="num">${meta}</span></div>${
     decided ? '' : '<div class="note" style="padding-left:0">Tick your choice.</div>'}${
     g.items.map(i => `<div class="dish"><span><span class="tick">${i.chosen ? '✓' : ''}</span>${esc(i.item_name)}</span>${
       priced && Number(i.amount) > 0 ? `<span class="p num">${money(i.amount)}</span>` : ''}</div>`).join('')}</div>`;
@@ -54,12 +39,15 @@ export function courseGrid(all: QuotationLineItem[], prices: boolean, mode: 'quo
   // Served copies list decided picks as normal dishes; open groups stay as a choice.
   const decided = new Set(choiceGroups(items).filter(g => pickedOf(g).length).map(g => g.meta.id));
   const groups = choiceGroups(items).filter(g => mode === 'quote' || !decided.has(g.meta.id));
-  const fixed = items.filter(i => !i.choice || (mode === 'served' && decided.has(i.choice.id)));
-  return `<div class="courses">${groups.map(g => choiceBlock(g, prices)).join('')}${coursesOf(fixed).map(c => {
-    const meta = prices && c.sum > 0 ? `${money(c.sum)} / plate` : `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}`;
-    const showSub = c.subs.length > 1 || (c.subs[0]?.name && c.subs[0].name !== c.name);
+  // Decided picks print as normal dishes; open choices sit inside their own course.
+  const list = items.map(i => (i.choice && !groups.some(g => g.meta.id === i.choice!.id) ? { ...i, choice: undefined } : i));
+  return `<div class="courses">${planCourses(list, { pair: true, groups }).map(c => {
+    const meta = prices && c.sum > 0 ? `${money(c.sum)} / plate` : c.count ? `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}` : '';
+    const plain = c.subs.filter(x => !x.choice);
+    const showSub = c.subs.length > 1 || (!!plain[0]?.name && plain[0].name !== c.name);
     return `<div class="course"><div class="course-h">${esc(c.name)}<span class="num">${meta}</span></div>${
-      c.subs.map(s => `${showSub && s.name ? `<div class="sub">${esc(s.name)}</div>` : ''}${s.items.map(i => dish(i, prices)).join('')}`).join('')}</div>`;
+      c.subs.map(x => (x.choice ? choiceBlock(x.choice, prices)
+        : `${showSub && x.name ? `<div class="sub">${esc(x.name)}</div>` : ''}${x.items.map(i => dish(i, prices)).join('')}`)).join('')}</div>`;
   }).join('')}</div>`;
 }
 

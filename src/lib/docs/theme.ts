@@ -48,7 +48,9 @@ h2 { font-family: Outfit, sans-serif; font-size: 19px; font-weight: 600; color: 
 .dish { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; padding: 2px 0; border-bottom: 1px dotted #E3E3EA; }
 .dish .p { font-weight: 500; white-space: nowrap; }
 .note { font-size: 11.5px; font-style: italic; color: #5C5C6B; padding: 1px 0 2px 10px; }
-.course.choice { border: 1.5px solid var(--accent); border-radius: 10px; padding: 10px 12px; background: #FAFCF6; }
+.choice-box { border: 1.5px solid var(--accent); border-radius: 8px; padding: 6px 10px 4px; margin: 4px 0 6px; background: #FAFCF6; }
+.choice-h { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; font-weight: 600; color: var(--accent-text); margin-bottom: 2px; }
+.choice-h span { font-weight: 500; color: #5C5C6B; }
 .tick { display: inline-flex; width: 14px; height: 14px; border: 1.5px solid #1C1C24; border-radius: 3px; align-items: center; justify-content: center; font-size: 10px; margin-right: 8px; vertical-align: -2px; }
 .compare { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 12px; break-inside: avoid; }
 .opt { border: 1px solid #E3E3EA; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
