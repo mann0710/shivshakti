@@ -1,7 +1,7 @@
 import type { SeasonalOrder } from '../hooks/useSeasonalOrders';
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
-import { ReceiptData, billNumber, receiptHtml, printHtml, whatsAppText, openWhatsApp } from './receipt';
-import { preorderSlipHtml } from './preorderSlip';
+import { ReceiptData, billNumber, printHtml, whatsAppText, openWhatsApp } from './receipt';
+import { billHtml, preorderSlipHtml } from './docs/sweetsDocs';
 import { inr } from './money';
 import { STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf, advanceAtBooking, balanceOf, modeLabel } from './preorders';
 
@@ -12,6 +12,7 @@ export const orderReceipt = (o: SeasonalOrder, occasion?: string, gst?: string):
   kind: 'Bill',
   number: billNumber(o.bill_no, o.id),
   date: day(o.created_at),
+  time: new Date(o.created_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }),
   customer_name: o.customer_name,
   phone: o.phone,
   occasion,
@@ -50,6 +51,8 @@ export const preorderReceipt = (p: SeasonalPreorder, occasion?: string, gst?: st
     collected: p.balance_paid ?? 0,
     collected_mode: modeLabel(p.balance_mode),
     handed_over: p.delivered_at ? day(p.delivered_at) : undefined,
+    packed: p.status === 'ready' || p.status === 'delivered',
+    given: p.status === 'delivered',
   },
 });
 
@@ -62,4 +65,4 @@ export const shareReceipt = (r: ReceiptData) => {
 };
 
 // Bills print as 80 mm receipts; pre-bookings as a full A4 slip.
-export const printReceipt = (r: ReceiptData) => printHtml(r.booking ? preorderSlipHtml(r) : receiptHtml(r));
+export const printReceipt = (r: ReceiptData) => printHtml(r.booking ? preorderSlipHtml(r) : billHtml(r));

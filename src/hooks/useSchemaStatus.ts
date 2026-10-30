@@ -6,6 +6,7 @@ export type SchemaStatus = 'ready' | 'legacy';
 export const PACK_MIGRATION_FILE = 'supabase/migrations/20261030_sessional_pack_sizes.sql';
 export const PRICE_MIGRATION_FILE = 'supabase/migrations/20261101_prices_gstin.sql';
 export const PREORDER_MIGRATION_FILE = 'supabase/migrations/20261104_preorder_fulfillment.sql';
+export const DOC_SETTINGS_MIGRATION_FILE = 'supabase/migrations/20261105_doc_settings.sql';
 
 const missingColumn = (e: { code?: string; message?: string }) =>
   e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find/i.test(e.message ?? '');
@@ -44,4 +45,9 @@ export const useHasPriceColumns = () => useSchema('prices', () => [
 // Pre-booking pickup/delivery, hand-over date and balance collected.
 export const useHasPreorderColumns = () => useSchema('preorders', () => [
   supabase.from('seasonal_preorders').select('fulfillment, delivered_at, balance_paid, balance_mode').limit(1),
+]).data === 'ready';
+
+// Saved document settings on data_center.
+export const useHasDocSettings = () => useSchema('doc_settings', () => [
+  supabase.from('data_center').select('doc_settings').limit(1),
 ]).data === 'ready';

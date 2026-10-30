@@ -34,7 +34,7 @@ create table if not exists payments (id uuid primary key default gen_random_uuid
   amount numeric(12,2) not null, payment_date date not null default current_date, payment_type text not null,
   payment_mode text not null, notes text, created_at timestamptz not null default now());
 create table if not exists data_center (id uuid primary key default gen_random_uuid(), gst_number text, gst_rate numeric(5,2) default 18,
-  fssai_certificate_url text, updated_at timestamptz, created_at timestamptz not null default now());
+  fssai_certificate_url text, updated_at timestamptz, created_at timestamptz not null default now(), doc_settings jsonb);
 create table if not exists team_members (id uuid primary key default gen_random_uuid(), name text not null, mobile text, email text,
   created_at timestamptz not null default now());
 create table if not exists event_types (id uuid primary key default gen_random_uuid(), name text not null unique, created_at timestamptz not null default now());

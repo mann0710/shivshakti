@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DocSettingsCard from '../components/DocSettingsCard';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { supabase } from '../lib/supabase';
@@ -242,6 +243,8 @@ const DataCenter: React.FC = () => {
             <button style={btnPrimary} onClick={handleSaveInfo}>Save Information</button>
           </div>
         </div>
+
+        <DocSettingsCard />
 
         {/* Event Types */}
         <div style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 20 }}>

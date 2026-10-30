@@ -3,10 +3,6 @@
 export const inr = (n: number) =>
   `₹${(Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
-// jsPDF's built-in fonts have no ₹ glyph.
-export const rs = (n: number) =>
-  `Rs ${(Number(n) || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-
 export type DiscountType = 'amount' | 'percentage';
 
 export function discountValue(subtotal: number, value: number | string, type: DiscountType): number {

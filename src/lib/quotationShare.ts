@@ -1,7 +1,7 @@
 import toast from 'react-hot-toast';
 import { Quotation } from '../hooks/useQuotations';
-import { buildQuotationPdf } from './pdf/quotationPdf';
-import { sharePdf, ShareResult } from './sharePdf';
+import { quotationDoc } from './docs/quotationDoc';
+import { shareDoc, ShareResult } from './docs/output';
 import { formatDateIST } from './ist';
 import { inr } from './money';
 import { SHOP } from './shop';
@@ -32,11 +32,10 @@ export const quotationMessage = (q: Quotation): string => {
   return lines.filter(l => typeof l === 'string').join('\n');
 };
 
-// Builds the PDF synchronously so the share sheet still counts as a user tap.
+// Real PDF from the PDF service; phones get the share sheet, desktops a download + WhatsApp.
 export async function shareQuotation(q: Quotation, withPrices = true): Promise<ShareResult | null> {
   try {
-    const { doc, fileName } = buildQuotationPdf(q, withPrices);
-    const res = await sharePdf(doc, fileName, quotationMessage(q), q.customer?.phone);
+    const res = await shareDoc(() => quotationDoc(q, { withPrices }), quotationMessage(q), q.customer?.phone);
     if (res === 'shared') toast.success('Quotation shared');
     else if (res === 'whatsapp') toast.success('PDF downloaded — attach it in the WhatsApp chat', { duration: 5000 });
     else toast('Share cancelled');

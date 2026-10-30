@@ -28,6 +28,16 @@ export function pickQuotation<T extends { booking_id?: string | null; status?: s
   return mine.find(q => q.status === 'accepted') ?? mine.find(q => q.status !== 'rejected') ?? mine[0];
 }
 
+// Day number = ordinal position of date among unique dates in first-appearance order
+export const getDayNumber = (date: string, days: { date: string }[]): number => {
+  const seen: string[] = [];
+  for (const d of days) {
+    if (d.date && !seen.includes(d.date)) seen.push(d.date);
+  }
+  const idx = seen.indexOf(date);
+  return idx >= 0 ? idx + 1 : 1;
+};
+
 // WhatsApp needs the country code; 10-digit Indian numbers get 91.
 export const waNumber = (phone: string | undefined | null) => {
   const d = (phone ?? '').replace(/\D/g, '');

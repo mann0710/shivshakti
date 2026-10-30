@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
-import { getDayNumber } from '../../lib/pdf/quotationPdf';
+import { getDayNumber } from '../../lib/quoteMath';
 import QuotationItemPanels, { PickerItem, ItemTextField } from './QuotationItemPanels';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Hi-Tea', 'Snacks', 'Dinner', 'Supper'];

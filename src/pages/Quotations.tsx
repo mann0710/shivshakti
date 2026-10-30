@@ -16,7 +16,9 @@ import {
   useDeleteQuotation,
   Quotation, QuotationLineItem, EventDay,
 } from '../hooks/useQuotations';
-import { downloadPDF, getDayNumber } from '../lib/pdf/quotationPdf';
+import { getDayNumber } from '../lib/quoteMath';
+import { downloadDoc } from '../lib/docs/output';
+import { quotationDoc } from '../lib/docs/quotationDoc';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import QuotationList from '../components/catering/QuotationList';
@@ -447,7 +449,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
                   style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
                 <span>Include item prices in PDF</span>
               </label>
-              <button onClick={withDraft(q => downloadPDF(q, showPrices && pdfWithPrices))} style={{ ...btnSmall, background: '#378ADD' }}>⬇ Download PDF</button>
+              <button onClick={withDraft(q => downloadDoc(() => quotationDoc(q, { withPrices: showPrices && pdfWithPrices })))} style={{ ...btnSmall, background: '#378ADD' }}>⬇ Download PDF</button>
               {editingId && (
                 <button onClick={withDraft(q => { lifecycle.share(q, showPrices && pdfWithPrices); })} style={{ ...btnSmall, background: '#1DA851' }}>📤 Share</button>
               )}
@@ -465,7 +467,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
 
       <QuotationList
         quotations={quotations}
-        onPdf={q => downloadPDF(q)}
+        onPdf={q => downloadDoc(() => quotationDoc(q))}
         onShare={q => { lifecycle.share(q); }}
         onEdit={openEdit}
         onClone={handleClone}

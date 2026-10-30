@@ -126,6 +126,18 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | Quantity could only be changed with +/− (24 packs = 24 taps) | **Fixed.** Typed quantity in the bill and the pack picker |
 | Report PDFs used jsPDF fonts, which cannot draw Gujarati names | **Fixed.** Reports, slip and sheet print as HTML, so any script prints |
 
+## Printed documents (owner feedback, 31 Oct 2026)
+
+| Finding | Status |
+|---|---|
+| Per-plate quotations showed "Rs.0" next to every dish; one dish per row ran to two pages | **Fixed.** Dish prices only when priced per item; two-column course list |
+| Same subcategory under two courses ("Hot" starters and "Hot" sweets) looked like one | **Fixed.** Course → sub-group |
+| Invoice GSTIN printed over the header rule; invoice number twice; no shop identity or bill-to | **Fixed.** New header and bill-to block |
+| "Rs." instead of ₹; Gujarati names could not print (jsPDF fonts) | **Fixed.** HTML templates rendered by Chrome with Noto fonts |
+| No venue, address, validity, payment amounts or way to pay on the quotation | **Fixed.** Facts block, valid-till, schedule in rupees, UPI QR |
+| Document details hard-coded | **Fixed.** Data Center → Documents |
+| Four separate jsPDF builders (quotation, invoice, calendar menu, reports) | **Fixed.** One theme + shared parts in `lib/docs` |
+
 ## Code quality
 
 | Finding | Status |

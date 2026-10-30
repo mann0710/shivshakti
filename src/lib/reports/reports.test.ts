@@ -5,7 +5,7 @@ import { paymentsReport, duesReport } from './money';
 import { preorderReport, cateringReport } from './pipeline';
 import { reportCsv, reportHtml } from './export';
 import { buildSheet } from '../preorderSheet';
-import { preorderSlipHtml } from '../preorderSlip';
+import { preorderSlipHtml } from '../docs/sweetsDocs';
 import { preorderReceipt } from '../sessionalReceipts';
 
 const kaju = { item_id: 'k', item_name: 'Kaju Katli', weight: 500, weight_unit: 'gm' as const, price: 490, qty: 2, line_total: 980 };
@@ -91,7 +91,7 @@ describe('pipeline reports', () => {
   it('exports CSV and printable HTML', () => {
     const r = salesReport(input());
     expect(reportCsv(r, input().range)).toContain('Day by day\nDate,Bills,Counter sales');
-    expect(reportHtml(r, input().range)).toContain('<h1>Sales report</h1>');
+    expect(reportHtml(r, input().range)).toContain('>Sales report</div>');
   });
 });
 
@@ -105,7 +105,7 @@ describe('pre-booking sheet and slip', () => {
   });
   it('prints every payment detail on the slip', () => {
     const html = preorderSlipHtml(preorderReceipt(input().preorders[1], 'Diwali', '24ABCDE1234F1Z5'));
-    ['PRE-BOOKING ORDER', 'Sita', '9898989898', 'Pickup', 'Advance paid (UPI)', 'Paid at hand-over (Cash)', 'Balance due', 'Customer signature', 'Diwali']
+    ['Pre-booking', 'Sita', '9898989898', 'Pickup', 'Advance · UPI', 'Paid at hand-over · Cash', 'Fully paid', 'Customer signature', 'Diwali', 'counter stub']
       .forEach(t => expect(html).toContain(t));
   });
 });

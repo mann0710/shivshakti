@@ -89,6 +89,8 @@ export interface DataCenter {
   fssai_certificate_url?: string;
   // Default sweet pack sizes per unit (grams / ml / pieces)
   pack_sizes?: Partial<Record<'kg' | 'ltr' | 'pc', number[]>> | null;
+  // Printed-document settings (see lib/docs/settings)
+  doc_settings?: Record<string, unknown> | null;
   updated_at?: string;
 }
 

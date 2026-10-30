@@ -20,6 +20,7 @@ import SeasonalCustomers from './pages/SeasonalCustomers';
 import { Page, NAV_ITEMS, SECTIONS, PINNED, isPage } from './components/navItems';
 import { setNavIntent, NavIntent } from './hooks/useNavIntent';
 import { useAuth } from './hooks/useAuth';
+import { useDocContextSync } from './hooks/useDocSettings';
 import LoginScreen from './components/LoginScreen';
 
 const queryClient = new QueryClient();
@@ -27,6 +28,9 @@ const queryClient = new QueryClient();
 export type { Page };
 
 const hashPage = () => window.location.hash.replace('#', '');
+
+// Keeps printed documents in step with Data Center settings.
+const DocContextSync: React.FC = () => { useDocContextSync(); return null; };
 
 function App() {
   // URL hash first (#quotations), then the last-viewed page, then the dashboard.
@@ -94,6 +98,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <DocContextSync />
       <div className="app-layout">
         <Sidebar currentPage={currentPage} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
         <main className="app-main">

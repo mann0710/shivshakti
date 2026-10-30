@@ -5,7 +5,7 @@ Web app for Shiv Shakti's two businesses:
 - **Catering:** customers, bookings, quotations (single and multi-day), invoices, payments, calendar and finance.
 - **Sweets (Sessional):** a tap-to-bill POS, pre-bookings, and an item catalog priced per kg.
 
-Built with React 18 + TypeScript (Create React App), TanStack Query and Supabase (Postgres + PostgREST). PDFs are made with jsPDF.
+Built with React 18 + TypeScript (Create React App), TanStack Query and Supabase (Postgres + PostgREST). Printed documents are HTML templates; real PDF files come from a small PDF service (`api/pdf.js`, headless Chrome on Vercel).
 
 ## Quick start
 
@@ -63,6 +63,19 @@ Run [`supabase/migrations/20261103_backfill_advances.sql`](supabase/migrations/2
 ### Pre-booking pickup / delivery and hand-over payments
 
 Run [`supabase/migrations/20261104_preorder_fulfillment.sql`](supabase/migrations/20261104_preorder_fulfillment.sql) (adds `fulfillment`, `delivered_at`, `balance_paid`, `balance_mode` to `seasonal_preorders`; safe to re-run). Until it is run, the app skips these fields: pickup/delivery is guessed from the address, and the hand-over payment mode overwrites the advance mode as before. **Not yet applied on the live project.**
+
+### Document settings
+
+Run [`supabase/migrations/20261105_doc_settings.sql`](supabase/migrations/20261105_doc_settings.sql) (adds `data_center.doc_settings`; safe to re-run). Until it is run, Data Center → Documents shows a notice and every document uses the defaults. **Not yet applied on the live project.**
+
+### PDF service (Vercel)
+
+`api/pdf.js` turns a document into a PDF with headless Chrome (`puppeteer-core` + `@sparticuz/chromium`). It needs no setup beyond the usual `REACT_APP_SUPABASE_URL` and `REACT_APP_SUPABASE_ANON_KEY` environment variables in Vercel (it also accepts `SUPABASE_URL` / `SUPABASE_ANON_KEY`).
+- Only signed-in staff can use it (it calls `is_staff` with the user's token).
+- The page may load nothing but embedded images and Google Fonts.
+- Every page gets "Page X of Y" and the document reference in the footer.
+- If the service cannot be reached (local `npm start`, offline), the app opens the print window instead; choose "Save as PDF".
+- To try it locally: `CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"` and call `require('./api/pdf').render(html, footer)` from Node.
 
 ### Item prices and customer GSTIN
 
@@ -159,6 +172,31 @@ The phone bottom bar now has a **POS** button.
 - **Long lists are complete:** customers, bookings, quotations, invoices, payments and sweets load page by page, so nothing silently drops after 1,000 rows.
 - **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked.
 
+## Printed documents (quotations, invoices, slips, bills, reports)
+
+One look ("Navy & Leaf", from the logo) for everything that is printed or shared:
+- **Quotation:**
+  - logo strip with address, GSTIN, number, issue date and *valid till*;
+  - customer and event facts;
+  - the menu grouped by course, with sub-groups, "served with" and notes;
+  - **per plate** (no dish prices) or **per item** (dish prices, course subtotals, menu value and the special-price saving);
+  - **multi-day / several meals in a day:** one card per meal with time, ceremony, guests, rate or offer and amount;
+  - the **price** table, extra charges, transport and GST, ending with the navy **total banner**;
+  - then the payment schedule in rupees, "on request" extras, terms, signatures and a UPI QR to pay the booking amount.
+- **Tax invoice:**
+  - bill-to with GSTIN, place of supply and SAC;
+  - one line per meal (multi-day), extra charges and transport as lines;
+  - discounts broken down, taxable value, CGST/SGST or IGST, amount in words;
+  - payments received, balance with a UPI QR, and the menu served as the last page.
+- **Event menu** (Calendar): the kitchen copy without prices.
+- **Sweets:**
+  - 80 mm bill (black only, big total, payment status);
+  - A4 pre-booking slip with every payment and a tear-off counter stub (Packed / Given);
+  - register sheet and kitchen prep list in the same style.
+- **Reports:** the same header, headline tiles and tables.
+- **Data Center → Documents:** accent colour, shop address, UPI ID, bank details, contact person, quote validity, payment schedule (must add up to 100%), "on request" list, terms, and switches for the QR codes, invoice payments, invoice menu page and the slip stub, plus the bill footer line.
+- Gujarati names print correctly (Noto Sans Gujarati); amounts use the real ₹ sign.
+
 ## Catering fixes in this release
 
 - New invoices include the quotation's extra charges in the total. They were under-billed before.
@@ -211,19 +249,20 @@ src/
   lib/reports/                      report builders (sweets, money, pipeline), date ranges, Print/PDF + CSV export
   hooks/usePreorderActions.tsx      pack, hand over + collect, cancel, delete (shared by sheet and list)
   hooks/useReportData.ts            data for one report period
-  lib/pdf/                          quotation and invoice PDFs (build + download)
-  lib/sharePdf.ts                   share a PDF to WhatsApp (share sheet on phones, download + WhatsApp on desktop)
+  lib/docs/                         printed documents: theme, parts, menu blocks, quotation, invoice/event menu, sweets, settings, QR, output (PDF service → download/share, print fallback)
+  api/pdf.js                        PDF service (Vercel function, headless Chrome)
+  components/DocSettingsCard.tsx    Data Center → Documents
   lib/quoteMath.ts                  shared catering money math
   pages/                            one file per screen
 supabase/
   schema.sql                        baseline schema (inferred from the code, for local dev)
-  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN, invoice/quote numbers, pre-booking fulfillment)
+  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN, invoice/quote numbers, pre-booking fulfillment, document settings)
 ```
 
 ## Tests and checks
 
 ```bash
-CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, PDFs, reports, pre-booking sheet/slip, nav
+CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, documents, reports, pre-booking sheet/slip, nav
 npx tsc --noEmit -p .                             # type check
 npx eslint src --ext .ts,.tsx                     # lint (the hosted build fails on warnings when CI=true)
 ```

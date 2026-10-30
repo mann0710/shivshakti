@@ -1,6 +1,8 @@
-import { Report, Range, Table, Cell, fmtCell, isNum, rangeLabel } from './model';
-import { esc, printHtml } from '../receipt';
-import { inr } from '../money';
+import { Report, Range, Table, Cell, Fmt, fmtCell, isNum, rangeLabel } from './model';
+import { printHtml } from '../receipt';
+import { esc, page } from '../docs/theme';
+import { slimHeader, sectionHead } from '../docs/parts';
+import { DocContext, docContext } from '../docs/context';
 import { SHOP } from '../shop';
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -35,39 +37,31 @@ export function downloadCsv(r: Report, range: Range) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-const htmlTable = (t: Table) => `<h2>${esc(t.title)}</h2>${!t.rows.length ? `<p class="e">${esc(t.empty)}</p>` : `<table>
-<thead><tr>${t.cols.map(c => `<th class="${isNum(c.fmt) ? 'r' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
-<tbody>${t.rows.map(row => `<tr>${t.cols.map(c => `<td class="${isNum(c.fmt) ? 'r' : ''}">${esc(fmtCell(row[c.key], c.fmt))}</td>`).join('')}</tr>`).join('')}</tbody>
-${t.total ? `<tfoot><tr>${t.cols.map(c => `<td class="${isNum(c.fmt) ? 'r' : ''}">${esc(fmtCell(t.total![c.key], c.fmt))}</td>`).join('')}</tr></tfoot>` : ''}
-</table>`}`;
+const cell = (v: Cell, fmt?: Fmt) => esc(fmtCell(v, fmt));
+const htmlTable = (t: Table) => {
+  const right = (i: number) => (isNum(t.cols[i].fmt) ? 'r' : '');
+  return `<section>${sectionHead(t.title, t.rows.length ? `${t.rows.length} rows` : '')}${!t.rows.length ? `<p class="muted">${esc(t.empty)}</p>` : `<div class="box"><table class="t">
+<thead><tr>${t.cols.map((c, i) => `<th class="${right(i)}">${esc(c.label)}</th>`).join('')}</tr></thead>
+<tbody>${t.rows.map(row => `<tr>${t.cols.map((c, i) => `<td class="${right(i)}">${cell(row[c.key], c.fmt)}</td>`).join('')}</tr>`).join('')}</tbody>
+${t.total ? `<tfoot><tr>${t.cols.map((c, i) => `<td class="${right(i)}" style="font-weight:700;background:#EEF0FB">${cell(t.total![c.key], c.fmt)}</td>`).join('')}</tr></tfoot>` : ''}
+</table></div>`}</section>`;
+};
 
-// Printable A4 page; the browser's print dialog also saves it as PDF.
-export function reportHtml(r: Report, range: Range): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(reportFileName(r, range, 'pdf').replace('.pdf', ''))}</title>
-<style>
-  @page { size: A4; margin: 12mm; } * { box-sizing: border-box; }
-  body { font: 11.5px/1.4 Arial, 'Noto Sans Gujarati', sans-serif; color: #1A1A18; margin: 0; }
-  .top { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #1A237E; padding-bottom: 6px; margin-bottom: 4px; }
-  h1 { font-size: 20px; margin: 0; color: #1A237E; } .shop { font-weight: 700; font-size: 13px; } .m { color: #666; font-size: 10.5px; }
-  .note { color: #555; margin: 6px 0 10px; }
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
-  .stat { border: 1px solid #D6D9EE; border-radius: 6px; padding: 7px 9px; background: #F7F8FD; }
-  .stat .l { color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; } .stat .v { font-size: 15px; font-weight: 800; margin-top: 2px; } .stat .s { color: #777; font-size: 10px; }
-  .bad .v { color: #B3261E; } .good .v { color: #2E6B0F; } .warn .v { color: #B85C00; }
-  h2 { font-size: 13px; margin: 14px 0 5px; color: #1A237E; } .e { color: #888; font-style: italic; }
-  table { width: 100%; border-collapse: collapse; } thead { display: table-header-group; } tr { page-break-inside: avoid; }
-  th { background: #1A237E; color: #fff; text-align: left; padding: 5px 6px; font-size: 10.5px; }
-  td { padding: 4px 6px; border-bottom: 1px solid #E4E4E0; } tbody tr:nth-child(even) td { background: #FAFAF7; }
-  tfoot td { font-weight: 800; background: #EEF0FB; border-top: 2px solid #1A237E; } .r { text-align: right; white-space: nowrap; }
-  .foot { margin-top: 16px; color: #888; font-size: 10px; text-align: center; }
-</style></head><body>
-<div class="top"><div><div class="shop">${esc(SHOP.name)} · ${esc(SHOP.tagline)}</div><h1>${esc(r.title)}</h1></div>
-<div class="m" style="text-align:right"><b>${esc(rangeLabel(range))}</b><br>Printed ${esc(new Date().toLocaleString('en-IN'))}</div></div>
-<div class="note">${esc(r.note)}</div>
-<div class="stats">${r.stats.map(s => `<div class="stat ${s.tone ?? ''}"><div class="l">${esc(s.label)}</div><div class="v">${esc(fmtCell(s.value, s.fmt, inr) || '—')}</div>${s.sub ? `<div class="s">${esc(s.sub)}</div>` : ''}</div>`).join('')}</div>
-${r.tables.map(htmlTable).join('\n')}
-<div class="foot">${esc(SHOP.name)} · ${SHOP.phone}</div>
-</body></html>`;
+const TONES: Record<string, string> = { bad: '#B3261E', good: '#3D6B14', warn: '#B85C00' };
+
+// Printable A4 report in the document style; the print dialog also saves it as PDF.
+export function reportHtml(r: Report, range: Range, ctx: DocContext = docContext()): string {
+  const tiles = `<div class="tiles">${r.stats.map(s => `<div class="tile"><span class="muted" style="font-size:11px">${esc(s.label)}</span>
+  <b class="num" style="color:${s.tone ? TONES[s.tone] : '#1E1B6E'}">${esc(fmtCell(s.value, s.fmt) || '—')}</b>${s.sub ? `<span class="muted num" style="font-size:11px">${esc(s.sub)}</span>` : ''}</div>`).join('')}</div>`;
+  const body = `${slimHeader(ctx, 'Report', r.title, `<b>${esc(rangeLabel(range))}</b><br>Printed ${esc(new Date().toLocaleString('en-IN'))}`)}
+<div class="wrap"><p class="muted" style="margin:14px 0 0">${esc(r.note)}</p>${tiles}${r.tables.map(htmlTable).join('')}</div>
+<div class="end"><span>${esc(SHOP.name)} · ${esc(r.title)}</span><span>CSV copy available from the app</span></div>`;
+  return page(reportFileName(r, range, 'pdf').replace('.pdf', ''), ctx.settings.accent, body, `
+@page { margin: 12mm 0; } @page :first { margin-top: 0; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; break-inside: avoid; }
+.tile { border: 1px solid #E3E3EA; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.tile b { font-family: Outfit, sans-serif; font-size: 19px; }
+section { margin-top: 18px; } table.t td { padding: 5px 10px; font-size: 12px; } table.t th { padding: 6px 10px; }`);
 }
 
 export const printReport = (r: Report, range: Range) => printHtml(reportHtml(r, range));

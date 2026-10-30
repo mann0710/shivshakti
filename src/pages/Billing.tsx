@@ -353,7 +353,7 @@ const Billing: React.FC<Props> = () => {
 
                 <PaymentHistory key={selected.id} payments={paymentHistory} balanceDue={selected.balance_due} />
 
-                <InvoiceActions invoice={selected} quotation={selectedInvoiceQuotation} payments={paymentHistory} gstNumber={dc?.gst_number} />
+                <InvoiceActions invoice={selected} quotation={selectedInvoiceQuotation} payments={paymentHistory} />
 
                 {selected.balance_due > 0 && (
                   <button type="button" style={{ ...btnGhost, width: '100%', fontSize: 12, color: ORANGE, borderColor: ORANGE }} onClick={() => setShowPaymentForm(true)}>

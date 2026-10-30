@@ -1,6 +1,6 @@
 import React from 'react';
 import { EventDay } from '../../hooks/useQuotations';
-import { getDayNumber } from '../../lib/pdf/quotationPdf';
+import { getDayNumber } from '../../lib/quoteMath';
 import { formatDateIST } from '../../lib/ist';
 import { genId } from './QuotationMultiDay';
 
