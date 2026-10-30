@@ -68,6 +68,10 @@ Run [`supabase/migrations/20261104_preorder_fulfillment.sql`](supabase/migration
 
 Run [`supabase/migrations/20261105_doc_settings.sql`](supabase/migrations/20261105_doc_settings.sql) (adds `data_center.doc_settings`; safe to re-run). Until it is run, Data Center → Documents shows a notice and every document uses the defaults. **Not yet applied on the live project.**
 
+### Quotation options and price ranges
+
+Run [`supabase/migrations/20261106_quote_options.sql`](supabase/migrations/20261106_quote_options.sql) (adds `option_group`, `option_label`, `option_name`, `per_plate_max`, `total_max` to `quotations`; safe to re-run). Until it is run, "+ Add option" stays hidden and price ranges are not stored (choice groups still work, inside the dishes). **Not yet applied on the live project.**
+
 ### PDF service (Vercel)
 
 `api/pdf.js` turns a document into a PDF with headless Chrome (`puppeteer-core` + `@sparticuz/chromium`). It needs no setup beyond the usual `REACT_APP_SUPABASE_URL` and `REACT_APP_SUPABASE_ANON_KEY` environment variables in Vercel (it also accepts `SUPABASE_URL` / `SUPABASE_ANON_KEY`).
@@ -173,6 +177,18 @@ The phone bottom bar now has a **POS** button.
 - **Long lists are complete:** customers, bookings, quotations, invoices, payments and sweets load page by page, so nothing silently drops after 1,000 rows.
 - **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked.
 
+## Quotation options, "choose any" dishes and the quote calendar
+
+- **Calendar view** (Quotations → Calendar): a month of quotes by event date, coloured by status (draft, sent, accepted, not chosen / rejected). Tap a day for its quotes, a busy-day note and **+ New quote on this day** (the date is filled in). On phones the days show dots and the list sits below.
+- **Several quotes on one day are allowed.** The form warns when the date already has other quotes or the venue is booked by a confirmed event, but never blocks. Only two *confirmed* bookings at the same venue and date are refused.
+- **"Choose any N of M" groups:** in the selected dishes, tap **+ Choose-any group**, tick the dishes and **Group**. Set how many the customer picks.
+  - With item prices, the plate price becomes a **range** (cheapest to dearest picks) until the customer chooses; tick **Included in the plate price** to keep the dishes as free choices.
+  - **Fixed plate price** (beside Per Plate) quotes one price whatever they pick.
+  - Works in single-day menus and in every meal of a multi-day event.
+- **Options A / B / C:** on a saved quotation, **+ Add option** copies it as the next option of the same enquiry, with its own menu, price and name (e.g. Classic, Premium). Tabs switch between options; the list keeps them together.
+- **Mark accepted…** (from the editor, the status menu or the event page) asks which option the customer took and which dishes they picked, with the final guest count and a live price. It locks in the picks and exact price, marks the other options **Not chosen**, confirms the booking and offers the invoice.
+- **PDF:** options are compared side by side, then each option's menu and price; choice groups print with tick boxes and their price effect; the total shows as a range until decided; the payment schedule shows percentages until the price is final. Invoices and the event menu list only the dishes that will be served.
+
 ## Printed documents (quotations, invoices, slips, bills, reports)
 
 One look ("Navy & Leaf", from the logo) for everything that is printed or shared:
@@ -250,6 +266,9 @@ src/
   lib/reports/                      report builders (sweets, money, pipeline), date ranges, Print/PDF + CSV export
   hooks/usePreorderActions.tsx      pack, hand over + collect, cancel, delete (shared by sheet and list)
   hooks/useReportData.ts            data for one report period
+  lib/quoteChoices.ts, quoteOptions.ts   choose-any groups, price ranges, accepting picks; options, same-day note, quote dates
+  hooks/useQuoteForm.ts, useAcceptFlow.tsx   quotation form state and totals; accept with option + picks
+  components/catering/QuotationCalendar, QuotationOptionsBar, QuotationChoiceGroup, QuoteAcceptDialog
   lib/docs/                         printed documents: theme, parts, menu blocks, quotation, invoice/event menu, sweets, settings, QR, output (PDF service → download/share, print fallback)
   api/pdf.js                        PDF service (Vercel function, headless Chrome)
   components/DocSettingsCard.tsx    Data Center → Documents
@@ -257,7 +276,7 @@ src/
   pages/                            one file per screen
 supabase/
   schema.sql                        baseline schema (inferred from the code, for local dev)
-  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN, invoice/quote numbers, pre-booking fulfillment, document settings)
+  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN, invoice/quote numbers, pre-booking fulfillment, document settings, quote options)
 ```
 
 ## Tests and checks

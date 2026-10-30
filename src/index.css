@@ -244,3 +244,31 @@ a { color: inherit; }
 .report-table tbody tr:hover td { background: #FAFAF6; }
 .report-table tfoot td { font-weight: 700; background: #EEF0FB; color: #1A237E; border-top: 1px solid #C5CAE9; }
 .report-picker button { flex: 0 0 auto; }
+
+/* Quotations calendar */
+.qcal { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 24px; }
+.qcal-month { flex: 999 1 560px; min-width: 0; background: #fff; border: 0.5px solid #E5E5E0; border-radius: 12px; overflow: hidden; }
+.qcal-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 0.5px solid #E5E5E0; flex-wrap: wrap; }
+.qcal-legend { margin-left: auto; display: flex; gap: 12px; font-size: 11.5px; color: #555550; flex-wrap: wrap; }
+.qcal-legend span, .qcal-chip { display: flex; align-items: center; gap: 5px; }
+.qcal-legend i, .qcal-chip i { width: 7px; height: 7px; border-radius: 4px; flex-shrink: 0; }
+.qcal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.qcal-wd { padding: 7px 8px; font-size: 11px; font-weight: 600; color: #6B6B66; background: #F9F8F5; border-bottom: 0.5px solid #E5E5E0; }
+.qcal-day { min-height: 96px; padding: 5px 6px; border: none; border-right: 0.5px solid #EEEEE8; border-bottom: 0.5px solid #EEEEE8; background: #fff; display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer; min-width: 0; font: inherit; }
+.qcal-day.out { background: #FAFAF7; color: #A5A59F; }
+.qcal-day.on { background: #FFF8F0; box-shadow: inset 0 0 0 2px #E8750A; }
+.qcal-day.today .qcal-num { color: #E8750A; font-weight: 700; }
+.qcal-num { font-size: 12px; font-weight: 500; display: flex; justify-content: space-between; }
+.qcal-num em { font-style: normal; font-size: 10px; font-weight: 700; padding: 0 6px; border-radius: 8px; background: #FFF1E3; color: #A84F00; }
+.qcal-chip { font-size: 11px; padding: 2px 6px; border-radius: 5px; white-space: nowrap; min-width: 0; }
+.qcal-chip span { overflow: hidden; text-overflow: ellipsis; }
+.qcal-more { font-size: 10.5px; color: #6B6B66; }
+.qcal-panel { flex: 1 1 300px; max-width: 100%; background: #fff; border: 0.5px solid #E5E5E0; border-radius: 12px; display: flex; flex-direction: column; min-height: 320px; }
+@media (max-width: 768px) {
+  .qcal-day { min-height: 52px; align-items: center; }
+  .qcal-chip { padding: 0; background: none !important; }
+  .qcal-chip span, .qcal-more, .qcal-legend { display: none; }
+  .qcal-day { flex-direction: row; flex-wrap: wrap; justify-content: center; align-content: flex-start; }
+  .qcal-num { width: 100%; justify-content: center; }
+  .qcal-num em { display: none; }
+}

@@ -72,8 +72,8 @@ export function invoiceDoc(inv: Invoice, q: Quotation | undefined, payments: Pay
   const paid = s.invoice_payments && payments.length
     ? `<div style="margin-top:14px"><span class="lbl">Payments received</span>${payments.map(p => `<div class="dish num"><span>${day(p.payment_date)} · ${cap(p.payment_type)} · ${modeLabel(p.payment_mode)}</span><b>${money(p.amount)}</b></div>`).join('')}</div>` : '';
   const menu = inv.is_multi_day && (inv.event_days as unknown[] | undefined)?.length
-    ? mealSchedule(inv.event_days as Quotation['event_days'], { amounts: false, itemPrices: false })
-    : q?.items?.length ? courseGrid(q.items, false) : '';
+    ? mealSchedule(inv.event_days as Quotation['event_days'], { amounts: false, itemPrices: false, mode: 'served' })
+    : q?.items?.length ? courseGrid(q.items, false, 'served') : '';
 
   const body = `${header(ctx, taxed ? 'Tax invoice' : 'Invoice', inv.invoice_number, `Date ${day(inv.issue_date)}`)}
 <div class="wrap">
@@ -114,8 +114,8 @@ export function eventMenuDoc(b: Invoice['booking'], q: Quotation | undefined, ct
     <div class="fact"><span class="lbl">Customer</span><span class="big">${esc(b?.customer?.name || '—')}</span>${b?.customer?.phone ? `<span class="muted num">+91 ${esc(b.customer.phone)}</span>` : ''}</div>
     ${facts([['Date & time', [span, b?.event_time].filter(Boolean).join(' · ')], ['Venue', b?.venue], ['Guests', b?.guest_count || ''], ['Food', q?.food_type]])}
   </div>
-  <section>${sectionHead('Menu', q?.quotation_number ?? '')}${multi ? mealSchedule(q!.event_days, { amounts: false, itemPrices: false })
-    : q?.items?.length ? courseGrid(q.items, false) : '<span class="muted">No menu linked to this event yet.</span>'}</section>
+  <section>${sectionHead('Menu', q?.quotation_number ?? '')}${multi ? mealSchedule(q!.event_days, { amounts: false, itemPrices: false, mode: 'served' })
+    : q?.items?.length ? courseGrid(q.items, false, 'served') : '<span class="muted">No menu linked to this event yet.</span>'}</section>
   ${q?.notes ? `<section>${sectionHead('Notes')}<div style="white-space:pre-line">${esc(q.notes)}</div></section>` : ''}
 </div>`;
   return {

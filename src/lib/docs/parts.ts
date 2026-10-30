@@ -30,13 +30,14 @@ export const sumRows = (rows: SumRow[]) => rows.map(r =>
   `<div class="${r.cls ?? (r.sign === '-' ? 'good' : '')}"><span>${esc(r.label)}</span><span class="num">${r.sign === '-' ? '− ' : ''}${money(r.value)}</span></div>`).join('');
 
 // The navy closing price band.
-export const banner = (label: string, detail: string, amount: number, chip = '') =>
-  `<div class="banner"><div><div class="lbl">${esc(label)}</div><div class="sub2 num">${detail}</div>${chip ? `<span class="chip num">${esc(chip)}</span>` : ''}</div><div class="amt num">${money(amount)}</div></div>`;
+export const banner = (label: string, detail: string, amount: number | string, chip = '') =>
+  `<div class="banner"><div><div class="lbl">${esc(label)}</div><div class="sub2 num">${detail}</div>${chip ? `<span class="chip num">${esc(chip)}</span>` : ''}</div><div class="amt num">${typeof amount === 'number' ? money(amount) : esc(amount)}</div></div>`;
 
-export const paySteps = (total: number, steps: PayStep[]) => {
-  const amounts = scheduleAmounts(total, steps);
+// Rupee amounts when the total is known, else just the percentages.
+export const paySteps = (total: number | null, steps: PayStep[]) => {
+  const amounts = total === null ? steps.map(s => `${s.pct}%`) : scheduleAmounts(total, steps).map(money);
   return `<div class="steps" style="--n:${steps.length}">${steps.map((s, i) => `<div class="step">
-  <div class="dot"><i>${i + 1}</i><em></em></div><span class="a num">${money(amounts[i])}</span>
+  <div class="dot"><i>${i + 1}</i><em></em></div><span class="a num">${amounts[i]}</span>
   <b style="font-size:13px">${s.pct}% · ${esc(s.label)}</b><span class="muted" style="font-size:12px">${esc(s.when)}</span></div>`).join('')}</div>`;
 };
 

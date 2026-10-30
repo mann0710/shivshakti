@@ -20,7 +20,8 @@ create table if not exists quotations (id uuid primary key default gen_random_uu
   total_amount numeric(12,2) not null default 0, extra_charges jsonb not null default '[]', transportation_charges jsonb not null default '[]',
   additional_discounts jsonb not null default '[]', notes text, food_type text, status text not null default 'draft',
   issue_date date not null default current_date, is_multi_day boolean not null default false, event_days jsonb not null default '[]',
-  created_at timestamptz not null default now());
+  created_at timestamptz not null default now(),
+  option_group uuid, option_label text, option_name text, per_plate_max numeric(12,2), total_max numeric(12,2));
 create table if not exists invoices (id uuid primary key default gen_random_uuid(), invoice_number text not null unique,
   booking_id uuid not null references bookings(id) on delete restrict, quotation_id uuid references quotations(id) on delete set null,
   subtotal numeric(12,2) not null default 0, discount_amount numeric(12,2) not null default 0, discount_type text not null default 'amount',

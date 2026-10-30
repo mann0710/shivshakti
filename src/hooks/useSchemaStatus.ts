@@ -7,6 +7,7 @@ export const PACK_MIGRATION_FILE = 'supabase/migrations/20261030_sessional_pack_
 export const PRICE_MIGRATION_FILE = 'supabase/migrations/20261101_prices_gstin.sql';
 export const PREORDER_MIGRATION_FILE = 'supabase/migrations/20261104_preorder_fulfillment.sql';
 export const DOC_SETTINGS_MIGRATION_FILE = 'supabase/migrations/20261105_doc_settings.sql';
+export const QUOTE_OPTIONS_MIGRATION_FILE = 'supabase/migrations/20261106_quote_options.sql';
 
 const missingColumn = (e: { code?: string; message?: string }) =>
   e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find/i.test(e.message ?? '');
@@ -50,4 +51,9 @@ export const useHasPreorderColumns = () => useSchema('preorders', () => [
 // Saved document settings on data_center.
 export const useHasDocSettings = () => useSchema('doc_settings', () => [
   supabase.from('data_center').select('doc_settings').limit(1),
+]).data === 'ready';
+
+// Quotation options (A/B) and price ranges.
+export const useHasQuoteOptions = () => useSchema('quote_options', () => [
+  supabase.from('quotations').select('option_group, option_label, option_name, per_plate_max, total_max').limit(1),
 ]).data === 'ready';

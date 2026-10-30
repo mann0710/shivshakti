@@ -138,6 +138,16 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | Document details hard-coded | **Fixed.** Data Center → Documents |
 | Four separate jsPDF builders (quotation, invoice, calendar menu, reports) | **Fixed.** One theme + shared parts in `lib/docs` |
 
+## Quotation options and calendar (owner request, 31 Oct 2026)
+
+| Request | Status |
+|---|---|
+| "Choose any 1 of 5" dishes, with different prices | **Done.** Choice groups on dishes; price range or included; picks recorded on acceptance |
+| Several versions of one quote and record which was accepted | **Done.** Options A / B / C as sibling quotations; Mark accepted picks one, others become Not chosen |
+| Several quotes on one day: warn, don't block | **Done.** Same-day / venue warning in the form; only confirmed bookings block each other |
+| Calendar view of quotes | **Done.** Quotations → Calendar with day panel and "New quote on this day" |
+| `Quotations.tsx` would pass 500 lines | **Fixed.** Form state moved to `useQuoteForm`; new pieces are separate components |
+
 ## Code quality
 
 | Finding | Status |

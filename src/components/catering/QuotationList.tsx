@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Quotation } from '../../hooks/useQuotations';
 import { formatDateIST } from '../../lib/ist';
-import { inr } from '../../lib/money';
 import { quotationDates } from '../../lib/quotationShare';
+import { optionTitle, statusText, totalText, plateText } from '../../lib/quoteOptions';
 
 const STATUSES = ['draft', 'sent', 'accepted', 'rejected'] as const;
 type Filter = 'all' | typeof STATUSES[number];
@@ -29,7 +29,7 @@ interface Props extends Actions {
 const StatusSelect: React.FC<{ q: Quotation; onStatus: Props['onStatus'] }> = ({ q, onStatus }) => (
   <select value={q.status} onChange={e => onStatus(q, e.target.value)} aria-label="Status"
     style={{ border: '0.5px solid #E5E5E0', borderRadius: 6, background: '#fff', fontSize: 12, fontWeight: 600, color: STATUS_COLORS[q.status] || '#888880', cursor: 'pointer', padding: '3px 6px' }}>
-    {STATUSES.map(s => <option key={s} value={s}>{cap(s)}</option>)}
+    {STATUSES.map(s => <option key={s} value={s}>{statusText({ status: s, option_group: q.option_group })}</option>)}
   </select>
 );
 
@@ -59,7 +59,7 @@ const eventLabel = (q: Quotation) => {
 
 const typeLabel = (q: Quotation) => q.is_multi_day
   ? <span style={{ background: '#E6F1FB', color: '#185FA5', fontSize: 10, padding: '2px 8px', borderRadius: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>Multi-day ({q.event_days?.length || 0}d)</span>
-  : q.per_plate_amount > 0 ? `${inr(q.per_plate_amount)}/plate` : '—';
+  : q.per_plate_amount > 0 ? `${plateText(q)}/plate` : '—';
 
 const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) => {
   const [search, setSearch] = useState('');
@@ -76,7 +76,16 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
       || (digits.length >= 3 && String(q.customer?.phone || '').replace(/\D/g, '').includes(digits)));
   }, [quotations, search]);
 
-  const shown = filter === 'all' ? searched : searched.filter(q => q.status === filter);
+  // Options of one enquiry sit together, in A / B / C order, where the newest of them would be.
+  const shown = useMemo(() => {
+    const list = filter === 'all' ? searched : searched.filter(q => q.status === filter);
+    const newest = new Map<string, string>();
+    list.forEach(q => { const k = q.option_group || q.id; if ((newest.get(k) ?? '') < q.created_at) newest.set(k, q.created_at); });
+    return [...list].sort((a, b) => {
+      const ka = a.option_group || a.id, kb = b.option_group || b.id;
+      return ka === kb ? (a.option_label || '').localeCompare(b.option_label || '') : newest.get(kb)!.localeCompare(newest.get(ka)!);
+    });
+  }, [searched, filter]);
   const count = (f: Filter) => (f === 'all' ? searched.length : searched.filter(q => q.status === f).length);
 
   if (quotations.length === 0) {
@@ -124,6 +133,7 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
                     <tr key={q.id} style={{ borderBottom: i < shown.length - 1 ? '0.5px solid #F0F0EA' : 'none' }}>
                       <td style={cell}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#E8750A' }}>{q.quotation_number}</div>
+                        {q.option_label && <div style={optChip}>{optionTitle(q)}</div>}
                         <div style={sub}>{formatDateIST(q.issue_date, 'dd-MM-yyyy')}</div>
                       </td>
                       <td style={{ ...cell, fontSize: 13, whiteSpace: 'normal' }}>{q.customer?.name || '—'}</td>
@@ -131,7 +141,7 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
                         <div style={{ fontSize: 12, color: '#666' }}>{eventLabel(q)}</div>
                         <div style={sub}>{typeLabel(q)}</div>
                       </td>
-                      <td style={{ ...cell, fontSize: 13, fontWeight: 600 }}>{inr(q.total_amount || 0)}</td>
+                      <td style={{ ...cell, fontSize: 13, fontWeight: 600 }}>{totalText(q)}</td>
                       <td style={cell}><StatusSelect q={q} onStatus={onStatus} /></td>
                       <td style={{ ...cell, whiteSpace: 'normal' }}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, minWidth: 150 }}><RowActions q={q} {...actions} /></div>
@@ -148,13 +158,13 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
               {shown.map(q => (
                 <div key={q.id} className="list-card">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#E8750A' }}>{q.quotation_number}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#E8750A' }}>{q.quotation_number}{q.option_label && <span style={{ ...optChip, marginLeft: 6 }}>{optionTitle(q)}</span>}</span>
                     <StatusSelect q={q} onStatus={onStatus} />
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{q.customer?.name || '—'}</div>
                   <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{eventLabel(q)}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, gap: 8 }}>
-                    <span style={{ fontSize: 16, fontWeight: 700 }}>{inr(q.total_amount || 0)}</span>
+                    <span style={{ fontSize: 16, fontWeight: 700 }}>{totalText(q)}</span>
                     <span style={{ fontSize: 12, color: '#888880' }}>{typeLabel(q)}</span>
                   </div>
                   <div className="list-card-actions"><RowActions q={q} big {...actions} /></div>
@@ -171,5 +181,6 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
 const panel: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '0.5px solid #E5E5E0' };
 const cell: React.CSSProperties = { padding: '10px 12px', whiteSpace: 'nowrap', verticalAlign: 'middle' };
 const sub: React.CSSProperties = { fontSize: 11, color: '#888880', marginTop: 2 };
+const optChip: React.CSSProperties = { display: 'inline-block', fontSize: 10.5, fontWeight: 600, padding: '1px 7px', borderRadius: 8, background: '#FFF1E3', color: '#A84F00', marginTop: 2 };
 
 export default QuotationList;

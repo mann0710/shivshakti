@@ -33,9 +33,9 @@ export const quotationMessage = (q: Quotation): string => {
 };
 
 // Real PDF from the PDF service; phones get the share sheet, desktops a download + WhatsApp.
-export async function shareQuotation(q: Quotation, withPrices = true): Promise<ShareResult | null> {
+export async function shareQuotation(q: Quotation, withPrices = true, options?: Quotation[]): Promise<ShareResult | null> {
   try {
-    const res = await shareDoc(() => quotationDoc(q, { withPrices }), quotationMessage(q), q.customer?.phone);
+    const res = await shareDoc(() => quotationDoc(q, { withPrices, options }), quotationMessage(q), q.customer?.phone);
     if (res === 'shared') toast.success('Quotation shared');
     else if (res === 'whatsapp') toast.success('PDF downloaded — attach it in the WhatsApp chat', { duration: 5000 });
     else toast('Share cancelled');

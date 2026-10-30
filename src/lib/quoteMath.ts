@@ -22,6 +22,27 @@ export const dayNet = (d: DayLike) => (d.meals ?? []).reduce((s, m) => s + mealN
 export const sumCharges = (list: Charge[] | null | undefined) =>
   (list ?? []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
 
+interface TotalsInput {
+  isMultiDay: boolean;
+  eventDays: { day_subtotal?: number; meals?: MealLike[] }[];
+  perPlate: number;
+  guests: number;
+  additional: Charge[];
+  gstRate: number;   // 0 when GST is off
+  extra: number;
+  transport: number;
+}
+
+// The quotation total, exactly as the editor builds it: subtotal − offers − discounts + GST + charges.
+export function quoteTotals(t: TotalsInput) {
+  const subtotal = t.isMultiDay ? t.eventDays.reduce((s, d) => s + (Number(d.day_subtotal) || 0), 0) : t.perPlate * t.guests;
+  const mealSavingsTotal = t.isMultiDay ? mealSavings(t.eventDays) : 0;
+  const discount = mealSavingsTotal + sumCharges(t.additional);
+  const discounted = Math.max(0, subtotal - discount);
+  const gst = t.gstRate > 0 ? Math.round((discounted * t.gstRate) / 100) : 0;
+  return { subtotal, mealSavings: mealSavingsTotal, discount, gst, final: discounted + gst + t.extra + t.transport };
+}
+
 // Accepted quotation first, else the newest one for the booking.
 export function pickQuotation<T extends { booking_id?: string | null; status?: string; created_at: string }>(list: T[], bookingId: string): T | undefined {
   const mine = list.filter(q => q.booking_id === bookingId).sort((a, b) => b.created_at.localeCompare(a.created_at));

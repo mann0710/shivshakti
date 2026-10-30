@@ -7,7 +7,8 @@ import { dateRange } from './BookingCards';
 import { useBookings } from '../../hooks/useBookings';
 import { useQuotations } from '../../hooks/useQuotations';
 import { useInvoices } from '../../hooks/useInvoices';
-import { useQuoteLifecycle } from '../../hooks/useQuoteLifecycle';
+import { useAcceptFlow } from '../../hooks/useAcceptFlow';
+import { optionTitle, siblingsOf, statusText, totalText } from '../../lib/quoteOptions';
 import { Navigate } from '../../hooks/useNavIntent';
 import { eventStage } from '../../lib/eventStage';
 import { waNumber } from '../../lib/quoteMath';
@@ -22,7 +23,7 @@ const EventDetail: React.FC<Props> = ({ bookingId, onClose, onNavigate, onEdit }
   const { data: bookings = [] } = useBookings();
   const { data: allQuotes = [] } = useQuotations();
   const { data: invoices = [] } = useInvoices();
-  const lifecycle = useQuoteLifecycle(onNavigate);
+  const lifecycle = useAcceptFlow(onNavigate);
   const [paying, setPaying] = useState(false);
 
   const b = bookings.find(x => x.id === bookingId);
@@ -60,14 +61,14 @@ const EventDetail: React.FC<Props> = ({ bookingId, onClose, onNavigate, onEdit }
         {quotes.length === 0 ? <Empty>No quotation yet</Empty> : quotes.map(q => (
           <div key={q.id} style={row}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600 }}>{q.quotation_number} · {inr(q.total_amount)}</div>
+              <div style={{ fontWeight: 600 }}>{q.quotation_number}{q.option_label ? ` · ${optionTitle(q)}` : ''} · {totalText(q)}</div>
               <div style={{ fontSize: 11, color: '#888880' }}>{q.per_plate_amount > 0 ? `${inr(q.per_plate_amount)}/plate` : q.is_multi_day ? 'Multi-day' : ''}</div>
             </div>
-            <StatusPill status={q.status} />
+            {q.option_group && q.status === 'rejected' ? <span style={{ fontSize: 11, fontWeight: 600, color: '#8E2A2A' }}>{statusText(q)}</span> : <StatusPill status={q.status} />}
             <button type="button" style={small} onClick={() => go('quotations', { action: 'open', id: q.id })}>Edit</button>
-            <button type="button" style={small} onClick={() => lifecycle.share(q)}>Share</button>
+            <button type="button" style={small} onClick={() => lifecycle.share(q, true, siblingsOf(q, allQuotes))}>Share</button>
             {q.status !== 'accepted' && stage !== 'cancelled' && (
-              <button type="button" style={{ ...small, background: ORANGE, color: '#fff', borderColor: ORANGE }} onClick={() => lifecycle.setStatus(q, 'accepted')}>Accept</button>
+              <button type="button" style={{ ...small, background: ORANGE, color: '#fff', borderColor: ORANGE }} onClick={() => lifecycle.accept(q)}>Accept</button>
             )}
           </div>
         ))}
@@ -87,6 +88,7 @@ const EventDetail: React.FC<Props> = ({ bookingId, onClose, onNavigate, onEdit }
       </Section>
 
       {paying && invoice && invoice.balance_due > 0 && <PaymentFormModal invoice={invoice} onClose={() => setPaying(false)} />}
+      {lifecycle.ui}
     </Modal>
   );
 };

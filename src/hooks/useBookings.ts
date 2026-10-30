@@ -16,19 +16,22 @@ export const useBookings = () =>
 type Slot = Pick<Booking, 'venue' | 'event_date' | 'end_date' | 'status'>;
 
 // Same named venue on overlapping dates (multi-day included) is a clash; blank venues and cancelled bookings are not.
+const FINAL = ['confirmed', 'completed'];
+
+// Only confirmed events hold a venue; enquiries and quotes may overlap (the quote form warns instead).
 const assertVenueFree = async (b: Partial<Slot>, ignoreId?: string) => {
   const venue = b.venue?.trim();
-  if (!venue || !b.event_date || b.status === 'cancelled') return;
+  if (!venue || !b.event_date || !FINAL.includes(b.status ?? '')) return;
   const start = b.event_date;
   const end = b.end_date && b.end_date > start ? b.end_date : start;
   let q = supabase.from('bookings').select('id')
-    .eq('venue', venue).neq('status', 'cancelled')
+    .eq('venue', venue).in('status', FINAL)
     .lte('event_date', end)
     .or(`end_date.gte.${start},and(end_date.is.null,event_date.gte.${start})`);
   if (ignoreId) q = q.neq('id', ignoreId);
   const { data, error } = await q.limit(1);
   if (error) throw error;
-  if (data && data.length > 0) throw new Error('Another booking already uses this venue on these dates.');
+  if (data && data.length > 0) throw new Error('Another confirmed booking already uses this venue on these dates.');
 };
 
 export const useCreateBooking = () => {

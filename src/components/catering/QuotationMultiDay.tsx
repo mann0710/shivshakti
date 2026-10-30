@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
 import { getDayNumber } from '../../lib/quoteMath';
 import QuotationItemPanels, { PickerItem, ItemTextField } from './QuotationItemPanels';
+import { plateRange } from '../../lib/quoteChoices';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Hi-Tea', 'Snacks', 'Dinner', 'Supper'];
 
@@ -21,11 +22,13 @@ interface Props {
 
 const sumMeals = (meals: MealSlot[]) => meals.reduce((s, m) => s + m.subtotal, 0);
 
-// Item changes re-derive per plate from item prices when any are priced.
+// Item changes re-derive per plate from item prices when any are priced ("choose any" groups give a range).
 const withItems = (m: MealSlot, items: QuotationLineItem[]): MealSlot => {
-  const itemsSum = items.reduce((s, x) => s + (x.amount || 0), 0);
-  const per_plate_amount = itemsSum > 0 ? itemsSum : (items.length ? m.per_plate_amount : 0);
-  return { ...m, items, per_plate_amount, subtotal: per_plate_amount * m.guest_count };
+  const priced = items.some(x => (x.amount || 0) > 0);
+  const r = plateRange(items);
+  const per_plate_amount = priced ? r.min : (items.length ? m.per_plate_amount : 0);
+  const per_plate_max = priced && r.max > r.min ? r.max : null;
+  return { ...m, items, per_plate_amount, per_plate_max, subtotal: per_plate_amount * m.guest_count };
 };
 
 const smallInp: React.CSSProperties = { border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' };
@@ -83,6 +86,8 @@ const QuotationMultiDay: React.FC<Props> = ({
   const updateMealField = (dayIdx: number, mealId: string, field: keyof MealSlot, value: any) =>
     patchMeal(dayIdx, mealId, m => {
       const updated = { ...m, [field]: value };
+      // A typed plate price is fixed, so no range.
+      if (field === 'per_plate_amount') updated.per_plate_max = null;
       updated.subtotal = updated.per_plate_amount * updated.guest_count;
       return updated;
     });
@@ -233,7 +238,7 @@ const QuotationMultiDay: React.FC<Props> = ({
                           <span style={{ color: '#E8750A' }}>₹{(offer * meal.guest_count).toLocaleString('en-IN')}</span>
                         </span>
                       ) : (
-                        <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 600 }}>= ₹{meal.subtotal.toLocaleString('en-IN')}</span>
+                        <span style={{ fontSize: 12, color: '#3B6D11', fontWeight: 600 }}>= ₹{meal.subtotal.toLocaleString('en-IN')}{meal.per_plate_max ? ` – ₹${(meal.per_plate_max * meal.guest_count).toLocaleString('en-IN')}` : ''}</span>
                       ))}
                       <button onClick={() => setActiveMealKey(isOpen ? null : mealKey)}
                         style={{ fontSize: 11, color: '#E8750A', background: isOpen ? '#FFF0E0' : 'none', border: '1px solid #E8750A', borderRadius: 5, padding: '3px 8px', cursor: 'pointer', marginLeft: 'auto' }}>
@@ -255,7 +260,8 @@ const QuotationMultiDay: React.FC<Props> = ({
                           onRemove={id => removeItemFromMeal(dayIdx, meal.id, id)}
                           onText={(id, field, v) => updateMealItemText(dayIdx, meal.id, id, field, v)}
                           onReorder={(from, to) => reorderMealItems(dayIdx, meal.id, from, to)}
-                          onReset={() => patchMeal(dayIdx, meal.id, m => withItems(m, []))} />
+                          onReset={() => patchMeal(dayIdx, meal.id, m => withItems(m, []))}
+                          onChoice={next => patchMeal(dayIdx, meal.id, m => withItems(m, next))} />
                       </div>
                     )}
                   </div>

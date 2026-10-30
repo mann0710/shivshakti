@@ -47,8 +47,8 @@ export const useQuoteLifecycle = (onNavigate?: Navigate) => {
   };
 
   // Sharing a draft marks it Sent.
-  const share = async (q: Quotation, withPrices = true) => {
-    const res = await shareQuotation(q, withPrices);
+  const share = async (q: Quotation, withPrices = true, options?: Quotation[]) => {
+    const res = await shareQuotation(q, withPrices, options);
     if ((res === 'shared' || res === 'whatsapp') && q.status === 'draft') {
       try {
         await updateStatus.mutateAsync({ id: q.id, status: 'sent' });

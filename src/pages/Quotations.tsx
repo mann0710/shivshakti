@@ -1,487 +1,256 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
-import { todayIST } from '../lib/ist';
-import { useQueryClient } from '@tanstack/react-query';
-import { useBookings } from '../hooks/useBookings';
-import { useQuoteEvent } from '../hooks/useQuoteEvent';
-import { useQuoteLifecycle } from '../hooks/useQuoteLifecycle';
+import { useQuoteForm } from '../hooks/useQuoteForm';
+import { useAcceptFlow } from '../hooks/useAcceptFlow';
 import { useStoredState } from '../hooks/useStoredState';
-import { useMenuItemsFull } from '../hooks/useMenuBuilder';
-import { useItemPrices } from '../hooks/useItemPrices';
-import QuotationPackagePicker from '../components/catering/QuotationPackagePicker';
-import { useDataCenter } from '../hooks/useDataCenter';
-import {
-  useQuotations, useCreateQuotation, useUpdateQuotation,
-  useDeleteQuotation,
-  Quotation, QuotationLineItem, EventDay,
-} from '../hooks/useQuotations';
-import { getDayNumber } from '../lib/quoteMath';
+import { useHasQuoteOptions } from '../hooks/useSchemaStatus';
+import { useDeleteQuotation, Quotation } from '../hooks/useQuotations';
+import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { downloadDoc } from '../lib/docs/output';
 import { quotationDoc } from '../lib/docs/quotationDoc';
-import { Navigate, useNavIntent } from '../hooks/useNavIntent';
+import { siblingsOf, nextLabel, quoteCopy, sameDayNote } from '../lib/quoteOptions';
 import { useConfirm } from '../components/ui/ConfirmDialog';
+import QuotationPackagePicker from '../components/catering/QuotationPackagePicker';
 import QuotationList from '../components/catering/QuotationList';
-import QuotationItemPanels, { PickerItem, ItemTextField } from '../components/catering/QuotationItemPanels';
-import QuotationMultiDay, { genId } from '../components/catering/QuotationMultiDay';
-import QuotationCharges, { Charge, Discount } from '../components/catering/QuotationCharges';
+import QuotationCalendar from '../components/catering/QuotationCalendar';
+import QuotationOptionsBar from '../components/catering/QuotationOptionsBar';
+import QuotationItemPanels, { ItemTextField } from '../components/catering/QuotationItemPanels';
+import QuotationMultiDay from '../components/catering/QuotationMultiDay';
+import QuotationCharges from '../components/catering/QuotationCharges';
 import QuotationEventFields from '../components/catering/QuotationEventFields';
 
 interface Props { onNavigate?: Navigate }
+type View = 'list' | 'calendar';
 
 const Quotations: React.FC<Props> = ({ onNavigate }) => {
-  const { data: bookings = [] }   = useBookings();
-  const { data: menuItems = [] }  = useMenuItemsFull();
-  const { data: quotations = [], isFetched: quotationsFetched } = useQuotations();
-  const { data: dc }              = useDataCenter();
-  const createQuotation = useCreateQuotation();
-  const updateQuotation = useUpdateQuotation();
-  const qc = useQueryClient();
+  const f = useQuoteForm();
+  const flow = useAcceptFlow(onNavigate);
   const deleteQuotation = useDeleteQuotation();
+  const hasOptions = useHasQuoteOptions();
   const { confirm, dialog } = useConfirm();
-  const ev = useQuoteEvent(bookings);
-  const lifecycle = useQuoteLifecycle(onNavigate);
-  // Per-plate pricing by default; item prices only when switched on (per device).
-  const [prefs, setPrefs] = useStoredState('shivshakti.quotePrefs', () => ({ itemPrices: false }));
   const intent = useNavIntent('quotations');
   const intentHandled = useRef(false);
   const formRef = useRef<HTMLDivElement>(null);
-
-  // ── form state ────────────────────────────────────────────────────────────
-  const [showForm, setShowForm]             = useState(false);
-  const [editingId, setEditingId]           = useState<string | null>(null);
-  const selectedBookingId = ev.bookingId;
-  const [selectedItems, setSelectedItems]   = useState<QuotationLineItem[]>([]);
-  const [notes, setNotes]                   = useState('');
-  const [perPlate, setPerPlate]             = useState('');
-  const [gstChecked, setGstChecked]         = useState(false);
-  // Rate a saved quote was issued at; new quotes use today's Data Center rate.
-  const [savedGstRate, setSavedGstRate]     = useState<number | null>(null);
-  const [additionalDiscounts, setAdditionalDiscounts] = useState<Discount[]>([]);
-  const [extraCharges, setExtraCharges]     = useState<Charge[]>([]);
-  const [transportationCharges, setTransportationCharges] = useState<Charge[]>([]);
-  const [foodType, setFoodType]             = useState('');
-  const [pdfWithPrices, setPdfWithPrices]   = useState(true);
-  const perPlateAutoRef = useRef(true);
-
-  // ── multi-day state ───────────────────────────────────────────────────────
-  const [isMultiDay, setIsMultiDay]         = useState(false);
-  const [eventDays, setEventDays]           = useState<EventDay[]>([]);
-  const [activeMealKey, setActiveMealKey]   = useState<string | null>(null);
-
-  // Auto-enable multi-day when selected booking already has an end_date
-  useEffect(() => {
-    if (!selectedBookingId || editingId) return;
-    const booking = bookings.find(b => b.id === selectedBookingId);
-    if (booking?.end_date && booking.end_date !== booking.event_date) {
-      setIsMultiDay(true);
-      const sections: EventDay[] = [];
-      const start = new Date(booking.event_date + 'T00:00:00');
-      const end   = new Date(booking.end_date   + 'T00:00:00');
-      let cur = new Date(start); let idx = 0;
-      while (cur <= end && idx < 15) {
-        sections.push({ day_number: idx + 1, date: cur.toLocaleDateString('en-CA'), meals: [], day_subtotal: 0 });
-        cur.setDate(cur.getDate() + 1); idx++;
-      }
-      setEventDays(sections);
-    }
-  }, [selectedBookingId]); // eslint-disable-line
-
-  const dcGstRate = savedGstRate ?? dc?.gst_rate ?? 18;
-
-  const eligibleBookings = bookings.filter(b => b.status !== 'completed' && b.status !== 'cancelled');
-  const selectedBooking  = eligibleBookings.find(b => b.id === selectedBookingId)
-    ?? bookings.find(b => b.id === selectedBookingId);
-
-  const guestCount  = parseInt(ev.guests, 10) || 0;
-  const perPlateNum = parseFloat(perPlate) || 0;
-  const subtotal    = perPlateNum * guestCount;
-
-  // active subtotal depends on mode
-  const multiDaySubtotal = eventDays.reduce((s, d) => s + d.day_subtotal, 0);
-  const activeSubtotal   = isMultiDay ? multiDaySubtotal : subtotal;
-
-  // Sum savings from all meal offer rates: (actual_rate - offer_rate) × guests
-  const totalMealSavings = useMemo(() => {
-    if (!isMultiDay) return 0;
-    return eventDays.reduce((sum, day) =>
-      sum + day.meals.reduce((ms, m) => {
-        const offer = m.discount_amount || 0;
-        return offer > 0 && m.per_plate_amount > offer
-          ? ms + (m.per_plate_amount - offer) * m.guest_count
-          : ms;
-      }, 0)
-    , 0);
-  }, [isMultiDay, eventDays]);
-
-  const additionalDiscountsTotal = additionalDiscounts.reduce((s, d) => s + (d.amount || 0), 0);
-  const discountAmt = totalMealSavings + additionalDiscountsTotal;
-
-  const discountedSubtotal       = Math.max(0, activeSubtotal - discountAmt);
-  const gstAmount                = gstChecked ? Math.round((discountedSubtotal * dcGstRate) / 100) : 0;
-  const extraChargesTotal        = extraCharges.reduce((s, c) => s + (c.amount || 0), 0);
-  const transportationChargesTotal = transportationCharges.reduce((s, c) => s + (c.amount || 0), 0);
-  const finalTotal               = discountedSubtotal + gstAmount + extraChargesTotal + transportationChargesTotal;
-
-  // ── menu items + default prices ───────────────────────────────────────────
-  const activeItems = useMemo(() => menuItems.filter(
-    it => it.is_active !== false && it.subcategory?.is_active !== false && it.subcategory?.category?.is_active !== false,
-  ), [menuItems]);
-
-  const lookupPrice = useItemPrices(menuItems, quotations);
-  const hasItemPrices = selectedItems.some(i => i.amount > 0) || eventDays.some(d => d.meals.some(m => m.items.some(i => i.amount > 0)));
-  const showPrices = prefs.itemPrices || hasItemPrices;
-  const priceFor = (itemId: string) => (showPrices ? lookupPrice(itemId) : 0);
-
-  const itemsTotal = selectedItems.reduce((s, i) => s + (i.amount || 0), 0);
-
-  useEffect(() => {
-    if (perPlateAutoRef.current && showPrices) setPerPlate(itemsTotal > 0 ? String(itemsTotal) : '');
-  }, [itemsTotal, showPrices]);
-
-  const toggleMultiDay = (checked: boolean) => {
-    setIsMultiDay(checked);
-    setActiveMealKey(null);
-    if (checked && eventDays.length === 0) {
-      setEventDays([{ day_number: 1, date: selectedBooking?.event_date || '', meals: [], day_subtotal: 0 }]);
-    }
-    if (!checked) { setEventDays([]); }
-  };
-
-  // ── single-day item helpers ───────────────────────────────────────────────
-  const toLine = (it: PickerItem): QuotationLineItem => ({
-    item_id: it.id, item_name: it.name,
-    category_name: it.subcategory?.category?.name || '',
-    subcategory_name: it.subcategory?.name || '', amount: priceFor(it.id),
-  });
-  const addItem = (it: PickerItem) => setSelectedItems(prev => [...prev, toLine(it)]);
-
-  // Package items join the quote; the package price becomes the per-plate rate.
-  const applyPackage = (found: PickerItem[], price: number, missing: string[]) => {
-    setSelectedItems(prev => [...prev, ...found.filter(f => !prev.some(p => p.item_id === f.id)).map(toLine)]);
-    perPlateAutoRef.current = false;
-    setPerPlate(price > 0 ? String(price) : '');
-    toast.success(`Added ${found.length} item${found.length === 1 ? '' : 's'}${missing.length ? ` · not in Menu Builder: ${missing.join(', ')}` : ''}`, { duration: 6000 });
-  };
-
-  const patchItem = (itemId: string, change: Partial<QuotationLineItem>) =>
-    setSelectedItems(prev => prev.map(i => (i.item_id === itemId ? { ...i, ...change } : i)));
-
-  const reorderSelectedItems = (fromIdx: number, toIdx: number) =>
-    setSelectedItems(prev => {
-      const next = [...prev];
-      const [removed] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, removed);
-      return next;
-    });
-
-  // ── form lifecycle ────────────────────────────────────────────────────────
-  const resetForm = (keepOpen = false) => {
-    setEditingId(null); ev.reset(); setSelectedItems([]);
-    setNotes(''); setPerPlate('');
-    setGstChecked(false); setSavedGstRate(null); setAdditionalDiscounts([]);
-    setExtraCharges([]); setTransportationCharges([]);
-    setIsMultiDay(false); setEventDays([]); setActiveMealKey(null);
-    setFoodType('');
-    perPlateAutoRef.current = true;
-    setShowForm(keepOpen);
-  };
-  const openCreate = () => resetForm(true);
-
-  const openEdit = (q: Quotation) => {
-    setEditingId(q.id);
-    ev.selectBooking(q.booking_id || '', q.is_multi_day ? undefined : q.guest_count);
-    setIsMultiDay(q.is_multi_day || false);
-    if (q.is_multi_day && q.event_days?.length) {
-      setEventDays(q.event_days.map(d => ({ ...d, day_number: getDayNumber(d.date, q.event_days!) })));
-      setAdditionalDiscounts(q.additional_discounts || []);
-    } else {
-      setSelectedItems(q.items || []);
-      setPerPlate(q.per_plate_amount > 0 ? String(q.per_plate_amount) : '');
-      // Backward compat: if no stored additional_discounts but there's a discount, show it
-      if ((q.additional_discounts || []).length > 0) {
-        setAdditionalDiscounts(q.additional_discounts);
-      } else if (q.discount_amount > 0) {
-        setAdditionalDiscounts([{ id: genId(), description: 'Discount', amount: q.discount_amount }]);
-      } else {
-        setAdditionalDiscounts([]);
-      }
-    }
-    setNotes(q.notes || '');
-    setFoodType(q.food_type || '');
-    setGstChecked(q.gst_rate > 0);
-    setSavedGstRate(q.gst_rate > 0 ? q.gst_rate : null);
-    setExtraCharges(q.extra_charges || []);
-    setTransportationCharges(q.transportation_charges || []);
-    setActiveMealKey(null);
-    perPlateAutoRef.current = false;
-    setShowForm(true);
-  };
+  const [pdfWithPrices, setPdfWithPrices] = useState(true);
+  const [optBusy, setOptBusy] = useState(false);
+  const [viewPref, setViewPref] = useStoredState<{ view: View }>('shivshakti.quoteView', () => ({ view: 'list' }));
+  const { quotations, editingId, editingQuotation, ev } = f;
+  const siblings = editingQuotation ? siblingsOf(editingQuotation, quotations) : [];
 
   // Bring the form into view when it opens or switches quotation.
   useEffect(() => {
-    if (showForm) formRef.current?.scrollIntoView?.({ block: 'start' });
-  }, [showForm, editingId]);
+    if (f.showForm) formRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [f.showForm, editingId]);
 
   // Nav intent: 'new' opens the form (booking preselected); 'open' edits a quotation by its id or booking id.
   useEffect(() => {
     if (!intent || intentHandled.current) return;
     if (intent.action === 'open') {
-      if (!quotationsFetched) return;
+      if (!f.quotationsFetched) return;
       intentHandled.current = true;
       const q = intent.id ? quotations.find(x => x.id === intent.id) ?? quotations.find(x => x.booking_id === intent.id) : undefined;
-      if (q) { openEdit(q); return; }
+      if (q) { f.openEdit(q); return; }
       if (!intent.id) return;
     }
     intentHandled.current = true;
-    openCreate();
+    f.openCreate();
     if (intent.id) ev.selectBooking(intent.id);
-  }, [intent, quotationsFetched]); // eslint-disable-line
+  }, [intent, f.quotationsFetched]); // eslint-disable-line
 
-  // ── save ──────────────────────────────────────────────────────────────────
-  const buildPayload = (ids?: { bookingId: string; customerId: string }) => ({
-    customer_id:      ids?.customerId ?? selectedBooking?.customer_id ?? '',
-    booking_id:       ids?.bookingId ?? selectedBookingId,
-    items:            isMultiDay ? [] : selectedItems,
-    per_plate_amount: isMultiDay ? 0 : perPlateNum,
-    guest_count:      isMultiDay ? 0 : guestCount,
-    subtotal:         activeSubtotal,
-    discount_amount:  discountAmt,
-    discount_type:    'amount' as const,
-    gst_rate:         gstChecked ? dcGstRate : 0,
-    gst_amount:       gstAmount,
-    extra_charges:    extraCharges.filter(c => c.description.trim() || c.amount > 0),
-    transportation_charges: transportationCharges.filter(c => c.description.trim() || c.amount > 0),
-    additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
-    total_amount:     finalTotal,
-    notes:            notes || undefined,
-    food_type:        foodType || undefined,
-    status:           'draft' as const,
-    is_multi_day:     isMultiDay,
-    event_days:       isMultiDay
-      ? eventDays.map(d => ({ ...d, day_number: getDayNumber(d.date, eventDays) }))
-      : [],
-  });
-
-  const handleSave = async () => {
-    if (isMultiDay) {
-      if (eventDays.length === 0) { toast.error('Add at least one occasion'); return; }
-      for (let i = 0; i < eventDays.length; i++) {
-        const day = eventDays[i];
-        const dayNum = getDayNumber(day.date, eventDays);
-        if (!day.date) { toast.error(`Occasion ${i + 1}: select a date`); return; }
-        if (day.meals.length === 0) { toast.error(`Day ${dayNum} occasion ${i + 1}: add at least one meal`); return; }
-      }
-    } else {
-      if (selectedItems.length === 0) { toast.error('Please add at least one item'); return; }
-    }
-
-    try {
-      const ids = await ev.resolve();
-      if (!ids) return;
-      const payload = buildPayload(ids);
-      if (editingId) {
-        // Editing keeps the current status (sent / accepted) instead of resetting to draft.
-        const { status: _status, ...changes } = payload;
-        await updateQuotation.mutateAsync({ id: editingId, ...changes });
-        toast.success('Quotation updated');
-      } else {
-        await createQuotation.mutateAsync(payload);
-        toast.success('Quotation saved');
-      }
-      // Update booking end_date to the latest date across all occasions
-      if (isMultiDay && eventDays.length > 0) {
-        const maxDate = eventDays.map(d => d.date).filter(Boolean).sort().pop() || '';
-        if (maxDate) {
-          const { error: endErr } = await supabase.from('bookings').update({ end_date: maxDate }).eq('id', ids.bookingId);
-          if (endErr) toast.error(`Quotation saved, but booking end date not updated: ${endErr.message}`);
-          else qc.invalidateQueries({ queryKey: ['bookings'] });
-        }
-      }
-      if (!isMultiDay) await ev.syncGuests(ids.bookingId);
-      resetForm();
-    } catch (e: any) { toast.error(e?.message || 'Failed to save quotation'); }
-  };
+  const save = async () => { if (await f.handleSave()) f.resetForm(); };
 
   const handleDelete = async (q: Quotation) => {
-    const ok = await confirm({
-      title: 'Delete quotation?',
-      message: `${q.quotation_number}${q.customer?.name ? ` for ${q.customer.name}` : ''} will be deleted permanently.`,
-      confirmLabel: 'Delete', danger: true,
-    });
+    const ok = await confirm({ title: 'Delete quotation?', message: `${q.quotation_number}${q.customer?.name ? ` for ${q.customer.name}` : ''} will be deleted permanently.`, confirmLabel: 'Delete', danger: true });
     if (!ok) return;
     try {
       await deleteQuotation.mutateAsync(q.id);
-      if (editingId === q.id) resetForm();
+      if (editingId === q.id) f.resetForm();
       toast.success('Deleted');
     } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
   };
 
   const handleClone = async (q: Quotation) => {
-    const ok = await confirm({
-      title: 'Clone quotation?',
-      message: `A new draft will be created with the same details as ${q.quotation_number}.`,
-      confirmLabel: 'Clone',
-    });
+    const ok = await confirm({ title: 'Clone quotation?', message: `A new draft will be created with the same details as ${q.quotation_number}.`, confirmLabel: 'Clone' });
     if (!ok) return;
+    try { await f.createQuotation.mutateAsync(quoteCopy(q)); toast.success('Cloned as new draft'); }
+    catch (e: any) { toast.error(e?.message || 'Failed to clone'); }
+  };
+
+  // Copies the saved quote as the next option (B, C…) of the same enquiry and opens it.
+  const addOption = async () => {
+    const cur = editingQuotation;
+    if (!cur || f.dirty) return;
+    setOptBusy(true);
     try {
-      await createQuotation.mutateAsync({
-        customer_id: q.customer_id, booking_id: q.booking_id || null, items: q.items || [],
-        per_plate_amount: q.per_plate_amount, guest_count: q.guest_count, subtotal: q.subtotal,
-        discount_amount: q.discount_amount, discount_type: q.discount_type,
-        gst_rate: q.gst_rate, gst_amount: q.gst_amount,
-        extra_charges: q.extra_charges || [], transportation_charges: q.transportation_charges || [],
-        additional_discounts: q.additional_discounts || [], total_amount: q.total_amount,
-        notes: q.notes, food_type: q.food_type, status: 'draft' as const,
-        is_multi_day: q.is_multi_day || false, event_days: q.event_days || [],
-      });
-      toast.success('Cloned as new draft');
-    } catch (e: any) { toast.error(e?.message || 'Failed to clone'); }
+      const group = cur.option_group || crypto.randomUUID();
+      const sibs = cur.option_group ? siblings : [{ ...cur, option_label: 'A' }];
+      if (!cur.option_group) await f.updateQuotation.mutateAsync({ id: cur.id, option_group: group, option_label: 'A' });
+      const label = nextLabel(sibs);
+      const created = await f.createQuotation.mutateAsync({ ...quoteCopy(cur), option_group: group, option_label: label, option_name: null });
+      f.openEdit(created);
+      toast.success(`Option ${label} added — change its menu and price`);
+    } catch (e: any) { toast.error(e?.message || 'Could not add an option'); }
+    finally { setOptBusy(false); }
   };
 
-  const isSaving = createQuotation.isPending || updateQuotation.isPending;
-  const editingQuotation = editingId ? quotations.find(q => q.id === editingId) : undefined;
-
-  const buildDraftQuotation = (): Quotation => ({
-    ...buildPayload(),
-    id: editingId || 'draft',
-    quotation_number: editingQuotation?.quotation_number || 'DRAFT',
-    customer: selectedBooking?.customer || (ev.draft.name ? { name: ev.draft.name, phone: ev.draft.phone } : null),
-    booking: selectedBooking || { event_type: ev.draft.eventType, event_date: ev.draft.date, venue: ev.draft.venue, guest_count: guestCount },
-    booking_id: selectedBookingId || undefined,
-    issue_date: todayIST(),
-    created_at: new Date().toISOString(),
-  });
-
-  // Form PDF and share use what is on screen, including unsaved edits.
-  const withDraft = (fn: (q: Quotation) => void) => () => {
-    fn(buildDraftQuotation());
+  const switchOption = async (q: Quotation) => {
+    if (f.dirty && !(await confirm({ title: 'Switch option?', message: 'Unsaved changes in this option will be lost.', confirmLabel: 'Switch' }))) return;
+    f.openEdit(q);
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
+  const openNewOn = (date: string) => { f.openCreate(date); };
+  const view: View = viewPref.view;
+  const date = f.isMultiDay ? (f.eventDays[0]?.date || '') : (f.selectedBooking?.event_date || ev.draft.date);
+  const note = f.showForm ? sameDayNote(date, f.selectedBooking?.venue || ev.draft.venue || '', quotations, f.bookings,
+    { id: editingId ?? undefined, group: editingQuotation?.option_group, bookingId: f.selectedBooking?.id }) : '';
+  const rupees = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+
   return (
     <div style={{ padding: '20px 16px', maxWidth: 1100, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Quotations</h2>
           <div style={{ fontSize: 12, color: '#888880', marginTop: 2 }}>{quotations.length} quotation{quotations.length !== 1 ? 's' : ''}</div>
         </div>
-        {!showForm && <button onClick={openCreate} style={btnPrimary}>+ New Quotation</button>}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div role="group" aria-label="View" style={{ display: 'flex', border: '0.5px solid #D0D0CC', borderRadius: 8, overflow: 'hidden' }}>
+            {(['list', 'calendar'] as View[]).map(v => (
+              <button key={v} type="button" aria-pressed={view === v} onClick={() => setViewPref({ view: v })}
+                style={{ padding: '7px 14px', border: 'none', fontSize: 13, cursor: 'pointer', background: view === v ? '#E8750A' : '#fff', color: view === v ? '#fff' : '#555550', fontWeight: view === v ? 600 : 400 }}>
+                {v === 'list' ? 'List' : 'Calendar'}
+              </button>
+            ))}
+          </div>
+          {!f.showForm && <button onClick={() => f.openCreate()} style={btnPrimary}>+ New Quotation</button>}
+        </div>
       </div>
 
-      {/* ── Form ── */}
-      {showForm && (
+      {f.showForm && (
         <div key={editingId || 'new'} ref={formRef} style={{ background: '#fff', borderRadius: 12, border: '0.5px solid #E5E5E0', marginBottom: 24, overflow: 'hidden', scrollMarginTop: 12 }}>
           <div style={{ padding: '14px 20px', borderBottom: '0.5px solid #E5E5E0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontWeight: 600, fontSize: 14 }}>{editingQuotation ? `Edit ${editingQuotation.quotation_number}` : 'New Quotation'}</div>
-            <button onClick={() => resetForm()} aria-label="Close form" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888880' }}>×</button>
+            <button onClick={() => f.resetForm()} aria-label="Close form" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888880' }}>×</button>
           </div>
 
           <div style={{ padding: '16px' }}>
-            <QuotationEventFields
-              ev={ev} bookings={eligibleBookings} editing={!!editingId}
-              foodType={foodType} onFoodType={setFoodType}
-              isMultiDay={isMultiDay} onMultiDay={toggleMultiDay}
-              itemPrices={showPrices} onItemPrices={v => setPrefs({ itemPrices: v })} lockItemPrices={hasItemPrices} />
+            <QuotationOptionsBar current={editingQuotation} siblings={siblings} enabled={hasOptions} dirty={f.dirty} busy={optBusy}
+              name={f.optionName} onName={f.setOptionName} onSwitch={switchOption} onAdd={addOption} onAccept={flow.accept} />
 
-            {isMultiDay ? (
+            {note && (
+              <div role="status" style={{ marginBottom: 12, padding: '9px 12px', borderRadius: 8, background: '#FFF6E5', border: '0.5px solid #F2C77E', fontSize: 12.5, color: '#6D4C00', lineHeight: 1.45 }}>{note}</div>
+            )}
+
+            <QuotationEventFields
+              ev={ev} bookings={f.eligibleBookings} editing={!!editingId}
+              foodType={f.foodType} onFoodType={f.setFoodType}
+              isMultiDay={f.isMultiDay} onMultiDay={f.toggleMultiDay}
+              itemPrices={f.showPrices} onItemPrices={f.setItemPricesPref} lockItemPrices={f.hasItemPrices} />
+
+            {f.isMultiDay ? (
               <QuotationMultiDay
-                eventDays={eventDays} setEventDays={setEventDays}
-                activeMealKey={activeMealKey} setActiveMealKey={setActiveMealKey}
-                guestCount={guestCount} defaultDate={selectedBooking?.event_date || ''}
-                menuItems={activeItems} priceFor={priceFor} showPrices={showPrices} />
+                eventDays={f.eventDays} setEventDays={f.setEventDays}
+                activeMealKey={f.activeMealKey} setActiveMealKey={f.setActiveMealKey}
+                guestCount={f.guestCount} defaultDate={f.selectedBooking?.event_date || ev.draft.date || ''}
+                menuItems={f.activeItems} priceFor={f.priceFor} showPrices={f.showPrices} />
             ) : (
               <>
-                <QuotationPackagePicker menuItems={activeItems} bookingMenuId={selectedBooking?.menu_id} onApply={applyPackage} />
-                <QuotationItemPanels showPrices={showPrices}
-                  menuItems={activeItems} items={selectedItems}
-                  selectedTitle="SELECTED ITEMS" totalLabel="Items Total"
-                  onAdd={addItem}
-                  onAmount={(id, amount) => patchItem(id, { amount })}
-                  onRemove={id => setSelectedItems(prev => prev.filter(i => i.item_id !== id))}
-                  onText={(id, field: ItemTextField, value) => patchItem(id, { [field]: value })}
-                  onReorder={reorderSelectedItems}
-                  onReset={() => setSelectedItems([])} />
+                <QuotationPackagePicker menuItems={f.activeItems} bookingMenuId={f.selectedBooking?.menu_id} onApply={f.applyPackage} />
+                <QuotationItemPanels showPrices={f.showPrices}
+                  menuItems={f.activeItems} items={f.selectedItems}
+                  selectedTitle="SELECTED ITEMS" totalLabel="Plate price from items"
+                  onAdd={f.addItem}
+                  onAmount={(id, amount) => f.patchItem(id, { amount })}
+                  onRemove={id => f.setSelectedItems(prev => prev.filter(i => i.item_id !== id))}
+                  onText={(id, field: ItemTextField, value) => f.patchItem(id, { [field]: value })}
+                  onReorder={f.reorderItems}
+                  onReset={() => f.setSelectedItems([])}
+                  onChoice={f.setSelectedItems} />
 
-                {/* Per plate × guests */}
                 <div style={{ marginTop: 14, background: '#F9F8F5', borderRadius: 10, padding: '12px 16px', border: '0.5px solid #E5E5E0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#666', whiteSpace: 'nowrap' }}>
                     Per Plate (₹)
-                    <input type="number" min="0" inputMode="decimal" value={perPlate}
-                      onChange={e => { perPlateAutoRef.current = false; setPerPlate(e.target.value); }}
+                    <input type="number" min="0" inputMode="decimal" value={f.perPlate} onChange={e => f.typePerPlate(e.target.value)}
                       placeholder="0" style={{ width: 100, border: '1px solid #E5E5E0', borderRadius: 7, padding: '6px 8px', fontSize: 13, textAlign: 'right', background: '#fff' }} />
                   </label>
+                  {f.perPlateMax != null && <span style={{ fontSize: 12.5, fontWeight: 600, color: '#A84F00' }}>to {rupees(f.perPlateMax)} until the customer picks</span>}
                   <span style={{ fontSize: 13, color: '#888880' }}>×</span>
-                  <div style={{ fontSize: 13, color: '#444' }}><strong>{guestCount}</strong> <span style={{ color: '#888880' }}>guests</span></div>
+                  <div style={{ fontSize: 13, color: '#444' }}><strong>{f.guestCount}</strong> <span style={{ color: '#888880' }}>guests</span></div>
                   <span style={{ fontSize: 13, color: '#888880' }}>=</span>
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#1A1A18' }}>
-                    ₹{subtotal.toLocaleString('en-IN')}
+                    {rupees(f.totals.subtotal)}{f.perPlateMax != null ? ` – ${rupees(f.perPlateMax * f.guestCount)}` : ''}
                     <span style={{ fontSize: 11, color: '#888880', fontWeight: 400, marginLeft: 4 }}>(Subtotal)</span>
                   </div>
+                  {f.showPrices && (
+                    <label title="On: one price whatever the customer picks. Off: price follows the dishes." style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginLeft: 'auto', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!f.autoPrice} onChange={e => f.setAutoPrice(!e.target.checked)} style={{ accentColor: '#E8750A', width: 15, height: 15 }} />
+                      Fixed plate price
+                    </label>
+                  )}
                 </div>
               </>
             )}
 
             <QuotationCharges
-              isMultiDay={isMultiDay} eventDays={eventDays} gstRate={dcGstRate}
-              gstChecked={gstChecked} setGstChecked={setGstChecked}
-              discounts={additionalDiscounts} setDiscounts={setAdditionalDiscounts}
-              extraCharges={extraCharges} setExtraCharges={setExtraCharges}
-              transport={transportationCharges} setTransport={setTransportationCharges}
+              isMultiDay={f.isMultiDay} eventDays={f.eventDays} gstRate={f.dcGstRate}
+              gstChecked={f.gstChecked} setGstChecked={f.setGstChecked}
+              discounts={f.additionalDiscounts} setDiscounts={f.setAdditionalDiscounts}
+              extraCharges={f.extraCharges} setExtraCharges={f.setExtraCharges}
+              transport={f.transportationCharges} setTransport={f.setTransportationCharges}
               totals={{
-                mealSavings: totalMealSavings, discount: discountAmt, extra: extraChargesTotal,
-                transport: transportationChargesTotal, gst: gstAmount, multiDaySubtotal,
-                perPlate: perPlateNum, subtotal, final: finalTotal,
+                mealSavings: f.totals.mealSavings, discount: f.totals.discount,
+                extra: f.extraCharges.reduce((s, c) => s + (c.amount || 0), 0),
+                transport: f.transportationCharges.reduce((s, c) => s + (c.amount || 0), 0),
+                gst: f.totals.gst, multiDaySubtotal: f.isMultiDay ? f.totals.subtotal : 0,
+                perPlate: f.perPlateNum, subtotal: f.isMultiDay ? 0 : f.totals.subtotal, final: f.totals.final,
               }} />
+            {f.totalMax != null && (
+              <div style={{ marginTop: 6, textAlign: 'right', fontSize: 12.5, color: '#A84F00', fontWeight: 600 }}>
+                Up to {rupees(f.totalMax)} depending on the customer's picks
+              </div>
+            )}
 
-            {/* Notes */}
             <div style={{ marginTop: 14 }}>
               <label style={lbl}>NOTES (OPTIONAL)</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
-                placeholder="Add any notes…" style={{ ...inp, resize: 'vertical' }} />
+              <textarea value={f.notes} onChange={e => f.setNotes(e.target.value)} rows={2} placeholder="Add any notes…" style={{ ...inp, resize: 'vertical' }} />
             </div>
 
-            {/* PDF + share of what is on screen */}
             <div style={{ marginTop: 14, padding: '10px 14px', background: '#F5F8FF', border: '0.5px solid #B8C8F4', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <label style={{ display: showPrices ? 'flex' : 'none', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', userSelect: 'none', marginRight: 'auto' }}>
-                <input type="checkbox" checked={pdfWithPrices} onChange={e => setPdfWithPrices(e.target.checked)}
-                  style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
+              <label style={{ display: f.showPrices ? 'flex' : 'none', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', userSelect: 'none', marginRight: 'auto' }}>
+                <input type="checkbox" checked={pdfWithPrices} onChange={e => setPdfWithPrices(e.target.checked)} style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
                 <span>Include item prices in PDF</span>
               </label>
-              <button onClick={withDraft(q => downloadDoc(() => quotationDoc(q, { withPrices: showPrices && pdfWithPrices })))} style={{ ...btnSmall, background: '#378ADD' }}>⬇ Download PDF</button>
+              <button onClick={() => { const q = f.draftQuotation(); downloadDoc(() => quotationDoc(q, { withPrices: f.showPrices && pdfWithPrices, options: siblings })); }} style={{ ...btnSmall, background: '#378ADD' }}>⬇ Download PDF</button>
               {editingId && (
-                <button onClick={withDraft(q => { lifecycle.share(q, showPrices && pdfWithPrices); })} style={{ ...btnSmall, background: '#1DA851' }}>📤 Share</button>
+                <button onClick={() => flow.share(f.draftQuotation(), f.showPrices && pdfWithPrices, siblings)} style={{ ...btnSmall, background: '#1DA851' }}>📤 Share</button>
               )}
             </div>
 
             <div style={{ marginTop: 10, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => resetForm()} style={btnGhost}>Cancel</button>
-              <button onClick={handleSave} disabled={isSaving} style={{ ...btnPrimary, opacity: isSaving ? 0.6 : 1 }}>
-                {isSaving ? 'Saving…' : editingId ? 'Update Quotation' : 'Save Quotation'}
+              <button onClick={() => f.resetForm()} style={btnGhost}>Cancel</button>
+              <button onClick={save} disabled={f.isSaving} style={{ ...btnPrimary, opacity: f.isSaving ? 0.6 : 1 }}>
+                {f.isSaving ? 'Saving…' : editingId ? 'Update Quotation' : 'Save Quotation'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <QuotationList
-        quotations={quotations}
-        onPdf={q => downloadDoc(() => quotationDoc(q))}
-        onShare={q => { lifecycle.share(q); }}
-        onEdit={openEdit}
-        onClone={handleClone}
-        onDelete={handleDelete}
-        onStatus={lifecycle.setStatus} />
+      {view === 'calendar'
+        ? <QuotationCalendar quotations={quotations} onOpen={f.openEdit} onNew={openNewOn} />
+        : <QuotationList quotations={quotations}
+            onPdf={q => downloadDoc(() => quotationDoc(q, { options: siblingsOf(q, quotations) }))}
+            onShare={q => { flow.share(q, true, siblingsOf(q, quotations)); }}
+            onEdit={f.openEdit} onClone={handleClone} onDelete={handleDelete} onStatus={flow.setStatus} />}
 
+      {flow.ui}
       {dialog}
     </div>
   );
 };
 
 const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' };
-const btnGhost:   React.CSSProperties = { border: '1px solid #E5E5E0', background: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, cursor: 'pointer' };
-const btnSmall:   React.CSSProperties = { color: '#fff', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' };
+const btnGhost: React.CSSProperties = { border: '1px solid #E5E5E0', background: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, cursor: 'pointer' };
+const btnSmall: React.CSSProperties = { color: '#fff', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' };
 const lbl: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: '#888880', display: 'block', marginBottom: 4 };
 const inp: React.CSSProperties = { width: '100%', border: '1px solid #E5E5E0', borderRadius: 8, padding: '8px 10px', fontSize: 13, boxSizing: 'border-box', background: '#fff' };
 

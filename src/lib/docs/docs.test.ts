@@ -1,7 +1,7 @@
 import { quotationDoc } from './quotationDoc';
 import { invoiceDoc, eventMenuDoc } from './invoiceDoc';
 import { billHtml } from './sweetsDocs';
-import { coursesOf, daysOf } from './menu';
+import { coursesOf, daysOf, courseGrid } from './menu';
 import { mergeDocSettings, scheduleAmounts, DEFAULT_DOC_SETTINGS } from './settings';
 import { qrSvg, upiLink } from './qr';
 import { orderReceipt } from '../sessionalReceipts';
@@ -64,6 +64,21 @@ describe('quotation', () => {
     expect(html).toContain('− ₹5,000');
     expect(html).toContain('2 meals over 1 day');
     expect(html).toContain('UPI QR code');
+  });
+});
+
+describe('choose-any groups in documents', () => {
+  const g = { id: 'g', label: 'Sweets', pick: 1 };
+  const items = [dish('Main', '', 'Dal', 30), { ...dish('Sweets', '', 'Jamun', 40), choice: g }, { ...dish('Sweets', '', 'Halwa', 60), choice: g }];
+  it('quote shows tick boxes and the price effect', () => {
+    const html = courseGrid(items, true);
+    expect(html).toContain('Sweets · choose any 1');
+    expect(html).toContain('+₹40 – ₹60 / plate');
+  });
+  it('served copies keep only the picked dish', () => {
+    const html = courseGrid(items.map(i => (i.item_name === 'Halwa' ? { ...i, chosen: true } : i)), false, 'served');
+    expect(html).toContain('Halwa');
+    expect(html).not.toContain('Jamun');
   });
 });
 
