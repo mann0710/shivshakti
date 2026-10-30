@@ -74,6 +74,7 @@ Run [`supabase/migrations/20261105_doc_settings.sql`](supabase/migrations/202611
 - Only signed-in staff can use it (it calls `is_staff` with the user's token).
 - The page may load nothing but embedded images and Google Fonts.
 - Every page gets "Page X of Y" and the document reference in the footer.
+- `GET /api/pdf` is a health check (Node version and whether the PDF libraries load). Live and checked on 31 Oct 2026: a staff request returns a PDF in about 4–5 s on a cold start.
 - If the service cannot be reached (local `npm start`, offline), the app opens the print window instead; choose "Save as PDF".
 - To try it locally: `CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"` and call `require('./api/pdf').render(html, footer)` from Node.
 
