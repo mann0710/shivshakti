@@ -2,7 +2,7 @@ import type { Quotation } from '../../hooks/useQuotations';
 import { DocContext, docContext } from './context';
 import { scheduleAmounts } from './settings';
 import { page, esc, money, cap } from './theme';
-import { header, facts, sectionHead, sumRows, SumRow, banner, paySteps, chips, terms, upiBox, signatures, endLine, footerText } from './parts';
+import { header, facts, sectionHead, sumRows, SumRow, banner, paySteps, StepOption, chips, terms, upiBox, signatures, endLine, footerText } from './parts';
 import { courseGrid, coursesOf, hasItemPrices, priceShow, PriceShow, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText, dayLabel } from './menu';
 import { plateRange, choiceGroups, pickedOf, dishCount } from '../quoteChoices';
 import { optionTitle, statusText } from '../quoteOptions';
@@ -96,10 +96,10 @@ const menuSection = (q: Quotation, itemPrices: PriceShow, title: string, breakBe
 // Side-by-side cards for options A / B / C.
 const compareSection = (options: Quotation[]) => `<section class="keep">${sectionHead('Choose your menu', 'Pick one option')}
   <div class="compare" style="--n:${Math.min(options.length, 3)}">${options.map(o => `<div class="opt">
-    <span class="kind" style="letter-spacing:1.5px">${esc(optionTitle(o))}</span>
+    <span class="kind" style="letter-spacing:1.5px">${esc(optionTitle(o))} · ${esc(o.quotation_number)}</span>
     <b class="price num">${isMulti(o) ? rangeText(o.total_amount, o.total_max ?? 0) : `${rangeText(o.per_plate_amount, o.per_plate_max ?? 0)} <span style="font-size:13px;font-weight:500;color:#5C5C6B">/ plate</span>`}</b>
     ${isMulti(o) ? '' : `<span class="num">${rangeText(o.total_amount, o.total_max ?? 0)} total</span>`}
-    <span class="muted" style="font-size:12px">${dishesOf(o).length} dishes${choiceGroups(dishesOf(o)).length ? ' · with choices' : ''}${o.status === 'accepted' || o.status === 'rejected' ? ` · ${statusText(o)}` : ''}</span>
+    <span class="muted" style="font-size:12px">${dishCount(dishesOf(o))} dishes${choiceGroups(dishesOf(o)).length ? ' · with choices' : ''}${o.status === 'accepted' || o.status === 'rejected' ? ` · ${statusText(o)}` : ''}</span>
   </div>`).join('')}</div></section>`;
 
 export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options?: Quotation[] } = {}, ctx: DocContext = docContext()): Doc {
@@ -108,6 +108,10 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   // Unsaved edits of the open option replace its saved copy.
   const options = (opts.options?.length ?? 0) > 1 ? opts.options!.map(o => (o.id === q.id ? { ...o, ...q } : o)) : [q];
   const grouped = options.length > 1;
+  // One PDF for all options carries the first option's number; a single option is labelled "Option A".
+  const number = grouped ? options[0].quotation_number : q.quotation_number;
+  const kind = grouped ? `Quotation · ${options.length} options` : q.option_label ? `Quotation · ${optionTitle(q)}` : 'Quotation';
+  const perOption: StepOption[] = grouped ? options.map(o => ({ label: `Option ${o.option_label}`, lo: o.total_amount, hi: o.total_max ?? 0 })) : [];
   const prices = (o: Quotation) => priceShow(opts.withPrices !== false && hasItemPrices(dishesOf(o)), o.per_plate_amount, o.items);
   const issued = (q.issue_date || q.created_at || '').slice(0, 10);
   const validTill = issued ? addDays(issued, s.quote_valid_days) : '';
@@ -120,7 +124,7 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
     ? options.map((o, i) => `${menuSection(o, prices(o), `${optionTitle(o)} — the menu`, i > 0)}${priceSection(o, prices(o), `${optionTitle(o)} — price`)}`).join('')
     : `${menuSection(q, prices(q), 'The menu')}${q.notes ? `<section>${sectionHead('Notes')}<div style="white-space:pre-line;font-size:13px">${esc(q.notes)}</div></section>` : ''}${priceSection(q, prices(q))}`;
 
-  const body = `${header(ctx, grouped ? `Quotation · ${options.length} options` : 'Quotation', q.quotation_number, `Issued ${day(issued)}${validTill ? ` · Valid till ${day(validTill)}` : ''}`)}
+  const body = `${header(ctx, kind, number, `Issued ${day(issued)}${validTill ? ` · Valid till ${day(validTill)}` : ''}`)}
 <div class="wrap">
   <div class="intro">
     <div class="fact"><span class="lbl">Prepared for</span><span class="big">${esc(q.customer?.name || 'Customer')}</span>
@@ -129,7 +133,7 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   </div>
   ${grouped ? compareSection(options) : ''}
   ${details}
-  ${s.schedule.length ? `<section class="keep">${sectionHead('Payment schedule', open ? 'of the final total' : '')}${paySteps(open ? null : q.total_amount, s.schedule)}</section>` : ''}
+  ${s.schedule.length ? `<section class="keep">${sectionHead('Payment schedule', open ? 'of the final total' : '')}${paySteps(open ? null : q.total_amount, s.schedule, perOption)}</section>` : ''}
   ${s.extras.length ? `<section class="keep">${sectionHead('On request, charged extra')}${chips(s.extras)}</section>` : ''}
   <div class="keep"><section>${sectionHead('Terms')}${terms([...s.terms, ...(validTill ? [`This quotation is valid till ${day(validTill)}.`] : [])])}</section>
   <div class="close">${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', 'For Shiv Shakti Catering Service')}
@@ -138,8 +142,8 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
 ${endLine(ctx, 'Thank you for considering Shiv Shakti Catering Service')}`;
 
   return {
-    html: page(`Quotation ${q.quotation_number}`, s.accent, body),
-    fileName: docFileName(q.customer?.name, q.quotation_number),
-    footer: footerText(q.quotation_number, q.customer?.name, b?.event_type),
+    html: page(`Quotation ${number}`, s.accent, body),
+    fileName: docFileName(q.customer?.name, grouped ? `${number}_Options_${options.map(o => o.option_label).join('')}` : `${number}${q.option_label ? `_Option_${q.option_label}` : ''}`),
+    footer: footerText(grouped ? `${number} · ${options.length} options` : number, q.customer?.name, b?.event_type),
   };
 }

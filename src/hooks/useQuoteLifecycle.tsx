@@ -49,9 +49,11 @@ export const useQuoteLifecycle = (onNavigate?: Navigate) => {
   // Sharing a draft marks it Sent.
   const share = async (q: Quotation, withPrices = true, options?: Quotation[]) => {
     const res = await shareQuotation(q, withPrices, options);
-    if ((res === 'shared' || res === 'whatsapp') && q.status === 'draft') {
+    // Every draft in the PDF is now sent.
+    const drafts = (options?.length ? options : [q]).filter(o => o.status === 'draft');
+    if ((res === 'shared' || res === 'whatsapp') && drafts.length) {
       try {
-        await updateStatus.mutateAsync({ id: q.id, status: 'sent' });
+        for (const o of drafts) await updateStatus.mutateAsync({ id: o.id, status: 'sent' });
         await bookingTo(q, 'followup');
       } catch { /* sharing already succeeded */ }
     }

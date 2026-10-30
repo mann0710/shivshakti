@@ -36,6 +36,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   const [viewPref, setViewPref] = useStoredState<{ view: View }>('shivshakti.quoteView', () => ({ view: 'list' }));
   const { quotations, editingId, editingQuotation, ev } = f;
   const siblings = editingQuotation ? siblingsOf(editingQuotation, quotations) : [];
+  const multi = siblings.length > 1;
 
   // Bring the form into view when it opens or switches quotation.
   useEffect(() => {
@@ -64,6 +65,9 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     if (!ok) return;
     try {
       await deleteQuotation.mutateAsync(q.id);
+      // The last option left becomes a plain quotation.
+      const rest = siblingsOf(q, quotations).filter(s => s.id !== q.id);
+      if (q.option_group && rest.length === 1) await f.updateQuotation.mutateAsync({ id: rest[0].id, option_group: null, option_label: null, option_name: null });
       if (editingId === q.id) f.resetForm();
       toast.success('Deleted');
     } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
@@ -219,10 +223,15 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
                 <input type="checkbox" checked={pdfWithPrices} onChange={e => setPdfWithPrices(e.target.checked)} style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
                 <span>Include item prices in PDF</span>
               </label>
-              <button onClick={() => { const q = f.draftQuotation(); downloadDoc(() => quotationDoc(q, { withPrices: f.showPrices && pdfWithPrices, options: siblings })); }} style={{ ...btnSmall, background: '#378ADD' }}>⬇ Download PDF</button>
-              {editingId && (
-                <button onClick={() => flow.share(f.draftQuotation(), f.showPrices && pdfWithPrices, siblings)} style={{ ...btnSmall, background: '#1DA851' }}>📤 Share</button>
-              )}
+              {(multi ? [false, true] : [false]).map(all => (
+                <React.Fragment key={String(all)}>
+                  <button onClick={() => { const q = f.draftQuotation(); downloadDoc(() => quotationDoc(q, { withPrices: f.showPrices && pdfWithPrices, options: all ? siblings : undefined })); }}
+                    style={{ ...btnSmall, background: '#378ADD' }}>⬇ {all ? `All options (${siblings.map(o => o.option_label).join(' + ')})` : multi ? `Option ${editingQuotation?.option_label} only` : 'Download PDF'}</button>
+                  {editingId && (
+                    <button onClick={() => flow.share(f.draftQuotation(), f.showPrices && pdfWithPrices, all ? siblings : undefined)} style={{ ...btnSmall, background: '#1DA851' }}>📤 Share{all ? ' all' : multi ? ` ${editingQuotation?.option_label}` : ''}</button>
+                  )}
+                </React.Fragment>
+              ))}
             </div>
 
             <div style={{ marginTop: 10, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -238,8 +247,8 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
       {view === 'calendar'
         ? <QuotationCalendar quotations={quotations} onOpen={f.openEdit} onNew={openNewOn} />
         : <QuotationList quotations={quotations}
-            onPdf={q => downloadDoc(() => quotationDoc(q, { options: siblingsOf(q, quotations) }))}
-            onShare={q => { flow.share(q, true, siblingsOf(q, quotations)); }}
+            onPdf={(q, all) => downloadDoc(() => quotationDoc(q, { options: all }))}
+            onShare={(q, all) => { flow.share(q, true, all); }}
             onEdit={f.openEdit} onClone={handleClone} onDelete={handleDelete} onStatus={flow.setStatus} />}
 
       {flow.ui}

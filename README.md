@@ -187,9 +187,10 @@ The phone bottom bar now has a **POS** button.
   - **Your own price:** type it in Per Plate (the **Own price** tick turns on) — it is the price of the menu as you built it. Alternatives still move it by their price difference: ₹215 with South Boll (₹60) and Mix Bhajiya (₹40) offered instead quotes **₹195 – ₹215** a plate. Untick **Own price** to add up the dish prices again. Older quotes saved with one fixed price keep it until you edit them.
   - **On paper:** when the dish prices make up the plate price, the price table lists each priced course and choice (₹0 rows are left out). With your own higher price it shows one "Catering" line with the plate range, and the choice box shows what each dish adds ("South Boll +₹20").
   - Works in single-day menus and in every meal of a multi-day event.
-- **Options A / B / C:** on a saved quotation, **+ Add option** copies it as the next option of the same enquiry, with its own menu, price and name (e.g. Classic, Premium). Tabs switch between options; the list keeps them together.
+- **Options A / B / C:** on a saved quotation, **+ Add option** copies it as the next option of the same enquiry, with its own menu, price and name (e.g. Classic, Premium). Tabs switch between options.
+- **Quotation list:** an enquiry with options shows as one **master row** (first option's number, "2 options", total from lowest to highest — or the accepted option's — and "Draft · customer picks 1 of 2" / "Option B accepted"), with **Option A**, **Option B** indented under it, each with its own status, PDF, share, edit, clone and delete. The master row's **Share all** / **PDF · A + B** make one PDF with every option; **Open** opens the accepted (or first) option. Deleting down to one option turns it back into a plain quotation.
 - **Mark accepted…** (from the editor, the status menu or the event page) asks which option the customer took and which dishes they picked, with the final guest count and a live price. It locks in the picks and exact price, marks the other options **Not chosen**, confirms the booking and offers the invoice.
-- **PDF:** options are compared side by side, then each option's menu and price; choice groups print with tick boxes and their price effect; the total shows as a range until decided; the payment schedule shows percentages until the price is final. Invoices and the event menu list only the dishes that will be served.
+- **PDF:** a single option's PDF ("Option A only" in the editor, **PDF** on its row) holds just that option with its exact payment amounts, saved as `Name_QTN-0024_Option_A.pdf`. The all-options PDF ("All options (A + B)", **PDF · A + B**) carries option A's number, compares the options side by side (each with its own quotation number), then each option's menu and price, and under every payment step shows each option's amount; the WhatsApp message lists each option's total, and sharing it marks every draft option as sent. In both, choice groups print with tick boxes and their price effect; the total shows as a range until decided; the payment schedule shows percentages until the price is final. Invoices and the event menu list only the dishes that will be served.
 
 ## Printed documents (quotations, invoices, slips, bills, reports)
 
@@ -270,8 +271,9 @@ src/
   hooks/usePreorderActions.tsx      pack, hand over + collect, cancel, delete (shared by sheet and list)
   hooks/useReportData.ts            data for one report period
   lib/quoteChoices.ts, quoteOptions.ts   choose-any groups, price ranges, accepting picks; options, same-day note, quote dates
+  lib/quoteGroups.ts                     list grouping: options under one enquiry, group total and status
   hooks/useQuoteForm.ts, useAcceptFlow.tsx   quotation form state and totals; accept with option + picks
-  components/catering/QuotationCalendar, QuotationOptionsBar, QuotationChoiceGroup, AlternativePicker, QuoteAcceptDialog
+  components/catering/QuotationCalendar, QuotationOptionsBar, QuotationChoiceGroup, AlternativePicker, QuoteAcceptDialog, QuotationList, QuotationRowParts
   lib/docs/                         printed documents: theme, parts, menu blocks, quotation, invoice/event menu, sweets, settings, QR, output (PDF service → download/share, print fallback)
   api/pdf.js                        PDF service (Vercel function, headless Chrome)
   components/DocSettingsCard.tsx    Data Center → Documents

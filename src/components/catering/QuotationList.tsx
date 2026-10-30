@@ -1,65 +1,39 @@
 import React, { useMemo, useState } from 'react';
 import { Quotation } from '../../hooks/useQuotations';
 import { formatDateIST } from '../../lib/ist';
-import { quotationDates } from '../../lib/quotationShare';
-import { optionTitle, statusText, totalText, plateText } from '../../lib/quoteOptions';
+import { optionTitle, totalText, plateText } from '../../lib/quoteOptions';
+import { groupQuotes, groupTotal, groupStatus, acceptedOf, QuoteGroup } from '../../lib/quoteGroups';
+import { dishCount } from '../../lib/quoteChoices';
+import { STATUSES, STATUS_COLORS, Actions, StatusSelect, RowActions, actionBtn, eventLabel, typeLabel, panel, cell, sub, optChip } from './QuotationRowParts';
 
-const STATUSES = ['draft', 'sent', 'accepted', 'rejected'] as const;
 type Filter = 'all' | typeof STATUSES[number];
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: '#888880', sent: '#378ADD', accepted: '#639922', rejected: '#CC4444',
-};
-
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-interface Actions {
-  onPdf: (q: Quotation) => void;
-  onShare: (q: Quotation) => void;
-  onEdit: (q: Quotation) => void;
-  onClone: (q: Quotation) => void;
-  onDelete: (q: Quotation) => void;
-}
 
 interface Props extends Actions {
   quotations: Quotation[];
   onStatus: (q: Quotation, status: string) => void;
 }
 
-const StatusSelect: React.FC<{ q: Quotation; onStatus: Props['onStatus'] }> = ({ q, onStatus }) => (
-  <select value={q.status} onChange={e => onStatus(q, e.target.value)} aria-label="Status"
-    style={{ border: '0.5px solid #E5E5E0', borderRadius: 6, background: '#fff', fontSize: 12, fontWeight: 600, color: STATUS_COLORS[q.status] || '#888880', cursor: 'pointer', padding: '3px 6px' }}>
-    {STATUSES.map(s => <option key={s} value={s}>{statusText({ status: s, option_group: q.option_group })}</option>)}
-  </select>
-);
+// Shown group: every option for the summary, only the options that pass the status filter as rows.
+interface Shown extends QuoteGroup { rows: Quotation[] }
 
-const RowActions: React.FC<Actions & { q: Quotation; big?: boolean }> = ({ q, big, onPdf, onShare, onEdit, onClone, onDelete }) => {
-  const btn = (color: string, filled = false): React.CSSProperties => ({
-    background: filled ? color : '#fff', color: filled ? '#fff' : color,
-    border: `1px solid ${filled ? color : '#E5E5E0'}`, borderRadius: big ? 8 : 5,
-    padding: big ? '6px 12px' : '3px 8px', fontSize: big ? 13 : 11, fontWeight: filled ? 600 : 500,
-    cursor: 'pointer', whiteSpace: 'nowrap',
-  });
+// Master line of an enquiry with options: one PDF / share of all options, and open.
+const GroupActions: React.FC<Actions & { g: QuoteGroup; big?: boolean }> = ({ g, big, onPdf, onShare, onEdit }) => {
+  const first = acceptedOf(g) ?? g.options[0];
+  const labels = g.options.map(o => o.option_label).join(' + ');
   return (
     <>
-      <button onClick={() => onShare(q)} style={btn('#1DA851', true)} title="Send PDF on WhatsApp">📤 Share</button>
-      <button onClick={() => onPdf(q)} style={btn('#378ADD')}>⬇ PDF</button>
-      <button onClick={() => onEdit(q)} style={btn('#444')}>✏ Edit</button>
-      <button onClick={() => onClone(q)} style={btn('#0F6E56')}>⧉ Clone</button>
-      <button onClick={() => onDelete(q)} style={btn('#CC4444')}>🗑 Delete</button>
+      <button onClick={() => onShare(first, g.options)} style={actionBtn('#1DA851', true, big)} title={`One PDF with options ${labels}, on WhatsApp`}>📤 Share all</button>
+      <button onClick={() => onPdf(first, g.options)} style={actionBtn('#378ADD', false, big)} title={`One PDF with options ${labels}`}>⬇ PDF · {labels}</button>
+      <button onClick={() => onEdit(first)} style={actionBtn('#444', false, big)}>✏ Open</button>
     </>
   );
 };
 
-const eventLabel = (q: Quotation) => {
-  if (!q.booking) return '—';
-  const dates = quotationDates(q);
-  return dates ? `${q.booking.event_type} · ${dates}` : q.booking.event_type;
-};
-
-const typeLabel = (q: Quotation) => q.is_multi_day
-  ? <span style={{ background: '#E6F1FB', color: '#185FA5', fontSize: 10, padding: '2px 8px', borderRadius: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>Multi-day ({q.event_days?.length || 0}d)</span>
-  : q.per_plate_amount > 0 ? `${plateText(q)}/plate` : '—';
+const optionName = (q: Quotation) => (
+  <span style={{ ...optChip, marginTop: 0, fontSize: 11.5 }}>{optionTitle(q)}</span>
+);
 
 const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) => {
   const [search, setSearch] = useState('');
@@ -76,16 +50,13 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
       || (digits.length >= 3 && String(q.customer?.phone || '').replace(/\D/g, '').includes(digits)));
   }, [quotations, search]);
 
-  // Options of one enquiry sit together, in A / B / C order, where the newest of them would be.
-  const shown = useMemo(() => {
-    const list = filter === 'all' ? searched : searched.filter(q => q.status === filter);
-    const newest = new Map<string, string>();
-    list.forEach(q => { const k = q.option_group || q.id; if ((newest.get(k) ?? '') < q.created_at) newest.set(k, q.created_at); });
-    return [...list].sort((a, b) => {
-      const ka = a.option_group || a.id, kb = b.option_group || b.id;
-      return ka === kb ? (a.option_label || '').localeCompare(b.option_label || '') : newest.get(kb)!.localeCompare(newest.get(ka)!);
-    });
-  }, [searched, filter]);
+  // A search hit on one option brings its whole enquiry along.
+  const shown = useMemo<Shown[]>(() => {
+    const hit = new Set(searched.map(q => q.option_group || q.id));
+    return groupQuotes(quotations.filter(q => hit.has(q.option_group || q.id)))
+      .map(g => ({ ...g, rows: filter === 'all' ? g.options : g.options.filter(q => q.status === filter) }))
+      .filter(g => g.rows.length);
+  }, [quotations, searched, filter]);
   const count = (f: Filter) => (f === 'all' ? searched.length : searched.filter(q => q.status === f).length);
 
   if (quotations.length === 0) {
@@ -97,6 +68,8 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
       </div>
     );
   }
+
+  const tone = (g: QuoteGroup) => { const s = groupStatus(g); return <span style={{ fontSize: 12, fontWeight: 600, color: STATUS_COLORS[s.tone] }}>{s.text}</span>; };
 
   return (
     <div>
@@ -129,11 +102,42 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
                   </tr>
                 </thead>
                 <tbody>
-                  {shown.map((q, i) => (
-                    <tr key={q.id} style={{ borderBottom: i < shown.length - 1 ? '0.5px solid #F0F0EA' : 'none' }}>
+                  {shown.map(g => (g.grouped ? (
+                    <React.Fragment key={g.key}>
+                      <tr style={{ background: '#FFFAF4', borderTop: '0.5px solid #F0E2D0' }}>
+                        <td style={{ ...cell, borderLeft: '3px solid #E8750A' }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#E8750A' }}>{g.options[0].quotation_number}</div>
+                          <div style={{ ...optChip, background: '#E8750A', color: '#fff' }}>{g.options.length} options</div>
+                          <div style={sub}>{formatDateIST(g.options[0].issue_date, 'dd-MM-yyyy')}</div>
+                        </td>
+                        <td style={{ ...cell, fontSize: 13, fontWeight: 600, whiteSpace: 'normal' }}>{g.options[0].customer?.name || '—'}</td>
+                        <td style={{ ...cell, whiteSpace: 'normal' }}><div style={{ fontSize: 12, color: '#666' }}>{eventLabel(g.options[0])}</div></td>
+                        <td style={{ ...cell, fontSize: 13, fontWeight: 700 }}>{groupTotal(g)}</td>
+                        <td style={{ ...cell, whiteSpace: 'normal' }}>{tone(g)}</td>
+                        <td style={{ ...cell, whiteSpace: 'normal' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, minWidth: 150 }}><GroupActions g={g} {...actions} /></div>
+                        </td>
+                      </tr>
+                      {g.rows.map(q => (
+                        <tr key={q.id} style={{ borderTop: '0.5px dashed #F0E2D0' }}>
+                          <td style={{ ...cell, borderLeft: '3px solid #F6C89A', paddingLeft: 22 }}>
+                            {optionName(q)}
+                            <div style={sub}>{q.quotation_number}</div>
+                          </td>
+                          <td style={{ ...cell, fontSize: 12, color: '#666' }}>{q.is_multi_day ? '' : `${dishCount(q.items)} dishes`}</td>
+                          <td style={cell}><div style={sub}>{typeLabel(q)}</div></td>
+                          <td style={{ ...cell, fontSize: 13, fontWeight: 600 }}>{totalText(q)}</td>
+                          <td style={cell}><StatusSelect q={q} onStatus={onStatus} /></td>
+                          <td style={{ ...cell, whiteSpace: 'normal' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, minWidth: 150 }}><RowActions q={q} {...actions} /></div>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ) : g.rows.map(q => (
+                    <tr key={q.id} style={{ borderTop: '0.5px solid #F0F0EA' }}>
                       <td style={cell}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#E8750A' }}>{q.quotation_number}</div>
-                        {q.option_label && <div style={optChip}>{optionTitle(q)}</div>}
                         <div style={sub}>{formatDateIST(q.issue_date, 'dd-MM-yyyy')}</div>
                       </td>
                       <td style={{ ...cell, fontSize: 13, whiteSpace: 'normal' }}>{q.customer?.name || '—'}</td>
@@ -147,7 +151,7 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, minWidth: 150 }}><RowActions q={q} {...actions} /></div>
                       </td>
                     </tr>
-                  ))}
+                  ))))}
                 </tbody>
               </table>
             </div>
@@ -155,21 +159,38 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
 
           <div className="only-mobile">
             <div className="list-cards">
-              {shown.map(q => (
-                <div key={q.id} className="list-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#E8750A' }}>{q.quotation_number}{q.option_label && <span style={{ ...optChip, marginLeft: 6 }}>{optionTitle(q)}</span>}</span>
-                    <StatusSelect q={q} onStatus={onStatus} />
+              {shown.map(g => {
+                const head = g.options[0];
+                return (
+                  <div key={g.key} className="list-card" style={g.grouped ? { borderLeft: '3px solid #E8750A' } : undefined}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#E8750A' }}>{head.quotation_number}
+                        {g.grouped && <span style={{ ...optChip, marginLeft: 6, background: '#E8750A', color: '#fff' }}>{g.options.length} options</span>}</span>
+                      {g.grouped ? tone(g) : <StatusSelect q={head} onStatus={onStatus} />}
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{head.customer?.name || '—'}</div>
+                    <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{eventLabel(head)}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, gap: 8 }}>
+                      <span style={{ fontSize: 16, fontWeight: 700 }}>{groupTotal(g)}</span>
+                      {!g.grouped && <span style={{ fontSize: 12, color: '#888880' }}>{typeLabel(head)}</span>}
+                    </div>
+                    <div className="list-card-actions">{g.grouped ? <GroupActions g={g} big {...actions} /> : <RowActions q={head} big {...actions} />}</div>
+                    {g.grouped && g.rows.map(q => (
+                      <div key={q.id} style={{ marginTop: 10, padding: '8px 10px', border: '0.5px solid #F0E2D0', borderRadius: 8, background: '#FFFCF8' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          <span>{optionName(q)} <span style={{ fontSize: 11, color: '#888880' }}>{q.quotation_number}</span></span>
+                          <StatusSelect q={q} onStatus={onStatus} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 12, color: '#666' }}>
+                          <b style={{ fontSize: 14, color: '#1A1A18' }}>{totalText(q)}</b>
+                          <span>{q.is_multi_day ? typeLabel(q) : `${plateText(q)}/plate · ${dishCount(q.items)} dishes`}</span>
+                        </div>
+                        <div className="list-card-actions"><RowActions q={q} big {...actions} /></div>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{q.customer?.name || '—'}</div>
-                  <div style={{ fontSize: 12, color: '#666', marginTop: 2 }}>{eventLabel(q)}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, gap: 8 }}>
-                    <span style={{ fontSize: 16, fontWeight: 700 }}>{totalText(q)}</span>
-                    <span style={{ fontSize: 12, color: '#888880' }}>{typeLabel(q)}</span>
-                  </div>
-                  <div className="list-card-actions"><RowActions q={q} big {...actions} /></div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </>
@@ -177,10 +198,5 @@ const QuotationList: React.FC<Props> = ({ quotations, onStatus, ...actions }) =>
     </div>
   );
 };
-
-const panel: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '0.5px solid #E5E5E0' };
-const cell: React.CSSProperties = { padding: '10px 12px', whiteSpace: 'nowrap', verticalAlign: 'middle' };
-const sub: React.CSSProperties = { fontSize: 11, color: '#888880', marginTop: 2 };
-const optChip: React.CSSProperties = { display: 'inline-block', fontSize: 10.5, fontWeight: 600, padding: '1px 7px', borderRadius: 8, background: '#FFF1E3', color: '#A84F00', marginTop: 2 };
 
 export default QuotationList;

@@ -34,11 +34,15 @@ export const banner = (label: string, detail: string, amount: number | string, c
   `<div class="banner"><div><div class="lbl">${esc(label)}</div><div class="sub2 num">${detail}</div>${chip ? `<span class="chip num">${esc(chip)}</span>` : ''}</div><div class="amt num">${typeof amount === 'number' ? money(amount) : esc(amount)}</div></div>`;
 
 // Rupee amounts when the total is known, else just the percentages.
-export const paySteps = (total: number | null, steps: PayStep[]) => {
+// Each step's amount; with several options, each option's amount sits under the percentage.
+export interface StepOption { label: string; lo: number; hi: number }
+export const paySteps = (total: number | null, steps: PayStep[], per: StepOption[] = []) => {
   const amounts = total === null ? steps.map(s => `${s.pct}%`) : scheduleAmounts(total, steps).map(money);
+  const each = per.map(o => ({ label: o.label, lo: scheduleAmounts(o.lo, steps), hi: scheduleAmounts(Math.max(o.lo, o.hi), steps) }));
   return `<div class="steps" style="--n:${steps.length}">${steps.map((s, i) => `<div class="step">
   <div class="dot"><i>${i + 1}</i><em></em></div><span class="a num">${amounts[i]}</span>
-  <b style="font-size:13px">${s.pct}% · ${esc(s.label)}</b><span class="muted" style="font-size:12px">${esc(s.when)}</span></div>`).join('')}</div>`;
+  <b style="font-size:13px">${s.pct}% · ${esc(s.label)}</b><span class="muted" style="font-size:12px">${esc(s.when)}</span>${
+    each.map(o => `<span class="num" style="font-size:12px">${esc(o.label)}: <b>${money(o.lo[i])}${o.hi[i] > o.lo[i] ? ` – ${money(o.hi[i])}` : ''}</b></span>`).join('')}</div>`).join('')}</div>`;
 };
 
 export const chips = (list: string[]) => `<div class="chips">${list.map(x => `<span>${esc(x)}</span>`).join('')}</div>`;
