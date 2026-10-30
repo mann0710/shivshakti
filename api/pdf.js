@@ -1,6 +1,4 @@
 // PDF service: renders the app's document HTML in headless Chrome. Staff only.
-const chromium = require('@sparticuz/chromium');
-const puppeteer = require('puppeteer-core');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
 const ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY;
@@ -20,10 +18,17 @@ async function isStaff(token) {
   return r.ok && (await r.json()) === true;
 }
 
+// Both packages are ES modules; import() loads them on any Node version.
+const loadLibs = async () => {
+  const [chromium, puppeteer] = await Promise.all([import('@sparticuz/chromium'), import('puppeteer-core')]);
+  return { chromium: chromium.default ?? chromium, puppeteer: puppeteer.default ?? puppeteer };
+};
+
 let launching = null;
 // One browser per warm instance; CHROME_PATH runs a local Chrome for testing.
 function browser() {
   launching ??= (async () => {
+    const { chromium, puppeteer } = await loadLibs();
     const local = process.env.CHROME_PATH;
     return puppeteer.launch(local
       ? { executablePath: local, headless: true }
@@ -55,7 +60,12 @@ async function render(html, footer) {
 }
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') { res.setHeader('allow', 'POST'); return res.status(405).json({ error: 'POST only' }); }
+  // GET is a health check: runtime and whether the PDF libraries load (no browser started).
+  if (req.method === 'GET') {
+    const libs = await loadLibs().then(() => 'ok', e => `failed: ${e.code || e.name}`);
+    return res.status(200).json({ node: process.version, libs });
+  }
+  if (req.method !== 'POST') { res.setHeader('allow', 'GET, POST'); return res.status(405).json({ error: 'POST only' }); }
   try {
     const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!(await isStaff(token))) return res.status(401).json({ error: 'Sign in as staff' });
