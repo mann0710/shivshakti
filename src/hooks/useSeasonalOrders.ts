@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 import { LineUnit } from '../lib/units';
 
 // One bill line: a pack (or loose weight) of an item, priced at the time of sale.
@@ -38,11 +39,11 @@ export const useSeasonalOrders = (year?: number) =>
   useQuery({
     queryKey: ['seasonal_orders', year],
     queryFn: async () => {
-      let q = supabase.from('seasonal_orders').select('*').order('created_at', { ascending: false });
-      if (year) q = q.eq('year', year);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data as SeasonalOrder[];
+      return fetchAll<SeasonalOrder>((from, to) => {
+        let q = supabase.from('seasonal_orders').select('*').order('created_at', { ascending: false });
+        if (year) q = q.eq('year', year);
+        return q.range(from, to);
+      });
     },
   });
 

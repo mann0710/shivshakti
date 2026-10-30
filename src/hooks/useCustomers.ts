@@ -1,17 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 import { Customer } from '../types';
 
 export const useCustomers = () =>
   useQuery({
     queryKey: ['customers'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('name', { ascending: true });
-      if (error) throw error;
-      return data as Customer[];
+      return fetchAll<Customer>((from, to) => supabase
+        .from('customers').select('*').order('name', { ascending: true }).range(from, to));
     },
   });
 

@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { todayIST } from '../lib/ist';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBookings } from '../hooks/useBookings';
+import { useBookings, useUpdateBooking } from '../hooks/useBookings';
 import { useMenuItemsFull } from '../hooks/useMenuBuilder';
 import { useDataCenter } from '../hooks/useDataCenter';
 import {
@@ -23,7 +23,7 @@ import QuotationBookingFields from '../components/catering/QuotationBookingField
 
 interface Props { onNavigate?: Navigate }
 
-const Quotations: React.FC<Props> = () => {
+const Quotations: React.FC<Props> = ({ onNavigate }) => {
   const { data: bookings = [] }   = useBookings();
   const { data: menuItems = [] }  = useMenuItemsFull();
   const { data: quotations = [], isFetched: quotationsFetched } = useQuotations();
@@ -34,6 +34,7 @@ const Quotations: React.FC<Props> = () => {
   const updateStatus    = useUpdateQuotationStatus();
   const deleteQuotation = useDeleteQuotation();
   const { confirm, dialog } = useConfirm();
+  const updateBooking = useUpdateBooking();
   const intent = useNavIntent('quotations');
   const intentHandled = useRef(false);
   const formRef = useRef<HTMLDivElement>(null);
@@ -46,6 +47,8 @@ const Quotations: React.FC<Props> = () => {
   const [notes, setNotes]                   = useState('');
   const [perPlate, setPerPlate]             = useState('');
   const [gstChecked, setGstChecked]         = useState(false);
+  // Rate a saved quote was issued at; new quotes use today's Data Center rate.
+  const [savedGstRate, setSavedGstRate]     = useState<number | null>(null);
   const [additionalDiscounts, setAdditionalDiscounts] = useState<Discount[]>([]);
   const [extraCharges, setExtraCharges]     = useState<Charge[]>([]);
   const [transportationCharges, setTransportationCharges] = useState<Charge[]>([]);
@@ -76,7 +79,7 @@ const Quotations: React.FC<Props> = () => {
     }
   }, [selectedBookingId]); // eslint-disable-line
 
-  const dcGstRate = dc?.gst_rate ?? 18;
+  const dcGstRate = savedGstRate ?? dc?.gst_rate ?? 18;
 
   const eligibleBookings = bookings.filter(b => b.status !== 'completed' && b.status !== 'cancelled');
   const selectedBooking  = eligibleBookings.find(b => b.id === selectedBookingId)
@@ -165,7 +168,7 @@ const Quotations: React.FC<Props> = () => {
   const resetForm = (keepOpen = false) => {
     setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
     setNotes(''); setPerPlate('');
-    setGstChecked(false); setAdditionalDiscounts([]);
+    setGstChecked(false); setSavedGstRate(null); setAdditionalDiscounts([]);
     setExtraCharges([]); setTransportationCharges([]);
     setIsMultiDay(false); setEventDays([]); setActiveMealKey(null);
     setFoodType('');
@@ -196,6 +199,7 @@ const Quotations: React.FC<Props> = () => {
     setNotes(q.notes || '');
     setFoodType(q.food_type || '');
     setGstChecked(q.gst_rate > 0);
+    setSavedGstRate(q.gst_rate > 0 ? q.gst_rate : null);
     setExtraCharges(q.extra_charges || []);
     setTransportationCharges(q.transportation_charges || []);
     setActiveMealKey(null);
@@ -324,7 +328,30 @@ const Quotations: React.FC<Props> = () => {
 
   const handleStatus = async (q: Quotation, status: string) => {
     try { await updateStatus.mutateAsync({ id: q.id, status }); toast.success('Status updated'); }
-    catch { toast.error('Failed to update'); }
+    catch { toast.error('Failed to update'); return; }
+    if (status === 'accepted') await afterAccept(q);
+  };
+
+  // Accepted quote: offer to confirm its booking, then jump straight to the invoice.
+  const afterAccept = async (q: Quotation) => {
+    const booking = bookings.find(b => b.id === q.booking_id);
+    if (!booking || booking.status === 'completed' || booking.status === 'cancelled') return;
+    if (booking.status !== 'confirmed') {
+      const ok = await confirm({ title: 'Confirm the booking too?', message: `${q.customer?.name ?? 'This customer'}'s ${booking.event_type} on ${booking.event_date} will be marked Confirmed, so you can invoice it.`, confirmLabel: 'Confirm booking' });
+      if (!ok) return;
+      try { await updateBooking.mutateAsync({ id: booking.id, status: 'confirmed' }); }
+      catch (e: any) { toast.error(e?.message || 'Could not confirm booking'); return; }
+    }
+    if (!onNavigate) return;
+    toast(t => (
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        Booking confirmed.
+        <button onClick={() => { toast.dismiss(t.id); onNavigate('billing', { action: 'new', id: booking.id }); }}
+          style={{ background: '#E8750A', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>
+          Create invoice →
+        </button>
+      </span>
+    ), { duration: 15000 });
   };
 
   const isSaving = createQuotation.isPending || updateQuotation.isPending;

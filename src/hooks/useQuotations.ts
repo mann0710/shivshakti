@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 import { todayIST } from '../lib/ist';
 
 export interface QuotationLineItem {
@@ -85,12 +86,9 @@ export const useQuotations = () =>
   useQuery({
     queryKey: ['quotations'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('quotations')
-        .select('*, customer:customers(*), booking:bookings(*)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as Quotation[];
+      return fetchAll<Quotation>((from, to) => supabase
+        .from('quotations').select('*, customer:customers(*), booking:bookings(*)')
+        .order('created_at', { ascending: false }).range(from, to));
     },
   });
 

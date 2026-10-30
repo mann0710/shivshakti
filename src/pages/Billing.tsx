@@ -49,6 +49,8 @@ const Billing: React.FC<Props> = () => {
   const [editableEventDays, setEditableEventDays] = useState<any[]>([]);
 
   const selected = invoices.find(i => i.id === selectedId) || invoices[0];
+  // Keep the rate the invoice was issued at; only invoices without GST pick up today's rate.
+  const invoiceGstRate = selected?.gst_rate && selected.gst_rate > 0 ? selected.gst_rate : (dc?.gst_rate ?? 18);
 
   // Follows edited guest counts so "Save Guest Counts" uses the new numbers.
   const billMealSavings = useMemo(
@@ -110,7 +112,7 @@ const Billing: React.FC<Props> = () => {
     invoiceId,
     discount_amount: computeTotalDiscount(),
     discount_type: 'amount',
-    apply_gst, gst_rate: dc?.gst_rate ?? 18,
+    apply_gst, gst_rate: invoiceGstRate,
     transportation_charges: transportItems,
     additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
     extra_charges: extraChargeItems.filter(e => e.description.trim() || e.amount > 0),
@@ -127,7 +129,7 @@ const Billing: React.FC<Props> = () => {
   const handleGSTToggle = (checked: boolean) => {
     if (!selected) return;
     setShowGST(checked);
-    applyTotals(checked ? `GST @${dc?.gst_rate ?? 18}% added` : 'GST removed', 'Failed to update GST', checked);
+    applyTotals(checked ? `GST @${invoiceGstRate}% added` : 'GST removed', 'Failed to update GST', checked);
   };
 
   const handleUpdateGuestCount = (dayIndex: number, mealIndex: number, newCount: number) => {
@@ -215,7 +217,7 @@ const Billing: React.FC<Props> = () => {
                 {dc?.gst_number && (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666660', marginBottom: 12, cursor: 'pointer' }}>
                     <input type="checkbox" checked={showGST} onChange={e => handleGSTToggle(e.target.checked)} style={{ accentColor: ORANGE }} />
-                    Include GST @{dc.gst_rate ?? 18}% ({dc.gst_number})
+                    Include GST @{invoiceGstRate}% ({dc.gst_number})
                   </label>
                 )}
 

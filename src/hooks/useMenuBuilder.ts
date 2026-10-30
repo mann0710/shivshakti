@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 
 export interface MenuCategory {
   id: string;
@@ -145,24 +146,12 @@ export const useMenuItemsFull = () =>
   useQuery({
     queryKey: ['menu_items_full'],
     queryFn: async () => {
-      // Supabase caps a single response at 1000 rows, so page through all of them.
-      // Without this, items late in the alphabet (e.g. "Tandoori Paneer", "Wood Fire
-      // Pizza") were silently dropped once the catalog grew past 1000 items.
-      const PAGE = 1000;
       type Row = MenuItem & { subcategory: MenuSubcategory & { category: MenuCategory } };
-      const all: Row[] = [];
-      for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supabase
-          .from('menu_items')
-          .select('*, subcategory:menu_subcategories(*, category:menu_categories(*))')
-          .order('name')
-          .range(from, from + PAGE - 1);
-        if (error) throw error;
-        const rows = (data as Row[]) || [];
-        all.push(...rows);
-        if (rows.length < PAGE) break;
-      }
-      return all;
+      return fetchAll<Row>((from, to) => supabase
+        .from('menu_items')
+        .select('*, subcategory:menu_subcategories(*, category:menu_categories(*))')
+        .order('name')
+        .range(from, to));
     },
   });
 

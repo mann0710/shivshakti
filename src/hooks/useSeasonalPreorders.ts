@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 import { SeasonalOrderItem } from './useSeasonalOrders';
 
 export type { SeasonalOrderItem };
@@ -30,11 +31,11 @@ export const useSeasonalPreorders = (year?: number) =>
   useQuery({
     queryKey: ['seasonal_preorders', year],
     queryFn: async () => {
-      let q = supabase.from('seasonal_preorders').select('*').order('created_at', { ascending: false });
-      if (year) q = q.eq('year', year);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data as SeasonalPreorder[];
+      return fetchAll<SeasonalPreorder>((from, to) => {
+        let q = supabase.from('seasonal_preorders').select('*').order('created_at', { ascending: false });
+        if (year) q = q.eq('year', year);
+        return q.range(from, to);
+      });
     },
   });
 

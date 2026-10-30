@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 import {
   SeasonalItem, SeasonalItemRow, ItemInput, normalizeItem, toRow, adjustRate, legacySize,
 } from '../lib/itemCatalog';
@@ -17,12 +18,9 @@ export const useSeasonalItems = () =>
   useQuery({
     queryKey: KEY,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('seasonal_items')
-        .select('*')
-        .order('name', { ascending: true });
-      if (error) throw error;
-      return (data as SeasonalItemRow[]).map(normalizeItem);
+      const rows = await fetchAll<SeasonalItemRow>((from, to) => supabase
+        .from('seasonal_items').select('*').order('name', { ascending: true }).range(from, to));
+      return rows.map(normalizeItem);
     },
   });
 

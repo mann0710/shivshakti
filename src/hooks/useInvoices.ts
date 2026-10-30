@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 import { Invoice, Payment } from '../types';
 import { todayIST } from '../lib/ist';
 import { sumCharges } from '../lib/quoteMath';
@@ -32,12 +33,9 @@ export const useInvoices = () =>
   useQuery({
     queryKey: ['invoices'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*, booking:bookings(*, customer:customers(*), menu:menus(*))')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as Invoice[];
+      return fetchAll<Invoice>((from, to) => supabase
+        .from('invoices').select('*, booking:bookings(*, customer:customers(*), menu:menus(*))')
+        .order('created_at', { ascending: false }).range(from, to));
     },
   });
 
@@ -251,9 +249,7 @@ export const useAllPayments = () =>
   useQuery({
     queryKey: ['all_payments'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('payments').select('id, amount, payment_type, created_at');
-      if (error) throw error;
-      return (data || []) as Pick<Payment, 'id' | 'amount' | 'payment_type' | 'created_at'>[];
+      return fetchAll<Pick<Payment, 'id' | 'amount' | 'payment_type' | 'created_at'>>((from, to) => supabase
+        .from('payments').select('id, amount, payment_type, created_at').order('created_at').range(from, to));
     },
   });

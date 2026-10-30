@@ -122,6 +122,9 @@ The phone bottom bar now has a **POS** button.
 - **Search:** bookings, quotations and invoices can be searched by name, phone or number.
 - **Smarter quotations:** adding an item pre-fills the price you last used for it.
 - **Packages** can be reactivated ("Show inactive"). The Calendar day panel scrolls into view on phones and has a "+ New booking" shortcut.
+- **Quote → booking → invoice:** marking a quotation Accepted offers to confirm its booking, then shows "Create invoice →". Confirmed bookings also have an **Invoice** button that opens the invoice form with that booking selected.
+- **GST stays as issued:** editing an old quotation or invoice keeps the GST rate it was issued at, even if the Data Center rate has changed since.
+- **Long lists are complete:** customers, bookings, quotations, invoices, payments and sweets load page by page, so nothing silently drops after 1,000 rows.
 - **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked.
 
 ## Catering fixes in this release

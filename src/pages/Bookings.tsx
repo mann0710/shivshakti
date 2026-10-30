@@ -83,6 +83,7 @@ const Bookings: React.FC<Props> = ({ onNavigate }) => {
     onEdit: b => setFormFor(b),
     onDelete: handleDelete,
     onQuote: onNavigate ? b => onNavigate('quotations', { action: 'new', id: b.id }) : undefined,
+    onInvoice: onNavigate ? b => onNavigate('billing', { action: 'new', id: b.id }) : undefined,
     calendarHref: b => calendarUrl(b, teamEmails),
   };
 

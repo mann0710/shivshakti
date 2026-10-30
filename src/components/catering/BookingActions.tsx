@@ -10,6 +10,7 @@ export interface BookingHandlers {
   onEdit: (b: Booking) => void;
   onDelete: (b: Booking) => void;
   onQuote?: (b: Booking) => void;
+  onInvoice?: (b: Booking) => void;
   calendarHref: (b: Booking) => string;
 }
 
@@ -47,6 +48,7 @@ const BookingActions: React.FC<Props> = ({ booking: b, handlers: h, compact }) =
     <>
       <Act compact={compact} icon="✏" label="Edit" onClick={() => h.onEdit(b)} tone={compact ? { color: '#378ADD' } : undefined} />
       {canQuote && <Act compact={compact} icon="📝" label="Quote" onClick={() => h.onQuote?.(b)} />}
+      {h.onInvoice && b.status === 'confirmed' && <Act compact={compact} icon="🧾" label="Invoice" onClick={() => h.onInvoice?.(b)} />}
       <Act compact={compact} icon="📅" label="Google Calendar" href={h.calendarHref(b)} />
       {phone && <Act compact={compact} icon="💬" label="WhatsApp" href={`https://wa.me/${waNumber(phone)}`} />}
       {phone && <Act compact={compact} icon="📞" label="Call" href={`tel:${phone.replace(/[^\d+]/g, '')}`} />}

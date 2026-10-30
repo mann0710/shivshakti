@@ -32,7 +32,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | 2 | `Billing.tsx`, `useInvoices.ts` | "Advance already paid" had no payment row, so the next payment overwrote it. | **Fixed.** Saved as a payment. |
 | 3 | `Billing.tsx` | Multi-day guest-count changes used the old counts for offer savings. | **Fixed** |
 | 4 | `Billing.tsx` | The quotation's manual discounts were not copied to the invoice. | **Fixed** |
-| 5 | `Billing.tsx`, `CalendarPage.tsx` | The newest quotation was used even if draft or rejected. | **Fixed in Billing** (accepted first). Calendar still uses the newest: **Open** |
+| 5 | `Billing.tsx`, `CalendarPage.tsx` | The newest quotation was used even if draft or rejected. | **Fixed** (accepted first, in Billing and Calendar) |
 | 6 | `Quotations.tsx` | Editing a quotation reset its status to draft. | **Fixed** |
 | 7 | `Quotations.tsx` | Auto-generated days were one day early in IST. | **Fixed** |
 | 8 | `Bookings.tsx` | The end date, time and package could not be cleared. | **Fixed** |
@@ -50,7 +50,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | 20 | `Quotations.tsx` | Clone dropped the food type and failed without a booking. | **Fixed** |
 | 21 | `Quotations.tsx` | The quotation PDF day header shows the gross total while rows show offer prices. | **Open** |
 | 22 | `useInvoices.ts` | Recalculation ignored errors; a zero-total invoice became "paid"; a completed booking never reverts. | **Fixed** (errors; zero-total). Revert: **Open** |
-| 23 | list hooks | Supabase returns at most 1,000 rows; customers, bookings, quotations, invoices and payments are not paged. | **Open** |
+| 23 | list hooks | Supabase returns at most 1,000 rows; customers, bookings, quotations, invoices and payments are not paged. | **Fixed.** Shared `lib/fetchAll` pages every list |
 | 24 | `Billing.tsx` | Invoice WhatsApp links had no country code. | **Fixed** |
 | 25 | `useQuotations.ts`, `useInvoices.ts` | Quotation and invoice numbers are computed in the browser, so two devices can clash. | **Open** (sweets bills now use a database sequence) |
 
@@ -71,6 +71,14 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | No search on quotations and invoices | **Fixed** |
 | Every quotation item started at ₹0 | **Improved.** The last used price is pre-filled (catalog items still have no stored default price) |
 
+## Third round
+
+| Finding | Status |
+|---|---|
+| Opening a saved quotation (or pressing any invoice "Apply") recalculated GST at today's Data Center rate, e.g. a 5% quote became 18% | **Fixed.** Quotes and invoices keep the rate they were issued at |
+| Accepting a quote left the booking unconfirmed and invoicing as separate manual steps | **Fixed.** Accepting offers "Confirm booking", then a "Create invoice" shortcut; confirmed bookings have an Invoice button |
+| "+ New booking" from a customer didn't fill in the customer | **Fixed** |
+
 ## Security (Supabase Security Advisor: 22 errors, 1 warning)
 
 | Finding | Status |
@@ -84,7 +92,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 ## Catering — UX and missing basics (open)
 
 - Two unrelated menu systems (Packages and Menu Builder); catalog items have no default price.
-- Accepting a quote doesn't confirm the booking or create the invoice. Invoice status "sent" means partly paid.
+- Invoice status "sent" means partly paid. (Accepting a quote now offers to confirm the booking and jump to the invoice.)
 - Single-day invoices can't take the final guest count. The Billing preview has four separate "Apply" buttons.
 - Missing confirmations on some deletes (payments, quotation days and meals, event types, team members). Packages can't be re-activated.
 - No search on the Quotations and Invoices lists. Quotations can't be shared on WhatsApp.

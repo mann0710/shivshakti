@@ -6,6 +6,7 @@ import { useQuotations } from '../hooks/useQuotations';
 import StatusPill from '../components/StatusPill';
 import { formatDateIST } from '../lib/ist';
 import { Navigate } from '../hooks/useNavIntent';
+import { pickQuotation } from '../lib/quoteMath';
 
 const eventColors = ['#E8750A', '#378ADD', '#639922', '#7F77DD', '#D4537E', '#BA7517', '#0F6E56'];
 
@@ -231,7 +232,8 @@ const CalendarPage: React.FC<Props> = ({ onNavigate }) => {
   // Returns meals scheduled for a booking on a specific date (from its multi-day quotation)
   const getMealsForDay = (bookingId: string, day: Date): { meal_type: string; time: string; guest_count: number; per_plate_amount: number; subtotal: number }[] => {
     const dateStr = format(day, 'yyyy-MM-dd');
-    const q = quotations.find(qt => qt.booking_id === bookingId && qt.is_multi_day && (qt.event_days?.length ?? 0) > 0);
+    const pick = pickQuotation(quotations, bookingId);
+    const q = pick?.is_multi_day && (pick.event_days?.length ?? 0) > 0 ? pick : undefined;
     if (!q?.event_days) return [];
     const result: any[] = [];
     for (const occ of q.event_days) {
@@ -332,7 +334,7 @@ const CalendarPage: React.FC<Props> = ({ onNavigate }) => {
                   <div style={{ fontSize: 12, color: '#888880' }}>No bookings on this day</div>
                 ) : selectedBookings.map((b, i) => {
                   const meals = getMealsForDay(b.id, selectedDay);
-                  const bQuotation = quotations.find(q => q.booking_id === b.id);
+                  const bQuotation = pickQuotation(quotations, b.id);
                   return (
                     <div key={b.id} style={{ marginBottom: 10, padding: 10, background: eventColors[i % eventColors.length] + '11', borderRadius: 8, borderLeft: `3px solid ${eventColors[i % eventColors.length]}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -390,7 +392,7 @@ const CalendarPage: React.FC<Props> = ({ onNavigate }) => {
               {thisMonthBookings.length === 0 ? (
                 <div style={{ fontSize: 12, color: '#888880' }}>No events this month</div>
               ) : thisMonthBookings.map((b, i) => {
-                const mQ = quotations.find(q => q.booking_id === b.id);
+                const mQ = pickQuotation(quotations, b.id);
                 return (
                   <div key={b.id} style={{ display: 'flex', gap: 10, padding: '7px 0', borderBottom: '0.5px solid #F0F0EC', alignItems: 'center' }}>
                     <div style={{ width: 36, textAlign: 'center', flexShrink: 0 }}>

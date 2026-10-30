@@ -48,7 +48,7 @@ const CustomerDetail: React.FC<Props> = ({ customer, bookings, onEdit, onDelete,
               💬 WhatsApp
             </a>
           )}
-          <button type="button" style={btnPrimary} onClick={() => onNavigate('bookings', { action: 'new' })}>+ New booking</button>
+          <button type="button" style={btnPrimary} onClick={() => onNavigate('bookings', { action: 'new', id: customer.id })}>+ New booking</button>
         </div>
 
         <div className="g3" style={{ marginBottom: 0 }}>
