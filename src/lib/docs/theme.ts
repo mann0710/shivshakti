@@ -42,22 +42,27 @@ section { margin-top: 24px; }
 h2 { font-family: ${HEAD_FONT}; font-size: 19px; font-weight: 600; color: ${NAVY}; margin: 0; }
 .sec-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid #E3E3EA; padding-bottom: 7px; margin-bottom: 12px; break-after: avoid; }
 .sec-h span { font-size: 12px; color: #5C5C6B; }
-.courses { columns: 2; column-gap: 34px; }
-.course { break-inside: avoid; display: flex; flex-direction: column; gap: 3px; margin-bottom: 16px; }
-.course-h { display: flex; justify-content: space-between; align-items: baseline; font-family: ${HEAD_FONT}; font-size: 12.5px; font-weight: 600; letter-spacing: 1.5px; color: var(--accent-text); text-transform: uppercase; margin-bottom: 2px; }
-.course-h span { font-family: 'Noto Sans', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0; color: #5C5C6B; text-transform: none; }
-.sub { font-size: 11px; font-weight: 600; color: #5C5C6B; margin-top: 4px; }
-.dish { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; padding: 2px 0; border-bottom: 1px dotted #E3E3EA; }
-.dish .p { font-weight: 500; white-space: nowrap; }
-.note { font-size: 11.5px; font-style: italic; color: #5C5C6B; padding: 1px 0 2px 10px; }
-.choice-box { border: 1.5px solid var(--accent); border-radius: 8px; padding: 6px 10px 4px; margin: 4px 0 6px; background: #FAFCF6; }
-.choice-h { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; font-weight: 600; color: var(--accent-text); margin-bottom: 2px; }
-.choice-h span { font-weight: 500; color: #5C5C6B; }
-.tick { display: inline-flex; width: 14px; height: 14px; border: 1.5px solid #1C1C24; border-radius: 3px; align-items: center; justify-content: center; font-size: 10px; margin-right: 8px; vertical-align: -2px; }
+.courses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 36px; align-items: start; }
+.course { break-inside: avoid; display: flex; flex-direction: column; gap: 2px; }
+.course.wide { grid-column: 1 / -1; }
+.course.wide .list { columns: 2; column-gap: 36px; }
+.course-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-family: ${HEAD_FONT}; font-size: 12.5px; font-weight: 600; letter-spacing: 1.5px; color: var(--accent-text); text-transform: uppercase; margin-bottom: 3px; }
+.course-h span { font-family: 'Noto Sans', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0; color: #5C5C6B; text-transform: none; white-space: nowrap; }
+.dish { padding: 3px 0 4px; border-bottom: 1px dotted #E3E3EA; break-inside: avoid; }
+.dl { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; line-height: 1.35; }
+.dl .n { flex: 1; }
+.dl .p { font-weight: 500; white-space: nowrap; color: #2C2C3A; }
+.with { font-size: 11.5px; color: var(--accent-text); margin-top: 1px; }
+.note { font-size: 11.5px; font-style: italic; color: #5C5C6B; margin-top: 1px; }
+.ticked .with, .ticked .note { padding-left: 25px; }
+.course.pick, .pickbox { border: 1.5px solid var(--accent); border-radius: 10px; padding: 12px 14px 8px; background: #F7FBF1; }
+.pickbox { margin: 6px 0; padding: 10px 12px 6px; }
+.pick .dish, .pickbox .dish { border-bottom-color: #D6E6C4; }
+.hint { font-size: 11.5px; color: #4A4A58; margin-bottom: 2px; }
+.tick { display: inline-flex; flex-shrink: 0; width: 15px; height: 15px; border: 1.5px solid #1C1C24; border-radius: 3px; align-items: center; justify-content: center; font-size: 10px; margin-right: 0; align-self: center; }
 .compare { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 12px; break-inside: avoid; }
 .opt { border: 1px solid #E3E3EA; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
 .opt b.price { font-family: ${HEAD_FONT}; font-size: 22px; color: #1E1B6E; }
-.note.with { color: #3D6B14; }
 .meal { border: 1px solid #E3E3EA; border-radius: 10px; margin-top: 12px; overflow: hidden; }
 .meal-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; background: #F5F6FB; break-after: avoid; }
 .meal-h b { font-size: 14px; color: ${NAVY}; }

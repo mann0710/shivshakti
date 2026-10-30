@@ -79,17 +79,17 @@ function priceSection(q: Quotation, itemPrices: PriceShow, title = 'Price'): str
   const head = `<th>${multi ? 'Meal' : 'Description'}</th><th class="r">Guests</th><th class="r">${multi ? 'Rate' : 'Per plate'}</th><th class="r">Amount</th>`;
   return `<section>${sectionHead(title)}
   <div class="box"><table class="t"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>
-  <div style="display:flex;justify-content:flex-end;margin-top:10px"><div class="sum" style="width:340px">${sumRows(sums)}</div></div>
-  ${banner(q.gst_amount > 0 ? 'Total payable · incl. GST' : 'Total payable', detail, isRange(q) ? rangeText(q.total_amount, q.total_max ?? 0) : q.total_amount, saved > 0 ? `You save ${money(saved)}` : '')}
+  <div class="keep"><div style="display:flex;justify-content:flex-end;margin-top:10px"><div class="sum" style="width:340px">${sumRows(sums)}</div></div>
+  ${banner(q.gst_amount > 0 ? 'Total payable · incl. GST' : 'Total payable', detail, isRange(q) ? rangeText(q.total_amount, q.total_max ?? 0) : q.total_amount, saved > 0 ? `You save ${money(saved)}` : '')}</div>
 </section>`;
 }
 
-const menuSection = (q: Quotation, itemPrices: PriceShow, title: string, breakBefore = false) => {
+const menuSection = (q: Quotation, itemPrices: PriceShow, title: string) => {
   const dishes = dishesOf(q);
   const note = isMulti(q)
     ? `${daysOf(q.event_days).length} day(s) · ${daysOf(q.event_days).reduce((n, g) => n + g.meals.length, 0)} meal(s)`
     : [`${dishCount(dishes)} dishes`, itemPrices === true ? 'prices per plate' : '', q.food_type].filter(Boolean).join(' · ');
-  return `<section${breakBefore ? ' style="break-before:page"' : ''}>${sectionHead(title, note)}${
+  return `<section>${sectionHead(title, note)}${
     isMulti(q) ? mealSchedule(q.event_days, { amounts: true, itemPrices: !!itemPrices }) : courseGrid(q.items ?? [], itemPrices)}</section>`;
 };
 
@@ -121,7 +121,7 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   const firstStep = open ? 0 : scheduleAmounts(q.total_amount, s.schedule)[0] ?? 0;
 
   const details = grouped
-    ? options.map((o, i) => `${menuSection(o, prices(o), `${optionTitle(o)} — the menu`, i > 0)}${priceSection(o, prices(o), `${optionTitle(o)} — price`)}`).join('')
+    ? options.map(o => `${menuSection(o, prices(o), `${optionTitle(o)} — the menu`)}${priceSection(o, prices(o), `${optionTitle(o)} — price`)}`).join('')
     : `${menuSection(q, prices(q), 'The menu')}${q.notes ? `<section>${sectionHead('Notes')}<div style="white-space:pre-line;font-size:13px">${esc(q.notes)}</div></section>` : ''}${priceSection(q, prices(q))}`;
 
   const body = `${header(ctx, kind, number, `Issued ${day(issued)}${validTill ? ` · Valid till ${day(validTill)}` : ''}`)}

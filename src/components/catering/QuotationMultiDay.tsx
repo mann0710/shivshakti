@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
 import { getDayNumber } from '../../lib/quoteMath';
-import QuotationItemPanels, { PickerItem, ItemTextField } from './QuotationItemPanels';
+import QuotationItemPanels, { PickerItem } from './QuotationItemPanels';
 import { basePlate, ownRange, typedPrice } from '../../lib/quoteChoices';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Hi-Tea', 'Snacks', 'Dinner', 'Supper'];
@@ -109,8 +109,8 @@ const QuotationMultiDay: React.FC<Props> = ({
   const updateMealItemAmount = (dayIdx: number, mealId: string, itemId: string, amount: number) =>
     patchMeal(dayIdx, mealId, m => withItems(m, m.items.map(x => (x.item_id === itemId ? { ...x, amount } : x))));
 
-  const updateMealItemText = (dayIdx: number, mealId: string, itemId: string, field: ItemTextField, value: string) =>
-    patchMeal(dayIdx, mealId, m => ({ ...m, items: m.items.map(x => (x.item_id === itemId ? { ...x, [field]: value } : x)) }));
+  const patchMealItem = (dayIdx: number, mealId: string, itemId: string, change: Partial<QuotationLineItem>) =>
+    patchMeal(dayIdx, mealId, m => ({ ...m, items: m.items.map(x => (x.item_id === itemId ? { ...x, ...change } : x)) }));
 
   const reorderMealItems = (dayIdx: number, mealId: string, fromIdx: number, toIdx: number) =>
     patchMeal(dayIdx, mealId, m => {
@@ -261,7 +261,7 @@ const QuotationMultiDay: React.FC<Props> = ({
                           onAdd={it => addItemToMeal(dayIdx, meal.id, it)}
                           onAmount={(id, amt) => updateMealItemAmount(dayIdx, meal.id, id, amt)}
                           onRemove={id => removeItemFromMeal(dayIdx, meal.id, id)}
-                          onText={(id, field, v) => updateMealItemText(dayIdx, meal.id, id, field, v)}
+                          onPatch={(id, change) => patchMealItem(dayIdx, meal.id, id, change)}
                           onReorder={(from, to) => reorderMealItems(dayIdx, meal.id, from, to)}
                           onReset={() => patchMeal(dayIdx, meal.id, m => withItems(m, []))}
                           onChoice={next => patchMeal(dayIdx, meal.id, m => withItems(m, next))} toLine={toLine} />

@@ -32,8 +32,8 @@ describe('document settings', () => {
 });
 
 describe('menu blocks', () => {
-  it('groups dishes by course, keeping same-named subcategories apart', () => {
-    expect(coursesOf(menu).map(c => [c.name, c.subs.map(s => s.name), c.sum])).toEqual([['Starters', ['Hot'], 90], ['Sweets', ['Hot', 'Cold'], 110]]);
+  it('groups dishes by course with a flat list and per-course price', () => {
+    expect(coursesOf(menu).map(c => [c.name, c.entries.map(e => e.item?.item_name), c.sum])).toEqual([['Starters', ['Paneer Tikka'], 90], ['Sweets', ['Halwa', 'Rasmalai'], 110]]);
   });
   it('treats entries on the same date as one day', () => {
     const g = daysOf([{ day_number: 1, date: '2026-12-19', meals: [meal('lunch', 1, 1, 0)], day_subtotal: 0 }, { day_number: 1, date: '2026-12-19', meals: [meal('dinner', 1, 1, 0)], day_subtotal: 0 }]);

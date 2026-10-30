@@ -3,7 +3,7 @@ import { mealNet } from '../quoteMath';
 import { formatDateIST } from '../ist';
 import { esc, money, cap } from './theme';
 import { choiceGroups, pickedOf, servedItems, plateRange, ChoiceGroup } from '../quoteChoices';
-import { planCourses, Course } from '../menuOrder';
+import { planCourses, servedNames, Course } from '../menuOrder';
 
 // Menu blocks shared by quotations, invoices and the event menu.
 // Courses in the owner's order with one Main Course and accompaniments last (lib/menuOrder).
@@ -17,46 +17,55 @@ export type PriceShow = boolean | 'diff';
 export const priceShow = (on: boolean, plate: number, items: QuotationLineItem[] | undefined): PriceShow =>
   on && hasItemPrices(items ?? []) && plate > plateRange(items).min ? 'diff' : on;
 
-const dish = (it: QuotationLineItem, prices: PriceShow) => `<div class="dish"><span>${esc(it.item_name)}</span>${
-  prices === true && Number(it.amount) > 0 ? `<span class="p num">${money(it.amount)}</span>` : ''}</div>${
-  it.served_with ? `<div class="note with">Served with ${esc(it.served_with)}</div>` : ''}${
-  it.instruction ? `<div class="note">Note: ${esc(it.instruction)}</div>` : ''}`;
+// One dish line: tick box (choices), name, price; then "with …" and the owner's note.
+function dish(it: QuotationLineItem, price: string, tick?: boolean): string {
+  const served = servedNames(it);
+  return `<div class="dish${tick === undefined ? '' : ' ticked'}"><div class="dl">${tick === undefined ? '' : `<span class="tick">${tick ? '✓' : ''}</span>`}<span class="n">${esc(it.item_name)}</span>${
+    price ? `<span class="p num">${price}</span>` : ''}</div>${
+    served.length ? `<div class="with">with ${esc(served.join(', '))}</div>` : ''}${
+    it.instruction ? `<div class="note">${esc(it.instruction)}</div>` : ''}</div>`;
+}
+const itemPrice = (it: QuotationLineItem, prices: PriceShow) => (prices === true && Number(it.amount) > 0 ? money(it.amount) : '');
 
-// "Choose any N" block: tick boxes for the customer, picked dishes ticked once decided.
+// "Choose any N": tick boxes for the customer, the picked ones ticked once decided.
 // With your own plate price ('diff') each dish shows what it adds over the cheapest one.
-function choiceBlock(g: ChoiceGroup, prices: PriceShow): string {
+function choiceParts(g: ChoiceGroup, prices: PriceShow) {
   const n = Math.min(Math.max(1, g.meta.pick), g.items.length);
   const decided = pickedOf(g).length > 0;
   const a = g.items.map(i => Number(i.amount) || 0).sort((x, y) => x - y);
   const lo = a.slice(0, n).reduce((s, x) => s + x, 0);
   const hi = a.slice(a.length - n).reduce((s, x) => s + x, 0);
   const diff = prices === 'diff';
-  const priced = !!prices && !g.meta.included && (diff ? hi > lo : hi > 0);
-  const price = (i: QuotationLineItem) => (diff ? (Number(i.amount) || 0) - a[0] : Number(i.amount) || 0);
-  const meta = decided ? 'chosen' : !priced ? 'included' : diff ? `up to +${money(hi - lo)} / plate`
-    : lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`;
-  return `<div class="choice-box"><div class="choice-h">${esc(g.meta.label)} · ${decided ? 'your choice' : `choose any ${n}`}<span class="num">${meta}</span></div>${
-    decided ? '' : '<div class="note" style="padding-left:0">Tick your choice.</div>'}${
-    g.items.map(i => `<div class="dish"><span><span class="tick">${i.chosen ? '✓' : ''}</span>${esc(i.item_name)}</span>${
-      priced && price(i) > 0 ? `<span class="p num">${diff ? '+' : ''}${money(price(i))}</span>` : ''}</div>`).join('')}</div>`;
+  const priced = !decided && !!prices && !g.meta.included && (diff ? hi > lo : hi > 0);
+  const price = (i: QuotationLineItem) => { const v = (Number(i.amount) || 0) - (diff ? a[0] : 0); return priced && v > 0 ? `${diff ? '+' : ''}${money(v)}` : ''; };
+  const meta = !priced ? '' : diff ? `up to +${money(hi - lo)} / plate` : lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`;
+  const title = `${esc(g.meta.label)} · ${decided ? 'your choice' : `choose any ${n}`}`;
+  const hint = decided ? '' : `<div class="hint">Tick ${n === 1 ? 'one' : n}.${priced ? ' The plate price is final once you choose.' : ''}</div>`;
+  const list = g.items.map(i => dish(i, price(i), !!i.chosen)).join('');
+  return { title, meta, hint, list };
 }
 
-// Two-column course list; per-item prices and course subtotals when `prices`.
+// Design A: two-column grid of course cards with flat dish lists; a course that is only a
+// "choose any" group becomes a green choice card; a long course spans both columns.
 // "quote" shows choice groups to tick; "served" shows only what will be served.
 export function courseGrid(all: QuotationLineItem[], prices: PriceShow, mode: 'quote' | 'served' = 'quote'): string {
   const items = mode === 'served' ? servedItems(all) : all;
-  // Served copies list decided picks as normal dishes; open groups stay as a choice.
   const decided = new Set(choiceGroups(items).filter(g => pickedOf(g).length).map(g => g.meta.id));
   const groups = choiceGroups(items).filter(g => mode === 'quote' || !decided.has(g.meta.id));
-  // Decided picks print as normal dishes; open choices sit inside their own course.
+  // Served copies list decided picks as normal dishes; open choices stay as choices.
   const list = items.map(i => (i.choice && !groups.some(g => g.meta.id === i.choice!.id) ? { ...i, choice: undefined } : i));
-  return `<div class="courses">${planCourses(list, { pair: true, groups }).map(c => {
-    const meta = prices === true && c.sum > 0 ? `${money(c.sum)} / plate` : c.count ? `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}` : '';
-    const plain = c.subs.filter(x => !x.choice);
-    const showSub = c.subs.length > 1 || (!!plain[0]?.name && plain[0].name !== c.name);
-    return `<div class="course"><div class="course-h">${esc(c.name)}<span class="num">${meta}</span></div>${
-      c.subs.map(x => (x.choice ? choiceBlock(x.choice, prices)
-        : `${showSub && x.name ? `<div class="sub">${esc(x.name)}</div>` : ''}${x.items.map(i => dish(i, prices)).join('')}`)).join('')}</div>`;
+  return `<div class="courses">${planCourses(list, { merge: true, groups }).map(c => {
+    if (c.entries.length === 1 && c.entries[0].choice) {
+      const p = choiceParts(c.entries[0].choice, prices);
+      return `<div class="course pick"><div class="course-h">${p.title}<span class="num">${p.meta}</span></div>${p.hint}${p.list}</div>`;
+    }
+    const meta = prices === true && c.sum > 0 ? `${money(c.sum)} / plate` : `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}`;
+    const body = c.entries.map(e => {
+      if (!e.choice) return dish(e.item, itemPrice(e.item, prices));
+      const p = choiceParts(e.choice, prices);
+      return `<div class="pickbox"><div class="course-h">${p.title}<span class="num">${p.meta}</span></div>${p.hint}${p.list}</div>`;
+    }).join('');
+    return `<div class="course${c.entries.length > 8 ? ' wide' : ''}"><div class="course-h">${esc(c.name)}<span class="num">${meta}</span></div><div class="list">${body}</div></div>`;
   }).join('')}</div>`;
 }
 

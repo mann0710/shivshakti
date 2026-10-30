@@ -3,6 +3,7 @@ import { QuotationLineItem } from '../../hooks/useQuotations';
 import { choiceGroups, setGroupMeta, ungroup, plateRange, addAlternative, togglePicked, tidyGroups } from '../../lib/quoteChoices';
 import QuotationChoiceGroup from './QuotationChoiceGroup';
 import AlternativePicker from './AlternativePicker';
+import ServedWithPicker from './ServedWithPicker';
 
 export interface PickerItem {
   id: string;
@@ -11,7 +12,6 @@ export interface PickerItem {
   subcategory?: { name: string; category?: { name: string } | null } | null;
 }
 
-export type ItemTextField = 'instruction' | 'served_with';
 
 interface Props {
   menuItems: PickerItem[];
@@ -19,7 +19,7 @@ interface Props {
   onAdd: (it: PickerItem) => void;
   onAmount: (itemId: string, amount: number) => void;
   onRemove: (itemId: string) => void;
-  onText: (itemId: string, field: ItemTextField, value: string) => void;
+  onPatch: (itemId: string, change: Partial<QuotationLineItem>) => void;
   onReorder: (from: number, to: number) => void;
   onReset: () => void;
   selectedTitle: string;
@@ -37,7 +37,7 @@ type Group = { subcategory: string; items: PickerItem[] };
 
 // Available menu items (searchable, grouped by category) beside the chosen items with prices.
 const QuotationItemPanels: React.FC<Props> = ({
-  menuItems, items, onAdd, onAmount, onRemove, onText, onReorder, onReset, selectedTitle, totalLabel, compact, showPrices = true, onChoice, toLine,
+  menuItems, items, onAdd, onAmount, onRemove, onPatch, onReorder, onReset, selectedTitle, totalLabel, compact, showPrices = true, onChoice, toLine,
 }) => {
   const [altFor, setAltFor] = useState<AltTarget | null>(null);
   const canAlt = !!onChoice && !!toLine;
@@ -70,10 +70,10 @@ const QuotationItemPanels: React.FC<Props> = ({
   const total = plateRange(items);
   const endDrag = () => { setDragIdx(null); setOverIdx(null); };
 
-  const textInput = (it: QuotationLineItem, field: ItemTextField, placeholder: string, on: string, ink: string) => (
-    <input draggable={false} placeholder={placeholder} value={it[field] || ''}
-      onChange={e => onText(it.item_id, field, e.target.value)}
-      style={{ flex: 1, minWidth: 0, border: 'none', borderBottom: `1px dashed ${it[field] ? on : '#E0E0DC'}`, fontSize: 11, color: it[field] ? ink : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
+  const noteInput = (it: QuotationLineItem) => (
+    <input draggable={false} placeholder="Add instruction (optional)…" value={it.instruction || ''}
+      onChange={e => onPatch(it.item_id, { instruction: e.target.value })}
+      style={{ flex: 1, minWidth: 0, alignSelf: 'flex-start', border: 'none', borderBottom: `1px dashed ${it.instruction ? '#E8750A' : '#E0E0DC'}`, fontSize: 11, color: it.instruction ? '#7A4F20' : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
   );
 
   const pickAlt = ({ menu, existing }: { menu?: PickerItem; existing?: QuotationLineItem }) => {
@@ -122,9 +122,9 @@ const QuotationItemPanels: React.FC<Props> = ({
                 <button onClick={() => remove(it)} aria-label="Remove item"
                   style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
               </div>
-              <div style={{ paddingLeft: 28, paddingRight: 12, paddingBottom: 4, display: 'flex', gap: 10 }}>
-                {textInput(it, 'instruction', 'Add instruction (optional)…', '#E8750A', '#7A4F20')}
-                {textInput(it, 'served_with', 'Served with (optional)…', '#2E7D32', '#1B5E20')}
+              <div draggable={false} onDragStart={e => e.preventDefault()} style={{ paddingLeft: 28, paddingRight: 12, paddingBottom: 4, display: 'flex', flexWrap: 'wrap', gap: '4px 10px' }}>
+                {noteInput(it)}
+                <ServedWithPicker item={it} menuItems={menuItems} onChange={change => onPatch(it.item_id, change)} />
               </div>
             </div>
   );

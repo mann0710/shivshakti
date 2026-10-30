@@ -70,7 +70,7 @@ export function invoiceDoc(inv: Invoice, q: Quotation | undefined, payments: Pay
     ...(inv.advance_paid > 0 ? [{ label: 'Paid', value: inv.advance_paid, sign: '-' as const }] : []),
   ];
   const paid = s.invoice_payments && payments.length
-    ? `<div style="margin-top:14px"><span class="lbl">Payments received</span>${payments.map(p => `<div class="dish num"><span>${day(p.payment_date)} · ${cap(p.payment_type)} · ${modeLabel(p.payment_mode)}</span><b>${money(p.amount)}</b></div>`).join('')}</div>` : '';
+    ? `<div style="margin-top:14px"><span class="lbl">Payments received</span>${payments.map(p => `<div class="dish num"><div class="dl"><span class="n">${day(p.payment_date)} · ${cap(p.payment_type)} · ${modeLabel(p.payment_mode)}</span><b>${money(p.amount)}</b></div></div>`).join('')}</div>` : '';
   const menu = inv.is_multi_day && (inv.event_days as unknown[] | undefined)?.length
     ? mealSchedule(inv.event_days as Quotation['event_days'], { amounts: false, itemPrices: false, mode: 'served' })
     : q?.items?.length ? courseGrid(q.items, false, 'served') : '';

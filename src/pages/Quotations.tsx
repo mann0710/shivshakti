@@ -14,7 +14,7 @@ import QuotationPackagePicker from '../components/catering/QuotationPackagePicke
 import QuotationList from '../components/catering/QuotationList';
 import QuotationCalendar from '../components/catering/QuotationCalendar';
 import QuotationOptionsBar from '../components/catering/QuotationOptionsBar';
-import QuotationItemPanels, { ItemTextField } from '../components/catering/QuotationItemPanels';
+import QuotationItemPanels from '../components/catering/QuotationItemPanels';
 import QuotationMultiDay from '../components/catering/QuotationMultiDay';
 import QuotationCharges from '../components/catering/QuotationCharges';
 import QuotationEventFields from '../components/catering/QuotationEventFields';
@@ -38,9 +38,11 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   const siblings = editingQuotation ? siblingsOf(editingQuotation, quotations) : [];
   const multi = siblings.length > 1;
 
-  // Bring the form into view when it opens or switches quotation.
+  // Bring the form into view when it opens or switches quotation (not after saving a new one).
+  const stayPut = useRef(false);
   useEffect(() => {
-    if (f.showForm) formRef.current?.scrollIntoView?.({ block: 'start' });
+    if (f.showForm && !stayPut.current) formRef.current?.scrollIntoView?.({ block: 'start' });
+    stayPut.current = false;
   }, [f.showForm, editingId]);
 
   // Nav intent: 'new' opens the form (booking preselected); 'open' edits a quotation by its id or booking id.
@@ -58,7 +60,16 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     if (intent.id) ev.selectBooking(intent.id);
   }, [intent, f.quotationsFetched]); // eslint-disable-line
 
-  const save = async () => { if (await f.handleSave()) f.resetForm(); };
+  // Saving keeps the quotation open; a new one carries on as an edit of what was saved.
+  const save = async () => {
+    const created = !editingId;
+    const saved = await f.handleSave();
+    if (saved && created) { stayPut.current = true; f.openEdit(saved); }
+  };
+  const close = async () => {
+    if (f.dirty && !(await confirm({ title: 'Close without saving?', message: 'Your changes to this quotation will be lost.', confirmLabel: 'Close' }))) return;
+    f.resetForm();
+  };
 
   const handleDelete = async (q: Quotation) => {
     const ok = await confirm({ title: 'Delete quotation?', message: `${q.quotation_number}${q.customer?.name ? ` for ${q.customer.name}` : ''} will be deleted permanently.`, confirmLabel: 'Delete', danger: true });
@@ -133,7 +144,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
         <div key={editingId || 'new'} ref={formRef} style={{ background: '#fff', borderRadius: 12, border: '0.5px solid #E5E5E0', marginBottom: 24, overflow: 'hidden', scrollMarginTop: 12 }}>
           <div style={{ padding: '14px 20px', borderBottom: '0.5px solid #E5E5E0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontWeight: 600, fontSize: 14 }}>{editingQuotation ? `Edit ${editingQuotation.quotation_number}` : 'New Quotation'}</div>
-            <button onClick={() => f.resetForm()} aria-label="Close form" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888880' }}>×</button>
+            <button onClick={close} aria-label="Close form" style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888880' }}>×</button>
           </div>
 
           <div style={{ padding: '16px' }}>
@@ -165,7 +176,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
                   onAdd={f.addItem}
                   onAmount={(id, amount) => f.patchItem(id, { amount })}
                   onRemove={id => f.setSelectedItems(prev => prev.filter(i => i.item_id !== id))}
-                  onText={(id, field: ItemTextField, value) => f.patchItem(id, { [field]: value })}
+                  onPatch={f.patchItem}
                   onReorder={f.reorderItems}
                   onReset={() => f.setSelectedItems([])}
                   onChoice={f.setSelectedItems} toLine={f.toLine} />
@@ -235,7 +246,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
             </div>
 
             <div style={{ marginTop: 10, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => f.resetForm()} style={btnGhost}>Cancel</button>
+              <button onClick={close} style={btnGhost}>Close</button>
               <button onClick={save} disabled={f.isSaving} style={{ ...btnPrimary, opacity: f.isSaving ? 0.6 : 1 }}>
                 {f.isSaving ? 'Saving…' : editingId ? 'Update Quotation' : 'Save Quotation'}
               </button>

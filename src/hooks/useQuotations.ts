@@ -12,6 +12,8 @@ export interface QuotationLineItem {
   amount: number;
   instruction?: string;
   served_with?: string;
+  // Menu items picked in "Served with" (names kept in served_with for printing).
+  served_ids?: string[];
   // "Choose any N" group this dish belongs to, and whether the customer picked it.
   choice?: ChoiceMeta;
   chosen?: boolean;

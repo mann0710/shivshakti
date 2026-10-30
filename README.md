@@ -180,6 +180,7 @@ The phone bottom bar now has a **POS** button.
 
 ## Quotation options, "choose any" dishes and the quote calendar
 
+- **Saving keeps you in the editor:** Save / Update Quotation stays on the quotation (a new one carries on as an edit of what was saved); **Close** (or ×) goes back to the list and asks first if there are unsaved changes.
 - **Calendar view** (Quotations → Calendar): a month of quotes by event date, coloured by status (draft, sent, accepted, not chosen / rejected). Tap a day for its quotes, a busy-day note and **+ New quote on this day** (the date is filled in). On phones the days show dots and the list sits below.
 - **Several quotes on one day are allowed.** The form warns when the date already has other quotes or the venue is booked by a confirmed event, but never blocks. Only two *confirmed* bookings at the same venue and date are refused.
 - **Alternatives ("customer chooses"):** tap **+ Alternative** beside any selected dish (e.g. Churma Na Ladoo), search, and tap **Offer** on the other dish — dishes from the same course are suggested first, and dishes already in the menu can be moved in. They show as one box, "Customer chooses 1 of 2", joined by **OR**; **+ Add another alternative** adds more, and with three or more you can set how many they choose. Tap **Picked?** on a dish to record what the customer chose (works on accepted quotes too); **Remove choice** keeps all the dishes without a choice.
@@ -198,7 +199,7 @@ One look ("Navy & Leaf", from the logo) for everything that is printed or shared
 - **Quotation:**
   - logo strip with address, GSTIN, number, issue date and *valid till*;
   - customer and event facts;
-  - the menu grouped by course, with sub-groups, "served with" and notes;
+  - the menu grouped by course, with "with …" accompaniments and notes;
   - **per plate** (no dish prices) or **per item** (dish prices, course subtotals, menu value and the special-price saving);
   - **multi-day / several meals in a day:** one card per meal with time, ceremony, guests, rate or offer and amount;
   - the **price** table, extra charges, transport and GST, ending with the navy **total banner**;
@@ -215,7 +216,9 @@ One look ("Navy & Leaf", from the logo) for everything that is printed or shared
   - register sheet and kitchen prep list in the same style.
 - **Reports:** the same header, headline tiles and tables.
 - **Data Center → Documents:** accent colour, shop address, UPI ID, bank details, contact person, quote validity, payment schedule (must add up to 100%), "on request" list, terms, and switches for the QR codes, invoice payments, invoice menu page and the slip stub, plus the bill footer line.
-- **Menu layout on paper:** courses follow the order you arranged the dishes in; dal, rice, breads, sabji / shaak, kathod and kadhi are grouped under **Main Course** (each as a sub-heading); "Including" / accompaniments always come last; a chutney is printed as "Served with …" under the farsan or starter (a "Served with" you type yourself always wins); "choose any" alternatives print inside their own course.
+- **Menu layout on paper (design A):** a two-column grid of course cards, each a plain list of dishes with dotted rules — no sub-headings. Courses follow the order you arranged the dishes in; dal, rice, breads, sabji / shaak, kathod and kadhi sit in one **Main Course**; farsan and starters are their own course even when kept under Main Course in Menu Builder; "Including" / accompaniments always come last; a course with more than 8 dishes spans both columns. A "choose any" group that is a whole course prints as a green choice card ("Farsan · choose any 1", tick boxes, "Tick one."); with other dishes it sits as a small green box inside the course.
+- **Served with (accompaniments):** under each selected dish, **+ Served with…** opens a list of accompaniments (dishes in an Including / Accompaniments category, chutneys, raita, pickle, papad) — tick as many as you like, or search any dish. They print as "with Coconut Chutney, Green Chutney" under the dish, and a picked accompaniment that is also on the menu is not printed twice. Tip: make an **Accompaniments** category in Menu Builder for chutneys and sauces.
+- **Every quotation layout** (per plate, per item, special price with GST, own price with a choice, choose 2 of 5, decided, free choice, prices hidden, big menu, one day two meals, three days, a meal with a choice, options A + B, one option) is on the design canvas "Shiv Shakti Quotation — Every Combination", rendered from the real code.
 - Gujarati names print correctly (Noto Sans Gujarati); amounts use the real ₹ sign — headings and big amounts use Outfit, which has no ₹, so the sign always comes from Noto Sans (`HEAD_FONT` in `lib/docs/theme.ts`); the PDF server has no other fonts to fall back on.
 
 ## Catering fixes in this release
