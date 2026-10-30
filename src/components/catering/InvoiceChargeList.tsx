@@ -1,5 +1,5 @@
 import React from 'react';
-import { box, btnPrimary, inp, outlineBtn, xBtn } from './InvoiceUi';
+import { box, inp, outlineBtn, xBtn } from './InvoiceUi';
 
 export interface ChargeRow { id?: string; description: string; amount: number }
 
@@ -45,23 +45,15 @@ interface BoxProps<T extends ChargeRow> {
   onChange: (items: T[]) => void;
   make: () => T;
   empty: string;
-  applyLabel: string;
-  onApply: () => void;
-  pending: boolean;
   applied?: string;
 }
 
-// A boxed charge list with its own Apply button.
-export function InvoiceChargeBox<T extends ChargeRow>({ title, color, items, onChange, make, empty, applyLabel, onApply, pending, applied }: BoxProps<T>) {
+// A boxed charge list; Billing saves all edits with one button.
+export function InvoiceChargeBox<T extends ChargeRow>({ title, color, items, onChange, make, empty, applied }: BoxProps<T>) {
   return (
     <div style={box}>
       <InvoiceChargeList heading={<div style={{ fontSize: 12, fontWeight: 600, color: '#444440' }}>{title}</div>}
         color={color} items={items} onChange={onChange} make={make} empty={empty} />
-      {items.length > 0 && (
-        <button type="button" onClick={onApply} disabled={pending} style={{ ...btnPrimary, fontSize: 12, width: '100%', marginTop: 4, background: color }}>
-          {pending ? '...' : applyLabel}
-        </button>
-      )}
       {applied && <div style={{ fontSize: 11, color: '#666660', marginTop: 6 }}>{applied}</div>}
     </div>
   );

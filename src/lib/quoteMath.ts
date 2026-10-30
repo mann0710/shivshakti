@@ -1,6 +1,6 @@
 // Shared catering money math so quotations and invoices can't drift apart.
 
-interface MealLike { per_plate_amount?: number; discount_amount?: number; guest_count?: number }
+interface MealLike { per_plate_amount?: number; discount_amount?: number; guest_count?: number; subtotal?: number }
 interface DayLike { meals?: MealLike[] }
 interface Charge { amount?: number }
 
@@ -11,6 +11,13 @@ export const mealSavings = (days: DayLike[] | null | undefined): number =>
     const rate = Number(m.per_plate_amount) || 0;
     return offer > 0 && rate > offer ? ms + (rate - offer) * (Number(m.guest_count) || 0) : ms;
   }, 0), 0);
+
+// What the customer pays for a meal / day: offer rate × guests when an offer is set.
+export const mealNet = (m: MealLike) => {
+  const offer = Number(m.discount_amount) || 0;
+  return offer > 0 ? offer * (Number(m.guest_count) || 0) : Number(m.subtotal) || 0;
+};
+export const dayNet = (d: DayLike) => (d.meals ?? []).reduce((s, m) => s + mealNet(m), 0);
 
 export const sumCharges = (list: Charge[] | null | undefined) =>
   (list ?? []).reduce((s, c) => s + (Number(c.amount) || 0), 0);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMenus, useCreateMenu, useUpdateMenu } from '../hooks/useMenus';
+import { useMenuItemsFull } from '../hooks/useMenuBuilder';
 import { Menu } from '../types';
 import Modal from '../components/ui/Modal';
 import { useConfirm } from '../components/ui/ConfirmDialog';
@@ -26,6 +27,8 @@ const Menus: React.FC = () => {
   const createMenu = useCreateMenu();
   const updateMenu = useUpdateMenu();
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const { data: builderItems = [] } = useMenuItemsFull();
+  const catalog = Array.from(new Set(builderItems.filter(i => i.is_active).map(i => i.name)));
   const [editing, setEditing] = useState<Menu | 'new' | null>(null);
   const [form, setForm] = useState<Form>(emptyForm);
 
@@ -127,7 +130,15 @@ const Menus: React.FC = () => {
             </div>
           </div>
           <div style={{ marginBottom: 10 }}><label style={lbl}>Description</label><input style={inp} value={form.description} onChange={e => set({ description: e.target.value })} placeholder="Short description" /></div>
-          <label style={lbl}>Menu items (one per line)</label>
+          <label style={lbl}>Menu items (one per line) · names that match Menu Builder fill quotations with prices</label>
+          <input list="menu-builder-items" style={{ ...inp, marginBottom: 6 }} placeholder="+ Add from Menu Builder (type to search)"
+            onChange={e => {
+              const name = e.target.value;
+              if (!catalog.includes(name)) return;
+              set({ items: form.items.trim() ? `${form.items.trimEnd()}\n${name}` : name });
+              e.target.value = '';
+            }} />
+          <datalist id="menu-builder-items">{catalog.map(n => <option key={n} value={n} />)}</datalist>
           <textarea style={{ ...inp, height: 120, resize: 'vertical' }} value={form.items} onChange={e => set({ items: e.target.value })}
             placeholder={'Dal, Rice, Roti\nShaak (2 types)\nKadhi, Papad\nShrikhand'} />
         </Modal>

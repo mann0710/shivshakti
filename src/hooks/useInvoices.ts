@@ -5,7 +5,11 @@ import { Invoice, Payment } from '../types';
 import { todayIST } from '../lib/ist';
 import { sumCharges } from '../lib/quoteMath';
 
-// Recalculate invoice totals from all payments + mark booking completed if fully paid
+// Unpaid = draft, part paid = sent; a zero total with nothing paid stays draft.
+export const invoiceStatus = (total: number, paid: number): Invoice['status'] =>
+  paid > 0 && paid >= total ? 'paid' : paid > 0 ? 'sent' : 'draft';
+
+// Recalculate paid/balance/status from payments; completes the booking when paid, reopens it when not.
 const recalculateInvoice = async (invoiceId: string) => {
   const { data: payments, error: payErr } = await supabase
     .from('payments').select('amount').eq('invoice_id', invoiceId);
@@ -18,15 +22,18 @@ const recalculateInvoice = async (invoiceId: string) => {
   if (!inv) return;
 
   const newBalance = Math.max(0, Number(inv.total_amount) - totalPaid);
-  const newStatus = newBalance <= 0 && totalPaid > 0 ? 'paid' : totalPaid > 0 ? 'sent' : 'draft';
+  const newStatus = invoiceStatus(Number(inv.total_amount), totalPaid);
   const { error } = await supabase.from('invoices')
     .update({ advance_paid: totalPaid, balance_due: newBalance, status: newStatus })
     .eq('id', invoiceId);
   if (error) throw error;
 
-  if (newStatus === 'paid' && inv.booking_id) {
-    await supabase.from('bookings').update({ status: 'completed' }).eq('id', inv.booking_id);
-  }
+  if (!inv.booking_id) return;
+  const sync = newStatus === 'paid'
+    ? supabase.from('bookings').update({ status: 'completed' }).eq('id', inv.booking_id).eq('status', 'confirmed')
+    : supabase.from('bookings').update({ status: 'confirmed' }).eq('id', inv.booking_id).eq('status', 'completed');
+  const { error: bookErr } = await sync;
+  if (bookErr) throw bookErr;
 };
 
 export const useInvoices = () =>
@@ -43,12 +50,6 @@ export const useCreateInvoice = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ advance_mode = 'cash', ...invoice }: Partial<Invoice> & { advance_mode?: Payment['payment_mode'] }) => {
-      const { data: latest } = await supabase
-        .from('invoices').select('invoice_number').order('invoice_number', { ascending: false }).limit(1).maybeSingle();
-      const nextNum = latest?.invoice_number
-        ? (parseInt(latest.invoice_number.replace('INV-', ''), 10) || 0) + 1 : 1;
-      const invoiceNumber = `INV-${String(nextNum).padStart(4, '0')}`;
-
       const subtotal = invoice.subtotal || 0;
       const discount_amount = invoice.discount_amount || 0;
       const discount_type = invoice.discount_type || 'amount';
@@ -65,8 +66,7 @@ export const useCreateInvoice = () => {
       const { data, error } = await supabase
         .from('invoices')
         .insert({
-          ...invoice,
-          invoice_number: invoiceNumber,
+          ...invoice, // invoice_number is assigned by a database trigger
           discount_amount,
           discount_type,
           gst_rate,
@@ -192,7 +192,7 @@ export const useRecalculateTotals = () => {
       extra_charges?: { description: string; amount: number }[];
     }) => {
       const { data: inv } = await supabase
-        .from('invoices').select('subtotal, advance_paid, extra_charges').eq('id', invoiceId).single();
+        .from('invoices').select('subtotal, extra_charges').eq('id', invoiceId).single();
       if (!inv) throw new Error('Invoice not found');
       const discAmt = discount_type === 'percentage'
         ? Math.round((inv.subtotal * discount_amount) / 100)
@@ -207,27 +207,29 @@ export const useRecalculateTotals = () => {
       const extraChargesTotal = effectiveExtraCharges.reduce((s, c) => s + (c.amount || 0), 0);
       const transportation_charge = transportation_charges.reduce((s, c) => s + (c.amount || 0), 0);
       const total_amount = discountedSubtotal + gst_amount + transportation_charge + extraChargesTotal;
-      const advance_paid = inv.advance_paid || 0;
-      const balance_due = Math.max(0, total_amount - advance_paid);
-      const status = balance_due <= 0 ? 'paid' : advance_paid > 0 ? 'sent' : 'draft';
       const { error } = await supabase.from('invoices').update({
         discount_amount: discAmt, discount_type,
         gst_rate, gst_amount, transportation_charge, transportation_charges,
         additional_discounts,
         ...(extra_charges !== undefined ? { extra_charges } : {}),
-        total_amount, balance_due, status,
+        total_amount,
       }).eq('id', invoiceId);
       if (error) throw error;
+      await recalculateInvoice(invoiceId);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      qc.invalidateQueries({ queryKey: ['bookings'] });
+    },
   });
 };
 
 export const useUpdateEventDays = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ invoiceId, event_days, subtotal }: { invoiceId: string; event_days: any[]; subtotal: number }) => {
-      const { error } = await supabase.from('invoices').update({ event_days, subtotal }).eq('id', invoiceId);
+    // Final guest counts: multi-day sends edited days, single-day only the new subtotal.
+    mutationFn: async ({ invoiceId, event_days, subtotal }: { invoiceId: string; event_days?: any[]; subtotal: number }) => {
+      const { error } = await supabase.from('invoices').update(event_days ? { event_days, subtotal } : { subtotal }).eq('id', invoiceId);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),

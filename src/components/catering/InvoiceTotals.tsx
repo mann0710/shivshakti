@@ -20,7 +20,7 @@ const InvoiceTotals: React.FC<Props> = ({ invoice: inv, quotation, showGST, gstN
   return (
     <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '10px 12px', marginBottom: 12, background: '#fff' }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: '#888880', marginBottom: 8 }}>TOTAL SUMMARY</div>
-      <Row label={`Subtotal${!inv.is_multi_day && perPlate > 0 ? ` (₹${perPlate}/plate × ${quotation?.guest_count})` : ''}`} value={`₹${inv.subtotal.toLocaleString()}`} />
+      <Row label={`Subtotal${!inv.is_multi_day && perPlate > 0 ? ` (₹${perPlate}/plate × ${Math.round(inv.subtotal / perPlate)})` : ''}`} value={`₹${inv.subtotal.toLocaleString()}`} />
       {(inv.extra_charges || []).map((ec, i) => (
         <Row key={i} label={ec.description || 'Extra Charge'} value={`+₹${(ec.amount || 0).toLocaleString()}`} />
       ))}

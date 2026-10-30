@@ -13,21 +13,29 @@ export const useBookings = () =>
     },
   });
 
+type Slot = Pick<Booking, 'venue' | 'event_date' | 'end_date' | 'status'>;
+
+// Same named venue on overlapping dates (multi-day included) is a clash; blank venues and cancelled bookings are not.
+const assertVenueFree = async (b: Partial<Slot>, ignoreId?: string) => {
+  const venue = b.venue?.trim();
+  if (!venue || !b.event_date || b.status === 'cancelled') return;
+  const start = b.event_date;
+  const end = b.end_date && b.end_date > start ? b.end_date : start;
+  let q = supabase.from('bookings').select('id')
+    .eq('venue', venue).neq('status', 'cancelled')
+    .lte('event_date', end)
+    .or(`end_date.gte.${start},and(end_date.is.null,event_date.gte.${start})`);
+  if (ignoreId) q = q.neq('id', ignoreId);
+  const { data, error } = await q.limit(1);
+  if (error) throw error;
+  if (data && data.length > 0) throw new Error('Another booking already uses this venue on these dates.');
+};
+
 export const useCreateBooking = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (booking: Partial<Booking>) => {
-      // Same named venue on the same date is a clash; blank venues are not.
-      const venue = booking.venue?.trim();
-      const { data: existing } = venue ? await supabase
-        .from('bookings')
-        .select('id, venue')
-        .eq('event_date', booking.event_date!)
-        .eq('venue', venue)
-        .neq('status', 'cancelled') : { data: [] };
-      if (existing && existing.length > 0) {
-        throw new Error('Another booking already exists at this venue on the same date.');
-      }
+      await assertVenueFree(booking);
       const { data, error } = await supabase
         .from('bookings')
         .insert(booking)
@@ -44,6 +52,12 @@ export const useUpdateBooking = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Booking> & { id: string }) => {
+      if ('venue' in updates || 'event_date' in updates || 'end_date' in updates) {
+        const { data: cur, error: curErr } = await supabase
+          .from('bookings').select('venue, event_date, end_date, status').eq('id', id).single();
+        if (curErr) throw curErr;
+        await assertVenueFree({ ...cur, ...updates }, id);
+      }
       const { data, error } = await supabase
         .from('bookings')
         .update(updates)

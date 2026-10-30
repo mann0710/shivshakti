@@ -96,14 +96,10 @@ export const useCreateQuotation = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (q: QuotationPayload) => {
-      const { data: latest } = await supabase
-        .from('quotations').select('quotation_number').order('quotation_number', { ascending: false }).limit(1).maybeSingle();
-      const nextNum = latest?.quotation_number
-        ? (parseInt(latest.quotation_number.replace('QTN-', ''), 10) || 0) + 1 : 1;
-      const quotation_number = `QTN-${String(nextNum).padStart(4, '0')}`;
+      // quotation_number is assigned by a database trigger (migration 20261102_doc_numbers.sql)
       const { data, error } = await supabase
         .from('quotations')
-        .insert({ ...q, quotation_number, issue_date: todayIST() })
+        .insert({ ...q, issue_date: todayIST() })
         .select('*, customer:customers(*), booking:bookings(*)')
         .single();
       if (error) throw error;

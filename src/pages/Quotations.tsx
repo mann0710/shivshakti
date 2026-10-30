@@ -5,6 +5,8 @@ import { todayIST } from '../lib/ist';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBookings, useUpdateBooking } from '../hooks/useBookings';
 import { useMenuItemsFull } from '../hooks/useMenuBuilder';
+import { useItemPrices } from '../hooks/useItemPrices';
+import QuotationPackagePicker from '../components/catering/QuotationPackagePicker';
 import { useDataCenter } from '../hooks/useDataCenter';
 import {
   useQuotations, useCreateQuotation, useUpdateQuotation,
@@ -120,17 +122,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     it => it.is_active !== false && it.subcategory?.is_active !== false && it.subcategory?.category?.is_active !== false,
   ), [menuItems]);
 
-  // Latest priced amount per menu item across saved quotations, newest first.
-  const lastPrices = useMemo(() => {
-    const map = new Map<string, number>();
-    [...quotations].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).forEach(q =>
-      [...(q.items || []), ...(q.event_days || []).flatMap(d => (d.meals || []).flatMap(m => m.items || []))]
-        .forEach(it => { if (it.amount > 0 && !map.has(it.item_id)) map.set(it.item_id, it.amount); }));
-    return map;
-  }, [quotations]);
-  const savedPrices = useMemo(() => new Map(menuItems.map(it => [it.id, it.default_price || 0])), [menuItems]);
-  // Menu Builder price first, else the last quoted price.
-  const priceFor = (itemId: string) => savedPrices.get(itemId) || lastPrices.get(itemId) || 0;
+  const priceFor = useItemPrices(menuItems, quotations);
 
   const itemsTotal = selectedItems.reduce((s, i) => s + (i.amount || 0), 0);
 
@@ -148,12 +140,20 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   };
 
   // ── single-day item helpers ───────────────────────────────────────────────
-  const addItem = (it: PickerItem) =>
-    setSelectedItems(prev => [...prev, {
-      item_id: it.id, item_name: it.name,
-      category_name: it.subcategory?.category?.name || '',
-      subcategory_name: it.subcategory?.name || '', amount: priceFor(it.id),
-    }]);
+  const toLine = (it: PickerItem): QuotationLineItem => ({
+    item_id: it.id, item_name: it.name,
+    category_name: it.subcategory?.category?.name || '',
+    subcategory_name: it.subcategory?.name || '', amount: priceFor(it.id),
+  });
+  const addItem = (it: PickerItem) => setSelectedItems(prev => [...prev, toLine(it)]);
+
+  // Package items join the quote; the package price becomes the per-plate rate.
+  const applyPackage = (found: PickerItem[], price: number, missing: string[]) => {
+    setSelectedItems(prev => [...prev, ...found.filter(f => !prev.some(p => p.item_id === f.id)).map(toLine)]);
+    perPlateAutoRef.current = false;
+    setPerPlate(price > 0 ? String(price) : '');
+    toast.success(`Added ${found.length} item${found.length === 1 ? '' : 's'}${missing.length ? ` · not in Menu Builder: ${missing.join(', ')}` : ''}`, { duration: 6000 });
+  };
 
   const patchItem = (itemId: string, change: Partial<QuotationLineItem>) =>
     setSelectedItems(prev => prev.map(i => (i.item_id === itemId ? { ...i, ...change } : i)));
@@ -184,7 +184,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     setSelectedBookingId(q.booking_id || '');
     setIsMultiDay(q.is_multi_day || false);
     if (q.is_multi_day && q.event_days?.length) {
-      setEventDays(q.event_days.map((d, i) => ({ ...d, day_number: i + 1 })));
+      setEventDays(q.event_days.map(d => ({ ...d, day_number: getDayNumber(d.date, q.event_days!) })));
       setAdditionalDiscounts(q.additional_discounts || []);
     } else {
       setSelectedItems(q.items || []);
@@ -410,6 +410,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
                 menuItems={activeItems} priceFor={priceFor} />
             ) : (
               <>
+                <QuotationPackagePicker menuItems={activeItems} bookingMenuId={selectedBooking?.menu_id} onApply={applyPackage} />
                 <QuotationItemPanels
                   menuItems={activeItems} items={selectedItems}
                   selectedTitle="SELECTED ITEMS" totalLabel="Items Total"

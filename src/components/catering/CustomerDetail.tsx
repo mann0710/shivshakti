@@ -2,7 +2,7 @@ import React from 'react';
 import StatusPill from '../StatusPill';
 import { Booking, Customer } from '../../types';
 import { Navigate } from '../../hooks/useNavIntent';
-import { formatDateIST } from '../../lib/ist';
+import { formatDateIST, todayIST } from '../../lib/ist';
 import { waNumber } from '../../lib/quoteMath';
 import { inr } from '../../lib/money';
 import { Avatar, ORANGE, btnGhost, btnPrimary, card } from './CustomerUi';
@@ -20,7 +20,11 @@ interface Props {
 const CustomerDetail: React.FC<Props> = ({ customer, bookings, onEdit, onDelete, onBack, onNavigate }) => {
   const live = bookings.filter(b => b.status !== 'cancelled');
   const bookedValue = live.reduce((s, b) => s + (b.estimated_cost || 0), 0);
-  const lastEvent = live.reduce<string | undefined>((d, b) => (!d || b.event_date > d ? b.event_date : d), undefined);
+  // Next upcoming event if there is one, else the most recent past one.
+  const today = todayIST();
+  const dates = live.map(b => b.event_date).sort();
+  const nextEvent = dates.find(d => d >= today);
+  const lastEvent = nextEvent ?? dates[dates.length - 1];
   const history = [...bookings].sort((a, b) => b.event_date.localeCompare(a.event_date));
   const phone = customer.phone?.trim();
   const contact = [customer.phone, customer.email, customer.address, customer.gstin && `GSTIN ${customer.gstin}`].filter(Boolean).join(' · ');
@@ -54,7 +58,7 @@ const CustomerDetail: React.FC<Props> = ({ customer, bookings, onEdit, onDelete,
         <div className="g3" style={{ marginBottom: 0 }}>
           <div style={statCard}><div style={statLabel}>Total bookings</div><div style={statVal}>{bookings.length}</div></div>
           <div style={statCard}><div style={statLabel}>Booked value</div><div style={statVal}>{inr(bookedValue)}</div></div>
-          <div style={statCard}><div style={statLabel}>Last event</div><div style={statVal}>{lastEvent ? formatDateIST(lastEvent, 'dd-MM-yyyy') : '—'}</div></div>
+          <div style={statCard}><div style={statLabel}>{nextEvent ? 'Next event' : 'Last event'}</div><div style={statVal}>{lastEvent ? formatDateIST(lastEvent, 'dd-MM-yyyy') : '—'}</div></div>
         </div>
         {customer.notes && <div style={{ marginTop: 12, fontSize: 12, color: '#888880', background: '#FAFAF8', padding: '8px 12px', borderRadius: 8 }}>📝 {customer.notes}</div>}
       </div>

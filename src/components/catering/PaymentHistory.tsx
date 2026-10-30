@@ -8,10 +8,10 @@ import { inr } from '../../lib/money';
 import PaymentFields, { PayDraft, blankPay, modeLabel } from './PaymentFields';
 import { box, btnGhost, btnPrimary, xBtn } from './InvoiceUi';
 
-interface Props { payments: Payment[] }
+interface Props { payments: Payment[]; balanceDue: number }
 
 // Payments on an invoice with inline edit and confirmed delete.
-const PaymentHistory: React.FC<Props> = ({ payments }) => {
+const PaymentHistory: React.FC<Props> = ({ payments, balanceDue }) => {
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
   const { confirm, dialog } = useConfirm();
@@ -24,11 +24,15 @@ const PaymentHistory: React.FC<Props> = ({ payments }) => {
   };
 
   const saveEdit = async (p: Payment) => {
-    if (!(parseFloat(draft.amount) > 0)) { toast.error('Payment amount must be more than 0'); return; }
+    const amount = parseFloat(draft.amount);
+    if (!(amount > 0)) { toast.error('Payment amount must be more than 0'); return; }
+    // This payment's own amount is already counted against the invoice, so it can grow by the balance due only.
+    const max = p.amount + Math.max(0, balanceDue);
+    if (amount > max) { toast.error(`Amount cannot exceed ${inr(max)} (this payment + balance due)`); return; }
     try {
       await updatePayment.mutateAsync({
         id: p.id, invoiceId: p.invoice_id,
-        amount: parseFloat(draft.amount),
+        amount,
         payment_type: draft.payment_type,
         payment_mode: draft.payment_mode as Payment['payment_mode'],
         notes: draft.notes, payment_date: draft.payment_date,
@@ -59,7 +63,7 @@ const PaymentHistory: React.FC<Props> = ({ payments }) => {
         <div key={p.id} style={{ borderBottom: '0.5px solid #E5E5E0', paddingBottom: 8, marginBottom: 8 }}>
           {editingId === p.id ? (
             <>
-              <PaymentFields value={draft} onChange={setDraft} />
+              <PaymentFields value={draft} onChange={setDraft} maxAmount={p.amount + Math.max(0, balanceDue)} />
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
                 <button type="button" onClick={() => setEditingId(null)} style={{ ...btnGhost, fontSize: 11, padding: '3px 10px' }}>Cancel</button>
                 <button type="button" onClick={() => saveEdit(p)} disabled={updatePayment.isPending} style={{ ...btnPrimary, fontSize: 11, padding: '3px 10px' }}>

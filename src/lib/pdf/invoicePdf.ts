@@ -4,6 +4,7 @@ import { formatDateIST } from '../ist';
 import { Payment, Invoice } from '../../types';
 import { Quotation, QuotationLineItem } from '../../hooks/useQuotations';
 import { amountInWords, taxSplit } from '../gst';
+import { dayNet, mealNet } from '../quoteMath';
 import { SHOP } from '../shop';
 
 // ─── PDF logo (preloaded at module level) ─────────────────────────────────────
@@ -111,24 +112,18 @@ export const buildInvoicePdf = (
 
     for (const day of (inv.event_days as any[])) {
       if (y > 265) { doc.addPage(); y = 15; drawMealHeader(); }
-      const dayNetBill = (day.meals as any[]).reduce((s: number, m: any) => {
-        const or = m.discount_amount || 0;
-        return s + (or > 0 ? or * m.guest_count : (m.subtotal || 0));
-      }, 0);
-
       // Day separator row
       doc.setFillColor(235, 238, 252); doc.rect(M, y, CW, RH, 'F');
       doc.setDrawColor(210, 208, 205); doc.rect(M, y, CW, RH);
       doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
       doc.text(`Day ${day.day_number}  —  ${formatDateIST(day.date, 'dd-MM-yyyy')}`, M + 3, y + RH - 2);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
-      doc.text(`Rs.${dayNetBill.toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
+      doc.text(`Rs.${dayNet(day).toLocaleString('en-IN')}`, M + CW - 2, y + RH - 2, { align: 'right' });
       y += RH;
 
       for (const meal of (day.meals as any[])) {
         if (y > 265) { doc.addPage(); y = 15; drawMealHeader(); }
         const offerRate = meal.discount_amount || 0;
-        const mealNet = offerRate > 0 ? offerRate * meal.guest_count : (meal.subtotal || 0);
         const rateStr = `Rs.${(offerRate > 0 ? offerRate : meal.per_plate_amount).toLocaleString('en-IN')}/pl`;
 
         // Main meal row
@@ -140,7 +135,7 @@ export const buildInvoicePdf = (
           meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1),
           String(meal.guest_count),
           rateStr,
-          `Rs.${mealNet.toLocaleString('en-IN')}`,
+          `Rs.${mealNet(meal).toLocaleString('en-IN')}`,
         ];
         for (let i = 0; i < mealCells.length; i++) {
           if (i > 0) { doc.setDrawColor(210, 208, 205); doc.line(x, y, x, y + RH); }

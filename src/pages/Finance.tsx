@@ -3,6 +3,7 @@ import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, subMonths
 import { useBookings } from '../hooks/useBookings';
 import { useInvoices } from '../hooks/useInvoices';
 import { useCustomers } from '../hooks/useCustomers';
+import { statusLabel } from '../components/StatusPill';
 
 const Finance: React.FC = () => {
   const { data: bookings = [] } = useBookings();
@@ -62,7 +63,7 @@ const Finance: React.FC = () => {
         i.total_amount,
         i.advance_paid,
         i.balance_due,
-        i.status,
+        statusLabel(i.status),
       ]),
     ];
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');

@@ -15,11 +15,13 @@ import { useConfirm } from '../components/ui/ConfirmDialog';
 import InvoiceList from '../components/catering/InvoiceList';
 import InvoiceCreateModal from '../components/catering/InvoiceCreateModal';
 import InvoiceChargeList, { InvoiceChargeBox } from '../components/catering/InvoiceChargeList';
+import InvoiceSchedule from '../components/catering/InvoiceSchedule';
+import { useUpdateBooking } from '../hooks/useBookings';
 import InvoiceTotals from '../components/catering/InvoiceTotals';
 import InvoiceActions from '../components/catering/InvoiceActions';
 import PaymentHistory from '../components/catering/PaymentHistory';
 import PaymentFormModal from '../components/catering/PaymentFormModal';
-import { ORANGE, box, btnGhost, btnPrimary, card, outlineBtn, revealOnPhone, statCard, statLbl } from '../components/catering/InvoiceUi';
+import { ORANGE, box, btnGhost, btnPrimary, card, revealOnPhone, statCard, statLbl } from '../components/catering/InvoiceUi';
 
 const genBillingId = () => Math.random().toString(36).slice(2, 10);
 type Charge = { description: string; amount: number };
@@ -34,6 +36,7 @@ const Billing: React.FC<Props> = () => {
   const recalcTotals = useRecalculateTotals();
   const deleteInvoice = useDeleteInvoice();
   const updateEventDays = useUpdateEventDays();
+  const updateBooking = useUpdateBooking();
   const { data: quotations = [] } = useQuotations();
   const { confirm, dialog } = useConfirm();
 
@@ -47,6 +50,8 @@ const Billing: React.FC<Props> = () => {
   const [transportItems, setTransportItems] = useState<Charge[]>([]);
   const [extraChargeItems, setExtraChargeItems] = useState<Charge[]>([]);
   const [editableEventDays, setEditableEventDays] = useState<any[]>([]);
+  const [guestDraft, setGuestDraft] = useState<number | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   const selected = invoices.find(i => i.id === selectedId) || invoices[0];
   // Keep the rate the invoice was issued at; only invoices without GST pick up today's rate.
@@ -63,6 +68,11 @@ const Billing: React.FC<Props> = () => {
     [quotations, selected?.quotation_id]
   );
 
+  // Single-day final guests, derived from the saved subtotal and per-plate rate.
+  const plateRate = selectedInvoiceQuotation?.per_plate_amount ?? 0;
+  const savedGuests = selected && plateRate > 0 ? Math.round(selected.subtotal / plateRate) : 0;
+  const guestsShown = guestDraft ?? savedGuests;
+
   const outstanding = invoices.filter(i => i.balance_due > 0);
   const advanceTotal = invoices.reduce((s, i) => s + (i.advance_paid || 0), 0);
   const thisMonth = invoices.filter(i => {
@@ -72,8 +82,11 @@ const Billing: React.FC<Props> = () => {
 
   const { data: paymentHistory = [] } = usePaymentHistory(selected?.id);
 
-  useEffect(() => {
+  // Load the saved invoice into the editable sections (also used by Discard).
+  const loadEdits = () => {
     if (!selected) return;
+    setDirty(false);
+    setGuestDraft(null);
     setShowGST(selected.gst_rate > 0);
     if ((selected.additional_discounts || []).length > 0) {
       setAdditionalDiscounts(selected.additional_discounts!);
@@ -96,9 +109,13 @@ const Billing: React.FC<Props> = () => {
     );
     setExtraChargeItems(selected.extra_charges?.length ? [...selected.extra_charges] : []);
     setEditableEventDays((selected.event_days || []) as any[]);
-  }, [selected?.id]); // eslint-disable-line
+  };
+  useEffect(loadEdits, [selected?.id]); // eslint-disable-line
 
-  const selectInvoice = (inv: Invoice) => {
+  const touch = <T,>(set: (v: T) => void) => (v: T) => { set(v); setDirty(true); };
+
+  const selectInvoice = async (inv: Invoice) => {
+    if (dirty && inv.id !== selected?.id && !(await confirm({ title: 'Discard unsaved changes?', message: 'Changes to this invoice have not been saved.', confirmLabel: 'Discard', danger: true }))) return;
     setSelectedId(inv.id);
     setShowPaymentForm(false);
     revealOnPhone(previewRef);
@@ -122,6 +139,7 @@ const Billing: React.FC<Props> = () => {
     if (!selected) return;
     try {
       await recalc(selected.id, apply_gst);
+      setDirty(false);
       toast.success(done);
     } catch (e: any) { toast.error(e?.message || failed); }
   };
@@ -133,6 +151,7 @@ const Billing: React.FC<Props> = () => {
   };
 
   const handleUpdateGuestCount = (dayIndex: number, mealIndex: number, newCount: number) => {
+    setDirty(true);
     setEditableEventDays(prev => prev.map((day: any, di: number) => {
       if (di !== dayIndex) return day;
       const meals = (day.meals as any[]).map((meal: any, mi: number) => {
@@ -145,15 +164,24 @@ const Billing: React.FC<Props> = () => {
     }));
   };
 
-  const handleApplyEventDays = async () => {
+  // One save for guest counts, charges and discounts.
+  const saveAll = async () => {
     if (!selected) return;
-    const newSubtotal = editableEventDays.reduce((s: number, day: any) => s + (day.day_subtotal || 0), 0);
     try {
-      await updateEventDays.mutateAsync({ invoiceId: selected.id, event_days: editableEventDays, subtotal: newSubtotal });
+      if (selected.is_multi_day) {
+        const subtotal = editableEventDays.reduce((sum: number, day: any) => sum + (day.day_subtotal || 0), 0);
+        await updateEventDays.mutateAsync({ invoiceId: selected.id, event_days: editableEventDays, subtotal });
+      } else if (guestDraft !== null && guestDraft > 0 && plateRate > 0) {
+        await updateEventDays.mutateAsync({ invoiceId: selected.id, subtotal: plateRate * guestDraft });
+        await updateBooking.mutateAsync({ id: selected.booking_id, guest_count: guestDraft });
+      }
       await recalc(selected.id, showGST);
-      toast.success('Guest counts updated!');
-    } catch (e: any) { toast.error(e?.message || 'Failed to update guest counts'); }
+      setDirty(false);
+      setGuestDraft(null);
+      toast.success('Invoice updated');
+    } catch (e: any) { toast.error(e?.message || 'Failed to save invoice'); }
   };
+  const saving = recalcTotals.isPending || updateEventDays.isPending || updateBooking.isPending;
 
   const handleDeleteInvoice = async (inv: Invoice) => {
     const paid = inv.advance_paid > 0 ? ` Its recorded payments (${inr(inv.advance_paid)}) will be deleted too.` : '';
@@ -232,45 +260,7 @@ const Billing: React.FC<Props> = () => {
 
                 {/* ── Event content: multi-day schedule or flat menu items ── */}
                 {selected.is_multi_day && (selected.event_days || []).length > 0 ? (
-                  <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
-                    <div style={{ ...sectionHead, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>EVENT SCHEDULE</span>
-                      <button type="button" onClick={handleApplyEventDays} disabled={updateEventDays.isPending || recalcTotals.isPending} style={outlineBtn(ORANGE)}>
-                        {updateEventDays.isPending ? '...' : 'Save Guest Counts'}
-                      </button>
-                    </div>
-                    {editableEventDays.map((day: any, di: number) => (
-                      <div key={di} style={{ borderBottom: di < editableEventDays.length - 1 ? '0.5px solid #E5E5E0' : 'none' }}>
-                        <div style={{ padding: '8px 12px 4px', fontWeight: 600, fontSize: 12, color: ORANGE, background: '#FFFBF5' }}>
-                          Day {day.day_number} — {day.date}
-                        </div>
-                        {(day.meals as any[]).map((meal: any, mi: number) => (
-                          <div key={mi} style={{ padding: '6px 12px', borderTop: '0.5px solid #F5F5F0' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>{meal.meal_type}{meal.time ? ` (${meal.time})` : ''}</span>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: ORANGE }}>₹{(meal.subtotal || 0).toLocaleString()}</span>
-                            </div>
-                            <div style={{ fontSize: 11, color: '#888880', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                              <input
-                                type="number" min={1} inputMode="numeric"
-                                value={meal.guest_count}
-                                onChange={e => handleUpdateGuestCount(di, mi, parseInt(e.target.value) || 1)}
-                                style={{ width: 64, padding: '2px 6px', borderRadius: 5, border: '0.5px solid #D0D0CC', fontSize: 12, textAlign: 'right' }}
-                              />
-                              <span>guests × ₹{meal.per_plate_amount}/plate</span>
-                            </div>
-                            {(meal.items as any[]).map((item: any, ii: number) => (
-                              <div key={ii} style={{ fontSize: 11, color: '#666660', paddingLeft: 8, paddingTop: 1 }}>· {item.item_name}</div>
-                            ))}
-                          </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 12px', background: '#F9F8F5', borderTop: '0.5px solid #E5E5E0' }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#444' }}>Day {day.day_number} Subtotal</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#1A1A18' }}>₹{(day.day_subtotal || 0).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <InvoiceSchedule days={editableEventDays} onGuests={handleUpdateGuestCount} />
                 ) : (
                   <>
                     {/* ── Menu Items ── */}
@@ -294,8 +284,10 @@ const Billing: React.FC<Props> = () => {
                           <span style={{ fontWeight: 600 }}>₹{(selectedInvoiceQuotation?.per_plate_amount ?? 0).toLocaleString()}</span>
                         </div>
                         <div style={plateRow}>
-                          <span style={{ color: '#888880' }}>Number of Guests</span>
-                          <span style={{ fontWeight: 600 }}>{selected.booking?.guest_count}</span>
+                          <span style={{ color: '#888880' }}>Final guest count</span>
+                          <input type="number" min={1} inputMode="numeric" aria-label="Final guest count" value={guestsShown || ''}
+                            onChange={e => { setGuestDraft(parseInt(e.target.value, 10) || 0); setDirty(true); }}
+                            style={{ width: 72, padding: '2px 6px', borderRadius: 5, border: '0.5px solid #D0D0CC', fontSize: 12, textAlign: 'right', fontWeight: 600 }} />
                         </div>
                       </div>
                     )}
@@ -303,9 +295,8 @@ const Billing: React.FC<Props> = () => {
                 )}
 
                 {/* ── Extra Charges (editable) ── */}
-                <InvoiceChargeBox title="Extra Charges" color="#7B1FA2" items={extraChargeItems} onChange={setExtraChargeItems}
-                  make={() => ({ description: '', amount: 0 })} empty="No extra charges" applyLabel="Apply Extra Charges"
-                  onApply={() => applyTotals('Extra charges applied!', 'Failed to apply extra charges')} pending={recalcTotals.isPending} />
+                <InvoiceChargeBox title="Extra Charges" color="#7B1FA2" items={extraChargeItems} onChange={touch(setExtraChargeItems)}
+                  make={() => ({ description: '', amount: 0 })} empty="No extra charges" />
 
                 {/* ── Discount ── */}
                 <div style={{ ...box, marginBottom: 10 }}>
@@ -334,13 +325,10 @@ const Billing: React.FC<Props> = () => {
                   {/* Additional manual discounts */}
                   <div style={{ marginBottom: 6 }}>
                     <InvoiceChargeList heading={<span style={{ fontSize: 10, fontWeight: 600, color: '#888880' }}>ADDITIONAL DISCOUNTS</span>}
-                      color="#3B6D11" items={additionalDiscounts} onChange={setAdditionalDiscounts} placeholder="Reason"
+                      color="#3B6D11" items={additionalDiscounts} onChange={touch(setAdditionalDiscounts)} placeholder="Reason"
                       make={() => ({ id: genBillingId(), description: '', amount: 0 })} empty="No additional discounts" />
                   </div>
 
-                  <button type="button" onClick={() => applyTotals('Discount applied!', 'Failed to apply discount')} style={{ ...btnPrimary, fontSize: 12, width: '100%' }} disabled={recalcTotals.isPending}>
-                    {recalcTotals.isPending ? '...' : 'Apply Discount'}
-                  </button>
                   {selected.discount_amount > 0 && (
                     <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 6 }}>
                       Applied: -₹{selected.discount_amount.toLocaleString('en-IN')}
@@ -349,14 +337,21 @@ const Billing: React.FC<Props> = () => {
                 </div>
 
                 {/* ── Transportation Charges ── */}
-                <InvoiceChargeBox title="Transportation Charges" color={ORANGE} items={transportItems} onChange={setTransportItems}
-                  make={() => ({ description: '', amount: 0 })} empty="No transportation charges" applyLabel="Apply Transportation"
-                  onApply={() => applyTotals('Transportation charge applied!', 'Failed to apply transport')} pending={recalcTotals.isPending}
+                <InvoiceChargeBox title="Transportation Charges" color={ORANGE} items={transportItems} onChange={touch(setTransportItems)}
+                  make={() => ({ description: '', amount: 0 })} empty="No transportation charges"
                   applied={(selected.transportation_charge || 0) > 0 ? `Applied: +₹${selected.transportation_charge.toLocaleString()}` : undefined} />
+
+                {dirty && (
+                  <div style={saveBar}>
+                    <span style={{ fontSize: 12, color: '#854F0B', flex: 1 }}>Unsaved changes</span>
+                    <button type="button" style={{ ...btnGhost, fontSize: 12 }} onClick={loadEdits} disabled={saving}>Discard</button>
+                    <button type="button" style={{ ...btnPrimary, fontSize: 12 }} onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+                  </div>
+                )}
 
                 <InvoiceTotals invoice={selected} quotation={selectedInvoiceQuotation} showGST={showGST} gstNumber={dc?.gst_number} />
 
-                <PaymentHistory key={selected.id} payments={paymentHistory} />
+                <PaymentHistory key={selected.id} payments={paymentHistory} balanceDue={selected.balance_due} />
 
                 <InvoiceActions invoice={selected} quotation={selectedInvoiceQuotation} payments={paymentHistory} gstNumber={dc?.gst_number} />
 
@@ -392,6 +387,7 @@ const Billing: React.FC<Props> = () => {
 
 const infoKey: React.CSSProperties = { color: '#AAAAAA', width: 46, display: 'inline-block' };
 const sectionHead: React.CSSProperties = { padding: '7px 12px', background: '#F9F8F5', fontSize: 11, fontWeight: 600, color: '#888880', borderBottom: '0.5px solid #E5E5E0' };
+const saveBar: React.CSSProperties = { position: 'sticky', bottom: 8, zIndex: 5, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', marginBottom: 12, background: '#FFF8EC', border: '0.5px solid #F2C27B', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' };
 const plateRow: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#444' };
 
 export default Billing;

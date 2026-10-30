@@ -50,7 +50,7 @@ const QuotationMultiDay: React.FC<Props> = ({
   // ── days ──
   const addOccasion = () => {
     const lastDate = eventDays.length > 0 ? eventDays[eventDays.length - 1].date : defaultDate;
-    setEventDays(prev => [...prev, { day_number: 0, date: lastDate, meals: [], day_subtotal: 0 }]);
+    setEventDays(prev => [...prev, { day_number: getDayNumber(lastDate, prev), date: lastDate, meals: [], day_subtotal: 0 }]);
   };
   const removeDay = (idx: number) => setEventDays(prev => prev.filter((_, i) => i !== idx));
   const updateDayDate = (idx: number, date: string) =>

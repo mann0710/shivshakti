@@ -36,23 +36,23 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | 6 | `Quotations.tsx` | Editing a quotation reset its status to draft. | **Fixed** |
 | 7 | `Quotations.tsx` | Auto-generated days were one day early in IST. | **Fixed** |
 | 8 | `Bookings.tsx` | The end date, time and package could not be cleared. | **Fixed** |
-| 9 | `useBookings.ts` | A blank venue counted as a clash. Multi-day overlap is not checked. | **Fixed** (blank venue). Overlap: **Open** |
+| 9 | `useBookings.ts` | A blank venue counted as a clash. Multi-day overlap is not checked. | **Fixed.** Overlapping date ranges at the same venue are blocked, on create and on date/venue edits |
 | 10 | `Bookings.tsx` | A failed booking save created a duplicate customer on retry. | **Fixed** |
 | 11 | `index.tsx` | Any later error replaced the whole app with a stack dump; two mutations had no error handling. | **Fixed** |
-| 12 | `Billing.tsx` | Negative or zero payments were possible, and Save Payment could be double-tapped. | **Fixed.** Editing a payment still has no balance check: **Open** |
+| 12 | `Billing.tsx` | Negative or zero payments were possible, and Save Payment could be double-tapped. | **Fixed.** Editing a payment is capped at its own amount plus the balance due |
 | 13 | `Dashboard.tsx` | Today's events were missing from Upcoming. | **Fixed** |
-| 14 | `Customers.tsx` | "Last event" showed the oldest event; "Total spend" included cancelled bookings. | **Open** |
+| 14 | `Customers.tsx` | "Last event" showed the oldest event; "Total spend" included cancelled bookings. | **Fixed.** Shows the next upcoming event (else the last one); cancelled bookings excluded |
 | 15 | `Finance.tsx` | Month labels broke on the 29th–31st; revenue used estimates including cancelled bookings; the event-type list was hard-coded. | **Fixed** (still based on booking estimates for event types and top customers) |
 | 16 | `DataCenter.tsx` | 0% GST could not be saved. | **Fixed** |
 | 17 | `DataCenter.tsx` | The old FSSAI file was deleted before the new upload succeeded. | **Fixed** |
-| 18 | `Quotations.tsx` | Days added with "Add Occasion" show as "Day 0" in the totals panel. | **Open** |
+| 18 | `Quotations.tsx` | Days added with "Add Occasion" show as "Day 0" in the totals panel. | **Fixed.** Numbered by date; reopened quotes too |
 | 19 | `Quotations.tsx` | A booking end-date update error was ignored and the bookings list went stale. | **Fixed** |
 | 20 | `Quotations.tsx` | Clone dropped the food type and failed without a booking. | **Fixed** |
-| 21 | `Quotations.tsx` | The quotation PDF day header shows the gross total while rows show offer prices. | **Open** |
-| 22 | `useInvoices.ts` | Recalculation ignored errors; a zero-total invoice became "paid"; a completed booking never reverts. | **Fixed** (errors; zero-total). Revert: **Open** |
+| 21 | `Quotations.tsx` | The quotation PDF day header shows the gross total while rows show offer prices. | **Fixed.** Shared `mealNet`/`dayNet` in both PDFs |
+| 22 | `useInvoices.ts` | Recalculation ignored errors; a zero-total invoice became "paid"; a completed booking never reverts. | **Fixed.** Deleting or reducing a payment sets a completed booking back to confirmed |
 | 23 | list hooks | Supabase returns at most 1,000 rows; customers, bookings, quotations, invoices and payments are not paged. | **Fixed.** Shared `lib/fetchAll` pages every list |
 | 24 | `Billing.tsx` | Invoice WhatsApp links had no country code. | **Fixed** |
-| 25 | `useQuotations.ts`, `useInvoices.ts` | Quotation and invoice numbers are computed in the browser, so two devices can clash. | **Open** (sweets bills now use a database sequence) |
+| 25 | `useQuotations.ts`, `useInvoices.ts` | Quotation and invoice numbers are computed in the browser, so two devices can clash. | **Fixed.** A database trigger assigns INV-/QTN- numbers under a lock (`20261102_doc_numbers.sql`) |
 
 ## App-wide UX pass (second round, after owner feedback)
 
@@ -91,20 +91,22 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | No login in the app | **Fixed.** Email + password sign-in, sign-out, "access not set up" screen for non-staff |
 | Public sign-ups are on in Supabase Auth | **Owner action:** turn off "Allow new users to sign up" (new sign-ups get no data access anyway) |
 
-## Catering — UX and missing basics (open)
+## Catering — UX and missing basics
 
-- Two unrelated menu systems (Packages and Menu Builder).
-- Invoice status "sent" means partly paid. (Accepting a quote now offers to confirm the booking and jump to the invoice.)
-- Single-day invoices can't take the final guest count. The Billing preview has four separate "Apply" buttons.
-- Missing confirmations on some deletes (payments, quotation days and meals, event types, team members). Packages can't be re-activated.
-- No search on the Quotations and Invoices lists. Quotations can't be shared on WhatsApp.
-- Business name, address and terms are hard-coded in the PDFs (now centralised for receipts in `lib/shop.ts`).
-- No URL routing, so the phone Back button leaves the app.
+| Finding | Status |
+|---|---|
+| Two unrelated menu systems (Packages and Menu Builder) | **Fixed.** Package lines can be picked from Menu Builder; a quotation can "Start from package" (items matched by name with their prices, package price as per-plate rate; the booking's package is preselected) |
+| Invoice status "sent" meant partly paid | **Fixed.** Shown as Unpaid / Part paid / Paid (also in the CSV export) |
+| Single-day invoices couldn't take the final guest count; four separate "Apply" buttons | **Fixed.** Final guest count field; one sticky "Save changes" bar with Discard, and a prompt before switching invoices with unsaved edits |
+| Missing confirmations on deletes; packages couldn't be re-activated | **Fixed.** All deletes use the in-app confirm; packages have Reactivate |
+| No search on Quotations and Invoices; quotations not shareable on WhatsApp | **Fixed** |
+| Business details hard-coded in PDFs | **Improved.** Centralised in `lib/shop.ts` (name, phone, email, SAC) |
+| No URL routing, phone Back left the app | **Fixed.** Hash routes per screen |
 
 ## Code quality
 
 | Finding | Status |
 |---|---|
-| Files over 500 lines: `SeasonalBilling.tsx` 1,563, `Quotations.tsx` 1,792, `Billing.tsx` 1,298, `Bookings.tsx` 508 | SeasonalBilling **fixed** (split). Quotation and invoice PDFs moved to `lib/pdf/`, so Quotations is now about 1,280 lines and Billing about 890: still **Open** (split into list / form / totals components) |
-| Copy-pasted helpers (weight labels, meal savings, currency formatting, style constants, nav defined twice) | **Fixed** for sweets (`lib/units`, `lib/money`, `components/ui/styles`), meal savings (`lib/quoteMath`) and nav (`components/navItems`). Catering style constants: **Open** |
+| Files over 500 lines: `SeasonalBilling.tsx` 1,563, `Quotations.tsx` 1,792, `Billing.tsx` 1,298, `Bookings.tsx` 508 | **Fixed.** Split into components; the largest screens are now about 500 lines |
+| Copy-pasted helpers (weight labels, meal savings, currency formatting, style constants, nav defined twice) | **Fixed** for sweets (`lib/units`, `lib/money`, `components/ui/styles`), meal/day totals (`lib/quoteMath`), item prices (`useItemPrices`) and nav (`components/navItems`). Catering style constants are still per-file (cosmetic) |
 | No tests | **Fixed** for pricing, merge, money, PDFs and nav (the default CRA test was broken) |
