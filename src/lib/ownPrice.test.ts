@@ -1,4 +1,4 @@
-import { ownRange, typedPrice, basePlate, acceptPatch, pickKey } from './quoteChoices';
+import { ownRange, typedPrice, basePlate, acceptPatch, pickKey, pendingChoice, openChoiceLabels } from './quoteChoices';
 import { quotationDoc } from './docs/quotationDoc';
 import { DEFAULT_DOC_SETTINGS } from './docs/settings';
 
@@ -35,5 +35,29 @@ describe('own plate price with alternatives', () => {
     expect(html).not.toContain('>₹0<');
     expect(html).not.toContain('adjustment');
     expect(html).toContain('+₹20');
+  });
+});
+
+describe('payment schedule and times', () => {
+  it('shows each payment step as a range while choices are open', () => {
+    const html = quotationDoc(quote, {}, ctx).html;
+    expect(html).toContain('₹2,880 – ₹3,160'); // 10% of 28,800 – 31,600
+    expect(html).toContain('final once you choose');
+  });
+  it('prints times as 11:00 AM', () => {
+    expect(quotationDoc({ ...quote, booking: { ...quote.booking, event_time: '11:00:00' } }, {}, ctx).html).toContain('25 Nov 2026 · 11:00 AM');
+  });
+});
+
+describe('what the customer still has to choose', () => {
+  it('an open farsan choice comes before the invoice', () => {
+    expect(openChoiceLabels(quote)).toEqual(['Farsan']);
+    expect(pendingChoice(quote, 1)).toBe('dishes');
+    expect(pendingChoice(quote, 2)).toBe('option');
+  });
+  it('nothing once picked or accepted', () => {
+    const picked = { ...quote, items: items.map((i: any) => (i.item_id === 'Mix Bhajiya' ? { ...i, chosen: true } : i)) };
+    expect(pendingChoice(picked, 1)).toBeNull();
+    expect(pendingChoice({ ...quote, status: 'accepted' }, 1)).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import type { Invoice, Payment } from '../../types';
 import type { Quotation } from '../../hooks/useQuotations';
 import { DocContext, docContext } from './context';
-import { page, esc, money, cap } from './theme';
+import { page, esc, money, cap, timeText } from './theme';
 import { header, facts, sectionHead, sumRows, SumRow, upiBox, endLine, footerText } from './parts';
 import { courseGrid, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, dayLabel, guestsText } from './menu';
 import { Doc, docFileName } from './quotationDoc';
@@ -81,7 +81,7 @@ export function invoiceDoc(inv: Invoice, q: Quotation | undefined, payments: Pay
     <div class="fact"><span class="lbl">Bill to</span><span class="big">${esc(c?.name || 'Customer')}</span>
       ${c?.phone ? `<span class="muted num">+91 ${esc(c.phone)}</span>` : ''}${c?.address ? `<span class="muted">${esc(c.address)}</span>` : ''}
       ${c?.gstin ? `<span class="num"><b>GSTIN</b> ${esc(c.gstin)}</span>` : ''}</div>
-    ${facts([['Event', b?.event_type], ['Date & time', [span, b?.event_time].filter(Boolean).join(' · ')], ['Venue', b?.venue],
+    ${facts([['Event', b?.event_type], ['Date & time', [span, timeText(b?.event_time)].filter(Boolean).join(' · ')], ['Venue', b?.venue],
       ['Guests', guestsText(inv.is_multi_day ? (inv.event_days as Quotation['event_days']) : [], b?.guest_count || 0)], ...(taxed ? [['Place of supply', placeOfSupply(ctx.gstNumber, c?.gstin)] as [string, string]] : []),
       ['Quotation', q?.quotation_number]])}
   </div>
@@ -112,7 +112,7 @@ export function eventMenuDoc(b: Invoice['booking'], q: Quotation | undefined, ct
 <div class="wrap">
   <div class="intro">
     <div class="fact"><span class="lbl">Customer</span><span class="big">${esc(b?.customer?.name || '—')}</span>${b?.customer?.phone ? `<span class="muted num">+91 ${esc(b.customer.phone)}</span>` : ''}</div>
-    ${facts([['Date & time', [span, b?.event_time].filter(Boolean).join(' · ')], ['Venue', b?.venue], ['Guests', b?.guest_count || ''], ['Food', q?.food_type]])}
+    ${facts([['Date & time', [span, timeText(b?.event_time)].filter(Boolean).join(' · ')], ['Venue', b?.venue], ['Guests', b?.guest_count || ''], ['Food', q?.food_type]])}
   </div>
   <section>${sectionHead('Menu', q?.quotation_number ?? '')}${multi ? mealSchedule(q!.event_days, { amounts: false, itemPrices: false, mode: 'served' })
     : q?.items?.length ? courseGrid(q.items, false, 'served') : '<span class="muted">No menu linked to this event yet.</span>'}</section>

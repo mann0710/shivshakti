@@ -6,6 +6,13 @@ export const NAVY = '#1E1B6E';
 
 export const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 export const money = (n: number) => inr(Math.round((Number(n) || 0) * 100) / 100);
+// "19:30:00" → "7:30 PM"; anything else prints as typed.
+export const timeText = (t?: string | null) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t || '');
+  if (!m) return t || '';
+  const h = Number(m[1]);
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+};
 export const cap = (s?: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
 
 // Outfit has no ₹ sign; Noto Sans (loaded) draws it, as the PDF server has no other fonts.
@@ -96,6 +103,7 @@ thead { display: table-header-group; }
 .step .dot { display: flex; align-items: center; gap: 8px; }
 .step .dot i { width: 26px; height: 26px; border-radius: 13px; background: ${NAVY}; color: #fff; font-size: 12px; font-weight: 700; font-style: normal; display: flex; align-items: center; justify-content: center; }
 .step .dot em { flex: 1; height: 2px; background: var(--accent); }
+.step .a.rng { font-size: 16px; }
 .step .a { font-family: ${HEAD_FONT}; font-size: 21px; font-weight: 700; color: ${NAVY}; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips span { font-size: 12.5px; padding: 5px 12px; border: 1px solid #D5D6E4; border-radius: 16px; }

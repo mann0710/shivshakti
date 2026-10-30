@@ -155,6 +155,17 @@ export function acceptPatch(q: Quotation, picked: Set<string>, guests?: number):
   return { items, per_plate_amount: pp, guest_count: g, subtotal: t.subtotal, discount_amount: t.discount, gst_amount: t.gst, total_amount: t.final, per_plate_max: null, total_max: null };
 }
 
+// Labels of "choose any" groups the customer has not picked from yet, across every meal.
+export const openChoiceLabels = (q: Pick<Quotation, 'is_multi_day' | 'event_days' | 'items'>) => {
+  const lists = q.is_multi_day && q.event_days?.length ? q.event_days.flatMap(d => d.meals.map(m => m.items ?? [])) : [q.items ?? []];
+  return Array.from(new Set(lists.flatMap(l => choiceGroups(l).filter(g => !pickedOf(g).length).map(g => g.meta.label))));
+};
+
+// What the customer still has to choose before this quote can be accepted: an option, dishes, or nothing.
+export const pendingChoice = (q: Quotation, siblings: number): 'option' | 'dishes' | null =>
+  q.status === 'accepted' || q.status === 'rejected' ? null
+    : siblings > 1 ? 'option' : openChoiceLabels(q).length ? 'dishes' : null;
+
 // Every dish of a quote with its meal id (single-day dishes have none).
 export const quoteDishes = (q: Pick<Quotation, 'is_multi_day' | 'event_days' | 'items'>) =>
   q.is_multi_day && q.event_days?.length

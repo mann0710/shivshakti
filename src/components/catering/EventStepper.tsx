@@ -3,7 +3,7 @@ import { STAGES, STAGE_LABELS, NEXT_STEP, Stage } from '../../lib/eventStage';
 import { ORANGE } from './CustomerUi';
 
 // Inquiry → Quoted → Confirmed → Invoiced → Paid, with the next thing to do underneath.
-const EventStepper: React.FC<{ stage: Stage }> = ({ stage }) => {
+const EventStepper: React.FC<{ stage: Stage; next?: string }> = ({ stage, next }) => {
   if (stage === 'cancelled') {
     return <div style={{ background: '#FCEBEB', color: '#A32D2D', borderRadius: 8, padding: '8px 12px', fontSize: 12, marginBottom: 12 }}>{NEXT_STEP.cancelled}</div>;
   }
@@ -25,7 +25,7 @@ const EventStepper: React.FC<{ stage: Stage }> = ({ stage }) => {
         })}
       </ol>
       <div style={{ marginTop: 10, fontSize: 12, color: '#854F0B', background: '#FFF8EC', borderRadius: 8, padding: '7px 10px' }}>
-        Next: {NEXT_STEP[stage]}
+        Next: {next ?? NEXT_STEP[stage]}
       </div>
     </div>
   );

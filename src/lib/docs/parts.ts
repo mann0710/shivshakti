@@ -36,11 +36,14 @@ export const banner = (label: string, detail: string, amount: number | string, c
 // Rupee amounts when the total is known, else just the percentages.
 // Each step's amount; with several options, each option's amount sits under the percentage.
 export interface StepOption { label: string; lo: number; hi: number }
-export const paySteps = (total: number | null, steps: PayStep[], per: StepOption[] = []) => {
-  const amounts = total === null ? steps.map(s => `${s.pct}%`) : scheduleAmounts(total, steps).map(money);
+// A price range (choices still open) shows each step as lowest – highest.
+export const paySteps = (total: number | null, steps: PayStep[], per: StepOption[] = [], max = 0) => {
+  const lo = total === null ? null : scheduleAmounts(total, steps);
+  const hi = total !== null && max > total ? scheduleAmounts(max, steps) : null;
+  const amounts = lo ? lo.map((v, i) => (hi ? `${money(v)} – ${money(hi[i])}` : money(v))) : steps.map(s => `${s.pct}%`);
   const each = per.map(o => ({ label: o.label, lo: scheduleAmounts(o.lo, steps), hi: scheduleAmounts(Math.max(o.lo, o.hi), steps) }));
   return `<div class="steps" style="--n:${steps.length}">${steps.map((s, i) => `<div class="step">
-  <div class="dot"><i>${i + 1}</i><em></em></div><span class="a num">${amounts[i]}</span>
+  <div class="dot"><i>${i + 1}</i><em></em></div><span class="a num${hi ? ' rng' : ''}">${amounts[i]}</span>
   <b style="font-size:13px">${s.pct}% · ${esc(s.label)}</b><span class="muted" style="font-size:12px">${esc(s.when)}</span>${
     each.map(o => `<span class="num" style="font-size:12px">${esc(o.label)}: <b>${money(o.lo[i])}${o.hi[i] > o.lo[i] ? ` – ${money(o.hi[i])}` : ''}</b></span>`).join('')}</div>`).join('')}</div>`;
 };

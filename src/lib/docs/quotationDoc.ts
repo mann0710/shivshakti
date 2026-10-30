@@ -1,7 +1,7 @@
 import type { Quotation } from '../../hooks/useQuotations';
 import { DocContext, docContext } from './context';
 import { scheduleAmounts } from './settings';
-import { page, esc, money, cap } from './theme';
+import { page, esc, money, cap, timeText } from './theme';
 import { header, facts, sectionHead, sumRows, SumRow, banner, paySteps, StepOption, chips, terms, upiBox, signatures, endLine, footerText } from './parts';
 import { courseGrid, coursesOf, hasItemPrices, priceShow, PriceShow, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText, dayLabel } from './menu';
 import { plateRange, choiceGroups, pickedOf, dishCount } from '../quoteChoices';
@@ -28,7 +28,7 @@ function whenText(q: Quotation): string {
   if (isMulti(q) && dates.length) return dates.length > 1 ? `${day(dates[0])} – ${day(dates[dates.length - 1])}` : day(dates[0]);
   const b = q.booking;
   const span = b?.end_date && b.end_date !== b.event_date ? `${day(b.event_date)} – ${day(b.end_date)}` : day(b?.event_date);
-  return [span, b?.event_time].filter(Boolean).join(' · ');
+  return [span, timeText(b?.event_time)].filter(Boolean).join(' · ');
 }
 
 // Price table + adjustments + closing banner, for per-plate, per-item, "choose any" and multi-meal quotes.
@@ -133,7 +133,7 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   </div>
   ${grouped ? compareSection(options) : ''}
   ${details}
-  ${s.schedule.length ? `<section class="keep">${sectionHead('Payment schedule', open ? 'of the final total' : '')}${paySteps(open ? null : q.total_amount, s.schedule, perOption)}</section>` : ''}
+  ${s.schedule.length ? `<section class="keep">${sectionHead('Payment schedule', grouped ? 'of the option you choose' : open ? 'final once you choose' : '')}${paySteps(grouped ? null : q.total_amount, s.schedule, perOption, isRange(q) ? q.total_max ?? 0 : 0)}</section>` : ''}
   ${s.extras.length ? `<section class="keep">${sectionHead('On request, charged extra')}${chips(s.extras)}</section>` : ''}
   <div class="keep"><section>${sectionHead('Terms')}${terms([...s.terms, ...(validTill ? [`This quotation is valid till ${day(validTill)}.`] : [])])}</section>
   <div class="close">${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', 'For Shiv Shakti Catering Service')}

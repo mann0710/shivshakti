@@ -1,7 +1,7 @@
 import type { QuotationLineItem, EventDay, MealSlot } from '../../hooks/useQuotations';
 import { mealNet } from '../quoteMath';
 import { formatDateIST } from '../ist';
-import { esc, money, cap } from './theme';
+import { esc, money, cap, timeText } from './theme';
 import { choiceGroups, pickedOf, servedItems, plateRange, ChoiceGroup } from '../quoteChoices';
 import { planCourses, servedNames, Course } from '../menuOrder';
 
@@ -83,7 +83,7 @@ export function daysOf(days: EventDay[] | undefined): DayGroup[] {
   return out;
 }
 
-export const mealTitle = (m: MealSlot) => [cap(m.meal_type), m.time, m.ceremony_name].filter(Boolean).join(' · ');
+export const mealTitle = (m: MealSlot) => [cap(m.meal_type), timeText(m.time), m.ceremony_name].filter(Boolean).join(' · ');
 export const offerOf = (m: MealSlot) => { const o = Number(m.discount_amount) || 0; return o > 0 && o < (Number(m.per_plate_amount) || 0) ? o : 0; };
 export const mealSaving = (m: MealSlot) => (offerOf(m) ? (m.per_plate_amount - offerOf(m)) * (m.guest_count || 0) : 0);
 export const dayLabel = (g: DayGroup) => `Day ${g.number}${g.date ? ` · ${formatDateIST(g.date, 'EEE, dd MMM yyyy')}` : ''}`;

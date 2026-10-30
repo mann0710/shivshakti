@@ -11,6 +11,7 @@ import { useAcceptFlow } from '../../hooks/useAcceptFlow';
 import { optionTitle, siblingsOf, statusText, totalText } from '../../lib/quoteOptions';
 import { Navigate } from '../../hooks/useNavIntent';
 import { eventStage } from '../../lib/eventStage';
+import { pendingChoice, openChoiceLabels } from '../../lib/quoteChoices';
 import { waNumber } from '../../lib/quoteMath';
 import { inr } from '../../lib/money';
 import { Booking } from '../../types';
@@ -33,8 +34,16 @@ const EventDetail: React.FC<Props> = ({ bookingId, onClose, onNavigate, onEdit }
   const stage = eventStage(b, quotes, invoice);
   const go: Navigate = (page, intent) => { onClose(); onNavigate(page, intent); };
   const phone = b.customer?.phone?.trim();
+  // A quote whose option or dishes are still open comes before the invoice.
+  const pickOf = (q: typeof quotes[number]) => pendingChoice(q, siblingsOf(q, allQuotes).length);
+  const toPick = !invoice && (stage === 'quoted' || stage === 'confirmed') ? quotes.find(q => pickOf(q)) : undefined;
+  const pickLabel = (q: typeof quotes[number]) => (pickOf(q) === 'option' ? 'Pick option & accept' : pickOf(q) === 'dishes' ? 'Pick dishes & accept' : 'Accept');
+  const next = toPick && (pickOf(toPick) === 'option'
+    ? 'Ask which option the customer wants, then accept it'
+    : `Ask which ${openChoiceLabels(toPick).join(', ')} the customer wants, then accept the quote`);
 
   const primary = (() => {
+    if (toPick) return <button type="button" style={btnPrimary} onClick={() => lifecycle.accept(toPick)}>{pickLabel(toPick)}</button>;
     switch (stage) {
       case 'inquiry': return <button type="button" style={btnPrimary} onClick={() => go('quotations', { action: 'new', id: b.id })}>Make quotation</button>;
       case 'confirmed': return <button type="button" style={btnPrimary} onClick={() => go('billing', { action: 'new', id: b.id })}>Create invoice</button>;
@@ -55,7 +64,7 @@ const EventDetail: React.FC<Props> = ({ bookingId, onClose, onNavigate, onEdit }
         {phone && <a href={`https://wa.me/${waNumber(phone)}`} target="_blank" rel="noopener noreferrer" style={{ ...link, color: '#128C7E' }}>💬 WhatsApp</a>}
       </div>
 
-      <EventStepper stage={stage} />
+      <EventStepper stage={stage} next={next} />
 
       <Section title="Quotations" action={<button type="button" style={small} onClick={() => go('quotations', { action: 'new', id: b.id })}>+ New</button>}>
         {quotes.length === 0 ? <Empty>No quotation yet</Empty> : quotes.map(q => (
@@ -64,11 +73,11 @@ const EventDetail: React.FC<Props> = ({ bookingId, onClose, onNavigate, onEdit }
               <div style={{ fontWeight: 600 }}>{q.quotation_number}{q.option_label ? ` · ${optionTitle(q)}` : ''} · {totalText(q)}</div>
               <div style={{ fontSize: 11, color: '#888880' }}>{q.per_plate_amount > 0 ? `${inr(q.per_plate_amount)}/plate` : q.is_multi_day ? 'Multi-day' : ''}</div>
             </div>
-            {q.option_group && q.status === 'rejected' ? <span style={{ fontSize: 11, fontWeight: 600, color: '#8E2A2A' }}>{statusText(q)}</span> : <StatusPill status={q.status} />}
+            <StatusPill status={q.status} label={statusText(q)} />
             <button type="button" style={small} onClick={() => go('quotations', { action: 'open', id: q.id })}>Edit</button>
             <button type="button" style={small} onClick={() => lifecycle.share(q, true, siblingsOf(q, allQuotes))}>Share</button>
             {q.status !== 'accepted' && stage !== 'cancelled' && (
-              <button type="button" style={{ ...small, background: ORANGE, color: '#fff', borderColor: ORANGE }} onClick={() => lifecycle.accept(q)}>Accept</button>
+              <button type="button" style={{ ...small, background: ORANGE, color: '#fff', borderColor: ORANGE }} onClick={() => lifecycle.accept(q)}>{pickLabel(q)}</button>
             )}
           </div>
         ))}
