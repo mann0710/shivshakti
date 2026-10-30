@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import QtyInput from './QtyInput';
 import Modal from '../ui/Modal';
 import { SeasonalItem } from '../../lib/itemCatalog';
 import { Pack, parseSize, sizeForAmount, loosePrice, formatSize, rateLabel, UNITS } from '../../lib/units';
@@ -26,7 +27,7 @@ const PackPicker: React.FC<Props> = ({ item, packs, onAdd, onClose }) => {
   const price = size ? (by === 'amount' ? Number(text) : loosePrice(item.rate, size, item.unit)) : 0;
   const valid = !!size && size > 0 && price > 0;
 
-  const addCustom = () => { if (valid) { onAdd(size!, price, 1); onClose(); } };
+  const addCustom = () => { if (valid) { onAdd(size!, price, qty); onClose(); } };
 
   return (
     <Modal title={item.name} onClose={onClose} width={420}>
@@ -36,7 +37,7 @@ const PackPicker: React.FC<Props> = ({ item, packs, onAdd, onClose }) => {
         <span style={lbl}>Quantity</span>
         <div className="pos-qty">
           <button type="button" aria-label="Less" onClick={() => setQty(q => Math.max(1, q - 1))}>−</button>
-          <span>{qty}</span>
+          <QtyInput qty={qty} label={item.name} onQty={setQty} />
           <button type="button" aria-label="More" onClick={() => setQty(q => q + 1)}>+</button>
         </div>
       </div>

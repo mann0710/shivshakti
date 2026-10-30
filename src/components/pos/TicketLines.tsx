@@ -1,4 +1,5 @@
 import React from 'react';
+import QtyInput from './QtyInput';
 import { CartLine, lineKey } from '../../lib/cart';
 import { formatLineSize } from '../../lib/units';
 import { inr } from '../../lib/money';
@@ -8,7 +9,7 @@ interface Props {
   onQty: (key: string, qty: number) => void;
 }
 
-// Receipt-style bill lines with +/− steppers; going below 1 removes the line.
+// Receipt-style bill lines with +/− steppers and a typed quantity; going below 1 removes the line.
 const TicketLines: React.FC<Props> = ({ lines, onQty }) => (
   <div className="pos-lines" aria-label="Bill lines">
     {lines.length === 0 ? (
@@ -26,7 +27,7 @@ const TicketLines: React.FC<Props> = ({ lines, onQty }) => (
           </div>
           <div className="pos-qty">
             <button type="button" aria-label={`One less ${l.item_name}`} onClick={() => onQty(key, l.qty - 1)}>{l.qty === 1 ? '🗑' : '−'}</button>
-            <span>{l.qty}</span>
+            <QtyInput qty={l.qty} label={l.item_name} onQty={q => onQty(key, q)} />
             <button type="button" aria-label={`One more ${l.item_name}`} onClick={() => onQty(key, l.qty + 1)}>+</button>
           </div>
           <div style={{ width: 72, textAlign: 'right', fontWeight: 700, fontSize: 13 }}>{inr(l.line_total)}</div>

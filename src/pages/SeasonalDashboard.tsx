@@ -4,18 +4,14 @@ import { useSeasonalPreorders } from '../hooks/useSeasonalPreorders';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import { Navigate } from '../hooks/useNavIntent';
 import { Page } from '../components/navItems';
+import { isOpenPreorder, STATUS_LABEL } from '../lib/preorders';
+import { PRE_STATUS } from '../components/ui/styles';
 
 interface Props { onNavigate: Navigate; }
 
 const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
-const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  pending:   { bg: '#FFF3E0', color: '#E65100' },
-  confirmed: { bg: '#E3F2FD', color: '#1565C0' },
-  delivered: { bg: '#EAF3DE', color: '#3B6D11' },
-  cancelled: { bg: '#FEECEC', color: '#C0392B' },
-};
 
 const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
   const [year, setYear] = useState(currentYear);
@@ -31,7 +27,7 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
   const totalUnpaid   = orders.filter(o => !o.is_paid).reduce((s, o) => s + o.total_amount, 0);
 
   // Pre-order stats
-  const activePreorders   = preorders.filter(p => p.status === 'pending' || p.status === 'confirmed');
+  const activePreorders   = preorders.filter(isOpenPreorder);
   const totalPreorderVal  = activePreorders.reduce((s, p) => s + p.total_amount, 0);
   const totalAdvance      = preorders.filter(p => p.status !== 'cancelled').reduce((s, p) => s + p.advance_paid, 0);
   // Balance only on open pre-orders; delivered ones are already settled.
@@ -52,7 +48,7 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
 
   // Recent orders
   const recentOrders = orders.slice(0, 5);
-  const recentPreorders = preorders.filter(p => p.status === 'pending' || p.status === 'confirmed').slice(0, 5);
+  const recentPreorders = activePreorders.slice(0, 5);
 
   return (
     <div>
@@ -84,7 +80,7 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
 
         {/* Pre-order stats */}
         <div className="g4" style={{ marginBottom: 14 }}>
-          <StatCard label="Active Pre-orders" value={String(activePreorders.length)} sub="Pending + Confirmed" subColor="#1565C0" />
+          <StatCard label="Active Pre-orders" value={String(activePreorders.length)} sub="Pending, confirmed, packed" subColor="#1565C0" />
           <StatCard label="Pre-order Value" value={`₹${totalPreorderVal.toLocaleString()}`} sub="Open pre-orders" />
           <StatCard label="Advance Collected" value={`₹${totalAdvance.toLocaleString()}`} sub="From pre-orders" subColor="#3B6D11" />
           <StatCard label="Balance (Pre-orders)" value={`₹${openBalance.toLocaleString('en-IN')}`} sub="Yet to collect" subColor="#E65100" />
@@ -196,10 +192,10 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
                     <div style={{ fontWeight: 600, fontSize: 13 }}>₹{p.total_amount.toLocaleString()}</div>
                     <span style={{
                       fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 600,
-                      background: STATUS_COLORS[p.status]?.bg || '#F5F5F0',
-                      color: STATUS_COLORS[p.status]?.color || '#555',
+                      background: PRE_STATUS[p.status]?.bg || '#F5F5F0',
+                      color: PRE_STATUS[p.status]?.color || '#555',
                     }}>
-                      {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                      {STATUS_LABEL[p.status]}
                     </span>
                   </div>
                 </div>

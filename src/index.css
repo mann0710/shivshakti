@@ -179,7 +179,8 @@ a { color: inherit; }
 .pos-line { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 0.5px solid #F0F0EC; }
 .pos-qty { display: flex; align-items: center; border: 1px solid #E5E5E0; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
 .pos-qty button { width: 30px; height: 30px; border: none; background: #F9F8F5; font-size: 16px; cursor: pointer; color: #1A237E; }
-.pos-qty span { min-width: 26px; text-align: center; font-weight: 700; font-size: 13px; }
+.pos-qty input { width: 40px; height: 30px; border: none; border-left: 1px solid #E5E5E0; border-right: 1px solid #E5E5E0; text-align: center; font-weight: 700; font-size: 14px; padding: 0; background: #fff; color: #1A1A18; }
+.pos-qty input:focus { outline: 2px solid #1A237E; outline-offset: -2px; }
 .pos-charge { height: 56px; border: none; border-radius: 12px; background: #1A237E; color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; width: 100%; letter-spacing: 0.02em; }
 .pos-charge:disabled { opacity: 0.5; cursor: not-allowed; }
 .pos-paybar { display: none; }
@@ -219,3 +220,27 @@ a { color: inherit; }
   .stack-table td:empty { display: none; }
   .stack-table td[data-label]::before { content: attr(data-label); display: inline-block; min-width: 80px; font-size: 11px; color: #888880; }
 }
+
+/* Pre-booking register (sheet view) */
+.sheet-wrap { border: 0.5px solid #E5E5E0; border-radius: 10px; background: #fff; max-height: 70vh; }
+.pre-sheet { border-collapse: separate; border-spacing: 0; font-size: 12px; min-width: 100%; }
+.pre-sheet th, .pre-sheet td { padding: 7px 9px; border-bottom: 0.5px solid #EEEEEA; border-right: 0.5px solid #F2F2EE; background: #fff; vertical-align: top; text-align: left; }
+.pre-sheet thead th { position: sticky; top: 0; z-index: 2; background: #EEF0FB; color: #1A237E; font-weight: 600; white-space: nowrap; }
+.pre-sheet th small { display: block; font-weight: 400; color: #888880; font-size: 10px; }
+.pre-sheet tfoot td { position: sticky; bottom: 0; background: #FFF3E0; font-weight: 700; color: #6D3A00; }
+.pre-sheet .stick { position: sticky; z-index: 1; } .pre-sheet thead .stick { z-index: 3; }
+.pre-sheet .s0 { left: 0; width: 54px; min-width: 54px; } .pre-sheet .s1 { left: 54px; width: 48px; min-width: 48px; }
+.pre-sheet .s2 { left: 102px; min-width: 140px; box-shadow: 2px 0 0 #E5E5E0; }
+.pre-sheet .c { text-align: center; } .pre-sheet .c input { width: 20px; height: 20px; accent-color: #1A237E; cursor: pointer; }
+.pre-sheet .q { white-space: nowrap; color: #1A237E; font-weight: 600; } .pre-sheet .r { text-align: right; white-space: nowrap; }
+.pre-sheet tr.done td { background: #F6FBF2; } .pre-sheet tr.x td { color: #AAAAAA; text-decoration: line-through; }
+.sheet-name { background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: #1A1A18; cursor: pointer; text-align: left; }
+.sheet-name:hover { color: #1A237E; text-decoration: underline; }
+
+/* Report tables */
+.report-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.report-table th { padding: 8px 10px; font-size: 11.5px; color: #888880; font-weight: 600; background: #F9F8F5; border-bottom: 0.5px solid #E5E5E0; }
+.report-table td { padding: 8px 10px; border-bottom: 0.5px solid #F0F0EC; }
+.report-table tbody tr:hover td { background: #FAFAF6; }
+.report-table tfoot td { font-weight: 700; background: #EEF0FB; color: #1A237E; border-top: 1px solid #C5CAE9; }
+.report-picker button { flex: 0 0 auto; }

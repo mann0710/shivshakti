@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
 import { SeasonalOrderItem } from './useSeasonalOrders';
+import { useHasPreorderColumns } from './useSchemaStatus';
 
 export type { SeasonalOrderItem };
 
@@ -19,10 +20,28 @@ export interface SeasonalPreorder {
   advance_paid: number;
   payment_mode: 'cash' | 'upi' | null;
   delivery_date?: string;
-  status: 'pending' | 'confirmed' | 'delivered' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'ready' | 'delivered' | 'cancelled';
   year: number;
   notes?: string;
   created_at: string;
+  // After the fulfillment migration.
+  fulfillment?: 'pickup' | 'delivery';
+  delivered_at?: string | null;
+  balance_paid?: number;
+  balance_mode?: 'cash' | 'upi' | null;
+}
+
+const NEW_FIELDS = ['fulfillment', 'delivered_at', 'balance_paid', 'balance_mode'] as const;
+
+// Drops the newer fields until the migration has been run.
+const useFitRow = () => {
+  const ready = useHasPreorderColumns();
+  return <T extends object>(row: T): T => {
+    if (ready) return row;
+    const out: any = { ...row };
+    NEW_FIELDS.forEach(f => delete out[f]);
+    return out;
+  };
 }
 
 export type SeasonalPreorderPayload = Omit<SeasonalPreorder, 'id' | 'created_at'>;
@@ -41,11 +60,12 @@ export const useSeasonalPreorders = (year?: number) =>
 
 export const useCreateSeasonalPreorder = () => {
   const qc = useQueryClient();
+  const fit = useFitRow();
   return useMutation({
     mutationFn: async (order: SeasonalPreorderPayload) => {
       const { data, error } = await supabase
         .from('seasonal_preorders')
-        .insert(order)
+        .insert(fit(order))
         .select()
         .single();
       if (error) throw error;
@@ -71,11 +91,12 @@ export const useUpdateSeasonalPreorderStatus = () => {
 
 export const useUpdateSeasonalPreorder = () => {
   const qc = useQueryClient();
+  const fit = useFitRow();
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<SeasonalPreorderPayload> & { id: string }) => {
       const { error } = await supabase
         .from('seasonal_preorders')
-        .update(updates)
+        .update(fit(updates))
         .eq('id', id);
       if (error) throw error;
     },

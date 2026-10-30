@@ -19,9 +19,21 @@ export interface ReceiptData {
   delivery_date?: string;
   notes?: string;
   gst_number?: string;
+  booking?: BookingInfo; // pre-bookings print a full A4 slip
 }
 
-const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
+export interface BookingInfo {
+  address?: string;
+  handover: string;        // "Pickup from shop" / "Home delivery"
+  status: string;
+  advance: number;
+  advance_mode: string;
+  collected: number;       // paid at hand-over
+  collected_mode: string;
+  handed_over?: string;
+}
+
+export const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 
 export const billNumber = (bill_no: number | null | undefined, id: string) =>
   bill_no ? String(bill_no) : id.slice(0, 6).toUpperCase();
@@ -76,7 +88,6 @@ export function printHtml(html: string) {
   }, 250);
 }
 
-export const printReceipt = (r: ReceiptData) => printHtml(receiptHtml(r));
 
 export function whatsAppText(r: ReceiptData): string {
   return [
@@ -84,7 +95,8 @@ export function whatsAppText(r: ReceiptData): string {
     `Customer: ${r.customer_name}`,
     `Date: ${r.date}`,
     r.occasion ? `Occasion: ${r.occasion}` : '',
-    r.delivery_date ? `Delivery: ${r.delivery_date}` : '',
+    r.delivery_date ? `${r.booking?.handover ?? 'Delivery'}: ${r.delivery_date}` : '',
+    r.booking?.address ? `Address: ${r.booking.address}` : '',
     '',
     '*Items:*',
     ...r.lines.map(l => `• ${l.item_name} (${formatLineSize(l.weight, l.weight_unit)}) ×${l.qty} = ${inr(l.line_total)}`),

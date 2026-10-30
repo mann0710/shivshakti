@@ -1,6 +1,7 @@
 import React from 'react';
 import { PosForm, Totals, PayMode } from '../../lib/posForm';
 import { inr } from '../../lib/money';
+import { Fulfillment } from '../../lib/preorders';
 import { inp, lbl, segBtn, segWrap, NAVY, SUCCESS } from '../ui/styles';
 
 interface Props {
@@ -18,6 +19,7 @@ const Row: React.FC<{ label: string; value: string; strong?: boolean; color?: st
 // Totals, discount and payment (or advance for pre-bookings).
 const CheckoutFields: React.FC<Props> = ({ form, totals, set }) => {
   const bill = form.mode === 'bill';
+  const fulfil = form.fulfillment ?? 'pickup';
   const pay: { key: PosForm['payment']; label: string }[] = [
     { key: 'cash', label: 'Cash' }, { key: 'upi', label: 'UPI' }, { key: 'unpaid', label: 'Unpaid' },
   ];
@@ -60,8 +62,15 @@ const CheckoutFields: React.FC<Props> = ({ form, totals, set }) => {
         </>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div style={{ ...segWrap, gridColumn: '1 / -1' }} role="group" aria-label="Pickup or delivery">
+            {(['pickup', 'delivery'] as Fulfillment[]).map(k => (
+              <button key={k} type="button" style={segBtn(fulfil === k)} aria-pressed={fulfil === k} onClick={() => set({ fulfillment: k })}>
+                {k === 'pickup' ? '🏪 Pickup from shop' : '🚚 Home delivery'}
+              </button>
+            ))}
+          </div>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={lbl}>Delivery date *</span>
+            <span style={lbl}>{fulfil === 'pickup' ? 'Pickup date *' : 'Delivery date *'}</span>
             <input style={inp} type="date" value={form.delivery_date} onChange={e => set({ delivery_date: e.target.value })} />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -77,7 +86,7 @@ const CheckoutFields: React.FC<Props> = ({ form, totals, set }) => {
               ))}
             </div>
           )}
-          <div style={{ gridColumn: '1 / -1' }}><Row label="Balance on delivery" value={inr(totals.balance)} color="#E65100" /></div>
+          <div style={{ gridColumn: '1 / -1' }}><Row label={fulfil === 'pickup' ? 'Balance at pickup' : 'Balance on delivery'} value={inr(totals.balance)} color="#E65100" /></div>
         </div>
       )}
       <input style={inp} value={form.notes} placeholder="Note (optional)" onChange={e => set({ notes: e.target.value })} aria-label="Note" />

@@ -60,6 +60,10 @@ Run [`supabase/migrations/20261102_doc_numbers.sql`](supabase/migrations/2026110
 
 Run [`supabase/migrations/20261103_backfill_advances.sql`](supabase/migrations/20261103_backfill_advances.sql) once: invoices made before payment history existed kept the advance only as a total. This gives each a payment row so it shows in history. (The app also does this automatically the first time such an invoice is saved or paid, so the advance is never lost.) Applied on the live project on 30 Oct 2026.
 
+### Pre-booking pickup / delivery and hand-over payments
+
+Run [`supabase/migrations/20261104_preorder_fulfillment.sql`](supabase/migrations/20261104_preorder_fulfillment.sql) (adds `fulfillment`, `delivered_at`, `balance_paid`, `balance_mode` to `seasonal_preorders`; safe to re-run). Until it is run, the app skips these fields: pickup/delivery is guessed from the address, and the hand-over payment mode overwrites the advance mode as before. **Not yet applied on the live project.**
+
 ### Item prices and customer GSTIN
 
 Run [`supabase/migrations/20261101_prices_gstin.sql`](supabase/migrations/20261101_prices_gstin.sql) (adds `menu_items.default_price` and `customers.gstin`; safe to re-run). Until it is run, the price and GSTIN fields stay hidden. Applied on the live project on 30 Oct 2026, after copying every table into the `backup_20261030` schema (not exposed to the API; drop it once you are happy).
@@ -97,27 +101,33 @@ The grid-and-bill layout follows NodeDR POS.
 - **Item grid:** search (Enter adds the top match), category chips and an occasion filter. Items with no occasion always show. Best sellers are listed first.
 - **Tiles:** one tap on a pack button (250 g ₹213) adds it. Tap the name or **Custom** to pick a quantity, sell a loose weight ("300", "1.25 kg") or sell by amount ("₹100 worth").
 - **Bill panel:**
-  - +/− steppers, discount in ₹ or %;
+  - +/− steppers plus a typed quantity (tap the number, type 24), discount in ₹ or %;
   - payment by **Cash / UPI / Unpaid**;
   - cash received shows the change to return;
   - a big **Charge ₹X** button.
 - **Customers:** walk-in by default. Name and mobile are required only for unpaid bills and pre-bookings. Typing a name or number suggests saved customers. New customers with a valid mobile are saved automatically.
-- **Counter bill / Pre-booking** toggle on the same screen. Pre-bookings take a delivery date (defaults to tomorrow), an advance and the advance mode.
-- After saving: **Print** (80 mm thermal receipt, also fine on A4), **WhatsApp** (sends the bill text) and **New bill**.
+- **Counter bill / Pre-booking** toggle on the same screen. Pre-bookings take **Pickup from shop / Home delivery** (delivery needs the address), a date (defaults to tomorrow), an advance and the advance mode.
+- After saving: **Print** (bills: 80 mm thermal receipt; pre-bookings: a full A4 slip with customer, hand-over, items, advance, amount paid at hand-over, balance and signature lines), **WhatsApp** and **New bill**.
 - The bill in progress survives a page refresh. Phones get a sticky bar with the item count, total and "View bill".
 - **Bills tab:**
   - today's sales split into cash, UPI and unpaid;
   - Today / Unpaid / All year filters; search by name, mobile or bill #;
   - mark paid (Cash/UPI), print, WhatsApp, edit (loads the bill back into the POS) and delete with confirmation.
 - **Pre-bookings tab:**
-  - Open / Due by tomorrow / Done / All filters, with overdue highlighting;
-  - **Deliver & collect** records the balance received;
-  - confirm and cancel;
-  - a **kitchen prep list** (total kg of each sweet to make per delivery date, printable).
-- **Reports tab:**
-  - totals, sales by occasion, unpaid bills;
-  - item sales in packs, kg and revenue, combined across old and new item names;
-  - PDF downloads: sales, unpaid, item sales.
+  - **Sheet view** (default), the paper register as a to-do list: one row per customer, one column per sweet with its ₹/kg, cells like "500 g × 2", a **Total quantity** row, and tick boxes for **Packed** and **Given**. Ticking Given asks for the balance received (Cash/UPI). **Print sheet** prints it landscape with tick boxes;
+  - **List view**: cards with Confirm, Mark packed, Hand over & collect, Print slip, WhatsApp, Edit, Cancel, Delete;
+  - status flow: Pending → Confirmed → Packed → Handed over (or Cancelled);
+  - Open / Due by tomorrow / Done / All filters, search, overdue highlighting;
+  - a **kitchen prep list** (total kg of each sweet still to make per date, printable).
+- **Reports tab:** pick a period (Today, Yesterday, Last 7 days, This month, Last month, This FY, This year or any from–to dates) and an occasion. Every report has headline numbers, tables with totals, an empty state, **Print / PDF** (A4, the print dialog saves as PDF) and **CSV / Excel**.
+  - **Sales:** counter bills + pre-bookings handed over, day by day (month by month for long periods), by occasion, unpaid bills;
+  - **Items:** item-wise packs, quantity (kg / ltr / pcs) and revenue with share, plus sales by pack size;
+  - **Categories:** the same by category (set in Sessional Items);
+  - **Payments:** money received by mode (Cash / UPI / bank / cheque) from counter bills, pre-booking advances, hand-over balances and catering payments, day by day;
+  - **Pre-bookings:** due in the period by status and date (pickup vs delivery), what is still to make, every booking with paid and balance;
+  - **Dues:** everything still to collect as of today: unpaid bills (with age), pre-booking balances, catering invoice balances;
+  - **Catering:** events in the period with value, invoiced, paid, balance, by event type and status;
+  - **Top:** top 10 items, sweets customers and catering customers.
 
 The phone bottom bar now has a **POS** button.
 
@@ -186,8 +196,9 @@ src/
   hooks/useAuth.ts, components/LoginScreen.tsx   staff sign-in and the staff-list check
   hooks/useNavIntent.ts             "open the new form" / "preselect this booking" between screens
   components/pos/                   ProductGrid, ProductTile, PackPicker, TicketPanel, TicketLines,
-                                    CustomerFields, CheckoutFields, SaleDone
-  components/sessional/             PosTab, OrdersTab, PreordersTab, PrepList, ReportsTab,
+                                    CustomerFields, CheckoutFields, SaleDone, QtyInput
+  components/sessional/             PosTab, OrdersTab, PreordersTab, PreorderSheet, PrepList, ReportsTab,
+  components/sessional/reports/     RangeBar (period + occasion), ReportView (renders any report)
                                     item form, bulk price, merge and pack-size dialogs, MigrationBanner
   hooks/                            Supabase data hooks (TanStack Query)
   lib/units.ts                      units, pack sizes, pack prices, size parsing/labels
@@ -195,20 +206,24 @@ src/
   lib/mergePlan.ts                  duplicate detection and merge plan
   lib/cart.ts, lib/posForm.ts       bill lines, totals, validation, save payloads
   lib/receipt.ts, sessionalReceipts.ts   thermal receipt, print, WhatsApp text
-  lib/sessionalReportPdf.ts         sweets report PDFs
+  lib/preorders.ts                  pre-booking statuses, balances, pickup/delivery, hand-over date
+  lib/preorderSheet.ts, preorderSlip.ts   pre-booking register (sheet + print) and the A4 slip
+  lib/reports/                      report builders (sweets, money, pipeline), date ranges, Print/PDF + CSV export
+  hooks/usePreorderActions.tsx      pack, hand over + collect, cancel, delete (shared by sheet and list)
+  hooks/useReportData.ts            data for one report period
   lib/pdf/                          quotation and invoice PDFs (build + download)
   lib/sharePdf.ts                   share a PDF to WhatsApp (share sheet on phones, download + WhatsApp on desktop)
   lib/quoteMath.ts                  shared catering money math
   pages/                            one file per screen
 supabase/
   schema.sql                        baseline schema (inferred from the code, for local dev)
-  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN, invoice/quote numbers)
+  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN, invoice/quote numbers, pre-booking fulfillment)
 ```
 
 ## Tests and checks
 
 ```bash
-CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, PDFs, nav
+CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, PDFs, reports, pre-booking sheet/slip, nav
 npx tsc --noEmit -p .                             # type check
 npx eslint src --ext .ts,.tsx                     # lint (the hosted build fails on warnings when CI=true)
 ```

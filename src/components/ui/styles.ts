@@ -29,6 +29,7 @@ export const segWrap: React.CSSProperties = { display: 'flex', border: '1px soli
 export const PRE_STATUS: Record<string, { bg: string; color: string }> = {
   pending:   { bg: '#FFF3E0', color: '#E65100' },
   confirmed: { bg: '#E3F2FD', color: '#1565C0' },
+  ready:     { bg: '#EDE7F6', color: '#5E35B1' },
   delivered: { bg: '#EAF3DE', color: SUCCESS },
   cancelled: { bg: '#FEECEC', color: DANGER },
 };

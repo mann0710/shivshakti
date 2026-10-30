@@ -5,6 +5,7 @@ export type SchemaStatus = 'ready' | 'legacy';
 
 export const PACK_MIGRATION_FILE = 'supabase/migrations/20261030_sessional_pack_sizes.sql';
 export const PRICE_MIGRATION_FILE = 'supabase/migrations/20261101_prices_gstin.sql';
+export const PREORDER_MIGRATION_FILE = 'supabase/migrations/20261104_preorder_fulfillment.sql';
 
 const missingColumn = (e: { code?: string; message?: string }) =>
   e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find/i.test(e.message ?? '');
@@ -38,4 +39,9 @@ export const useIsLegacySchema = () => usePackSchema().data === 'legacy';
 export const useHasPriceColumns = () => useSchema('prices', () => [
   supabase.from('menu_items').select('default_price').limit(1),
   supabase.from('customers').select('gstin').limit(1),
+]).data === 'ready';
+
+// Pre-booking pickup/delivery, hand-over date and balance collected.
+export const useHasPreorderColumns = () => useSchema('preorders', () => [
+  supabase.from('seasonal_preorders').select('fulfillment, delivered_at, balance_paid, balance_mode').limit(1),
 ]).data === 'ready';

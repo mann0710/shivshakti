@@ -2,6 +2,7 @@ import type { SeasonalOrder, SeasonalOrderPayload } from '../hooks/useSeasonalOr
 import type { SeasonalPreorder, SeasonalPreorderPayload } from '../hooks/useSeasonalPreorders';
 import { CartLine, subtotalOf } from './cart';
 import { DiscountType, discountValue, isValidPhone, cleanPhone } from './money';
+import { Fulfillment, fulfillmentOf } from './preorders';
 
 export type PosMode = 'bill' | 'preorder';
 export type PayMode = 'cash' | 'upi';
@@ -17,6 +18,7 @@ export interface PosForm {
   payment: PayMode | 'unpaid';
   received: string;
   delivery_date: string;
+  fulfillment?: Fulfillment; // older saved drafts lack it → pickup
   advance: string;
   advance_mode: PayMode;
   notes: string;
@@ -33,7 +35,7 @@ const tomorrow = () => {
 export const emptyForm = (mode: PosMode = 'bill', occasion_id = ''): PosForm => ({
   mode, occasion_id, customer_name: '', phone: '', address: '',
   discount: '', discount_type: 'amount', payment: 'cash', received: '',
-  delivery_date: mode === 'preorder' ? tomorrow() : '', advance: '', advance_mode: 'cash', notes: '', lines: [],
+  delivery_date: mode === 'preorder' ? tomorrow() : '', fulfillment: 'pickup', advance: '', advance_mode: 'cash', notes: '', lines: [],
 });
 
 export const formFromOrder = (o: SeasonalOrder): PosForm => ({
@@ -49,7 +51,7 @@ export const formFromPreorder = (p: SeasonalPreorder): PosForm => ({
   ...emptyForm('preorder', p.occasion_id ?? ''),
   customer_name: p.customer_name, phone: p.phone ?? '', address: p.address ?? '',
   discount: p.discount_amount ? String(p.discount_amount) : '', discount_type: 'amount',
-  delivery_date: p.delivery_date ?? '', advance: p.advance_paid ? String(p.advance_paid) : '',
+  delivery_date: p.delivery_date ?? '', fulfillment: fulfillmentOf(p), advance: p.advance_paid ? String(p.advance_paid) : '',
   advance_mode: p.payment_mode ?? 'cash', notes: p.notes ?? '', lines: p.items,
 });
 
@@ -76,7 +78,8 @@ export function validate(f: PosForm, t: Totals): string | null {
   if (f.mode === 'bill' && f.payment === 'unpaid' && (!named || !f.phone.trim())) return 'Unpaid bills need the customer name and phone';
   if (f.mode === 'preorder') {
     if (!named || !f.phone.trim()) return 'Pre-bookings need the customer name and phone';
-    if (!f.delivery_date) return 'Pick a delivery date';
+    if (!f.delivery_date) return f.fulfillment === 'delivery' ? 'Pick a delivery date' : 'Pick a pickup date';
+    if (f.fulfillment === 'delivery' && !f.address.trim()) return 'Home delivery needs the address';
     if (t.advance > t.total) return 'Advance cannot be more than the total';
   }
   return null;
@@ -107,6 +110,7 @@ export const toPreorderPayload = (f: PosForm, t: Totals, year: number): Seasonal
   advance_paid: t.advance,
   payment_mode: t.advance > 0 ? f.advance_mode : null,
   delivery_date: f.delivery_date || undefined,
+  fulfillment: f.fulfillment ?? 'pickup',
   status: 'pending',
   year,
 });

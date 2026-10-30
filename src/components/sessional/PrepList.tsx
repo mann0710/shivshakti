@@ -10,7 +10,7 @@ import { card, btnSm, th, td, NAVY } from '../ui/styles';
 
 // Kitchen prep sheet: how much of each sweet to make for open pre-bookings, by delivery date.
 export function prepByDate(preorders: SeasonalPreorder[]) {
-  const open = preorders.filter(p => p.status === 'pending' || p.status === 'confirmed');
+  const open = preorders.filter(p => p.status === 'pending' || p.status === 'confirmed'); // packed ones are already made
   const dates = Array.from(new Set(open.map(p => p.delivery_date || ''))).sort((a, b) => (a || '9').localeCompare(b || '9'));
   return dates.map(date => {
     const list = open.filter(p => (p.delivery_date || '') === date);

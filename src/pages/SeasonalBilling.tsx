@@ -8,6 +8,7 @@ import OrdersTab from '../components/sessional/OrdersTab';
 import PreordersTab from '../components/sessional/PreordersTab';
 import ReportsTab from '../components/sessional/ReportsTab';
 import MigrationBanner from '../components/sessional/MigrationBanner';
+import { isOpenPreorder } from '../lib/preorders';
 
 type Tab = 'pos' | 'orders' | 'preorders' | 'reports';
 
@@ -25,7 +26,7 @@ const SeasonalBilling: React.FC = () => {
   const { data: dc } = useDataCenter();
 
   const unpaid = orders.filter(o => !o.is_paid).length;
-  const openPre = preorders.filter(p => p.status === 'pending' || p.status === 'confirmed').length;
+  const openPre = preorders.filter(isOpenPreorder).length;
 
   const startEdit = (target: EditTarget) => { setEdit(target); setTab('pos'); };
   const endEdit = (kind: 'bill' | 'preorder') => { setEdit(null); setTab(kind === 'bill' ? 'orders' : 'preorders'); };
@@ -44,7 +45,7 @@ const SeasonalBilling: React.FC = () => {
           <div style={{ fontSize: 16, fontWeight: 600 }}>Sweets POS</div>
           <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>Sessional billing · tap a pack size to add it</div>
         </div>
-        {tab !== 'pos' && (
+        {(tab === 'orders' || tab === 'preorders') && (
           <select style={{ border: '0.5px solid #D0D0CC', borderRadius: 7, padding: '5px 10px', fontSize: 13, background: '#fff' }}
             value={year} onChange={e => setYear(Number(e.target.value))} aria-label="Year">
             {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
@@ -72,7 +73,7 @@ const SeasonalBilling: React.FC = () => {
         {tab === 'preorders' && (
           <PreordersTab preorders={preorders} occasions={occasions} gst={dc?.gst_number} onEdit={preorder => startEdit({ kind: 'preorder', preorder })} />
         )}
-        {tab === 'reports' && <ReportsTab year={year} orders={orders} preorders={preorders} occasions={occasions} />}
+        {tab === 'reports' && <ReportsTab occasions={occasions} />}
       </div>
     </div>
   );

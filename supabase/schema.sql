@@ -63,4 +63,5 @@ create table if not exists seasonal_preorders (id uuid primary key default gen_r
   customer_name text not null, phone text not null default '', address text, items jsonb not null default '[]',
   subtotal numeric(12,2) not null default 0, discount_amount numeric(12,2) not null default 0, discount_type text not null default 'amount',
   total_amount numeric(12,2) not null default 0, advance_paid numeric(12,2) not null default 0, payment_mode text,
-  delivery_date date, status text not null default 'pending', year int not null, notes text, created_at timestamptz not null default now());
+  delivery_date date, status text not null default 'pending', year int not null, notes text, created_at timestamptz not null default now(),
+  fulfillment text not null default 'pickup', delivered_at timestamptz, balance_paid numeric(12,2) not null default 0, balance_mode text);

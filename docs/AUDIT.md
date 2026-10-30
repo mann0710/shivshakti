@@ -115,6 +115,17 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | Per-plate quotes showed ₹0 item prices | **Fixed.** Item prices hidden unless "Price each item" is on |
 | No single place to see where an event stands | **Fixed.** Event page with progress bar and next-step button (`EventDetail`, `lib/eventStage`) |
 
+## Sweets reports and pre-bookings (owner feedback, 30–31 Oct 2026)
+
+| Finding | Status |
+|---|---|
+| Reports were three year-only PDFs; no date range, payment modes, categories, dues or catering | **Fixed.** Eight reports for any period with Print / PDF and CSV (`lib/reports`) |
+| Pre-booking register kept on paper (customers × sweets grid) | **Fixed.** Sheet view with Packed / Given tick boxes, quantity totals and a landscape print |
+| Pre-booking print was a thermal receipt without address or payment detail | **Fixed.** A4 slip with customer, pickup/delivery, items, advance, hand-over payment, balance, signatures |
+| No pickup vs delivery; hand-over overwrote the advance's payment mode | **Fixed** with `20261104_preorder_fulfillment.sql` (app works without it) |
+| Quantity could only be changed with +/− (24 packs = 24 taps) | **Fixed.** Typed quantity in the bill and the pack picker |
+| Report PDFs used jsPDF fonts, which cannot draw Gujarati names | **Fixed.** Reports, slip and sheet print as HTML, so any script prints |
+
 ## Code quality
 
 | Finding | Status |

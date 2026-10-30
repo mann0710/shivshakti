@@ -1,7 +1,9 @@
 import type { SeasonalOrder } from '../hooks/useSeasonalOrders';
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
-import { ReceiptData, billNumber, printReceipt, whatsAppText, openWhatsApp } from './receipt';
+import { ReceiptData, billNumber, receiptHtml, printHtml, whatsAppText, openWhatsApp } from './receipt';
+import { preorderSlipHtml } from './preorderSlip';
 import { inr } from './money';
+import { STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf, advanceAtBooking, balanceOf, modeLabel } from './preorders';
 
 const day = (iso: string) =>
   new Date(iso.includes('T') ? iso : `${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -34,11 +36,21 @@ export const preorderReceipt = (p: SeasonalPreorder, occasion?: string, gst?: st
   subtotal: p.subtotal,
   discount: p.discount_amount,
   total: p.total_amount,
-  status: p.advance_paid > 0 ? `Advance paid ${inr(p.advance_paid)}` : 'No advance paid',
-  balance: Math.max(0, p.total_amount - p.advance_paid),
+  status: p.advance_paid > 0 ? `Paid ${inr(p.advance_paid)}` : 'No advance paid',
+  balance: balanceOf(p),
   delivery_date: p.delivery_date ? day(p.delivery_date) : undefined,
   notes: p.notes,
   gst_number: gst,
+  booking: {
+    address: p.address,
+    handover: FULFILLMENT_LABEL[fulfillmentOf(p)],
+    status: STATUS_LABEL[p.status] ?? p.status,
+    advance: advanceAtBooking(p),
+    advance_mode: modeLabel(p.payment_mode),
+    collected: p.balance_paid ?? 0,
+    collected_mode: modeLabel(p.balance_mode),
+    handed_over: p.delivered_at ? day(p.delivered_at) : undefined,
+  },
 });
 
 export const formatDay = day;
@@ -49,4 +61,5 @@ export const shareReceipt = (r: ReceiptData) => {
   return true;
 };
 
-export { printReceipt };
+// Bills print as 80 mm receipts; pre-bookings as a full A4 slip.
+export const printReceipt = (r: ReceiptData) => printHtml(r.booking ? preorderSlipHtml(r) : receiptHtml(r));
