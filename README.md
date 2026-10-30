@@ -133,6 +133,10 @@ The phone bottom bar now has a **POS** button.
 - **Phone layouts:** booking, quotation, invoice and Sweets admin lists turn into cards on phones, so no actions are cut off. Stats show two per row. Menu Builder stacks its columns instead of squeezing three onto a phone screen.
 - **Search:** bookings, quotations and invoices can be searched by name, phone or number.
 - **Item prices:** set a **₹ price** on any Menu Builder item. Adding it to a quotation fills that price; items without one use the price you last quoted.
+- **Quote first:** **New Quotation** starts with *New event*: pick or add the customer, type event, date, venue and guests, and saving creates the booking too. *Existing booking* is still there. Guests typed in the quote update the booking.
+- **Statuses move by themselves:** sharing a draft quote marks it **Sent** and the booking **Follow-up**; marking it **Accepted** confirms the booking and offers **Create invoice**.
+- **Per-plate pricing by default:** item price boxes are hidden unless **Price each item** is ticked (remembered per device; quotes that already have item prices show them).
+- **Event page:** tap a customer name in Bookings (or an upcoming event on the Dashboard, or a booking in a customer's history) to see one page with a progress bar *Inquiry → Quoted → Confirmed → Invoiced → Paid*, the next step as a button, its quotations (edit, share, accept) and invoice (open, record payment).
 - **Packages + Menu Builder together:** pick package lines from Menu Builder, then use **Start from package** in a quotation to add its items with their prices and the package's per-plate rate (the booking's package is preselected).
 - **Simpler billing:** one **Save changes** bar for guest counts, extra charges, discounts and transport (with Discard). Single-day invoices take the **final guest count**. Statuses read Unpaid / Part paid / Paid.
 - **Safer money:** payment edits can't exceed the balance; deleting a payment on a completed booking sets it back to confirmed; invoice and quote numbers come from the database, so two phones never get the same number.

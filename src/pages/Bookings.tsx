@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useBookings, useUpdateBooking, useDeleteBooking } from '../hooks/useBookings';
 import { useTeamMembers } from '../hooks/useDataCenter';
@@ -10,6 +10,7 @@ import { useBookingValue } from '../hooks/useBookingValue';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import BookingFormModal from '../components/catering/BookingFormModal';
+import EventDetail from '../components/catering/EventDetail';
 import BookingCards, { dateRange } from '../components/catering/BookingCards';
 import BookingActions, { BookingHandlers, StatusSelect, cap } from '../components/catering/BookingActions';
 import { calendarUrl, promptCalendar, fmtTime } from '../components/catering/BookingCalendar';
@@ -45,12 +46,8 @@ const Bookings: React.FC<Props> = ({ onNavigate }) => {
   const [formFor, setFormFor] = useState<Booking | 'new' | null>(intent?.action === 'new' ? 'new' : null);
   const [presetCustomerId, setPresetCustomerId] = useState(intent?.action === 'new' ? intent.id : undefined);
 
-  // "open" intent: edit that booking once the list has loaded.
-  const openId = useRef(intent?.action === 'open' ? intent.id : undefined);
-  useEffect(() => {
-    const b = openId.current ? bookings.find(x => x.id === openId.current) : undefined;
-    if (b) { openId.current = undefined; setFormFor(b); }
-  }, [bookings]);
+  // "open" intent shows that event's page.
+  const [eventId, setEventId] = useState<string | null>(intent?.action === 'open' ? intent.id ?? null : null);
 
   const teamEmails = useMemo(() => teamMembers.map(t => t.email).filter(Boolean) as string[], [teamMembers]);
   const q = search.trim().toLowerCase();
@@ -83,6 +80,7 @@ const Bookings: React.FC<Props> = ({ onNavigate }) => {
   const handlers: BookingHandlers = {
     onStatus: handleStatus,
     onEdit: b => setFormFor(b),
+    onOpen: b => setEventId(b.id),
     onDelete: handleDelete,
     onQuote: onNavigate ? b => onNavigate('quotations', { action: 'new', id: b.id }) : undefined,
     onInvoice: onNavigate ? b => onNavigate('billing', { action: 'new', id: b.id }) : undefined,
@@ -133,7 +131,7 @@ const Bookings: React.FC<Props> = ({ onNavigate }) => {
                     {filtered.map(b => (
                       <tr key={b.id} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
                         <td style={td}>
-                          <div style={{ fontWeight: 500 }}>{b.customer?.name}</div>
+                          <button type="button" onClick={() => setEventId(b.id)} title="Open event" style={nameBtn}>{b.customer?.name}</button>
                           <div style={{ fontSize: 11, color: '#888880' }}>{b.customer?.phone}</div>
                         </td>
                         <td style={td}>{b.event_type}</td>
@@ -165,6 +163,9 @@ const Bookings: React.FC<Props> = ({ onNavigate }) => {
         )}
       </div>
 
+      {eventId && onNavigate && (
+        <EventDetail bookingId={eventId} onClose={() => setEventId(null)} onNavigate={onNavigate} onEdit={b => setFormFor(b)} />
+      )}
       {formFor && (
         <BookingFormModal
           booking={formFor === 'new' ? null : formFor}
@@ -184,6 +185,7 @@ const Bookings: React.FC<Props> = ({ onNavigate }) => {
 const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
 const emptyBox: React.CSSProperties = { ...card, padding: 40, textAlign: 'center', color: '#888880', fontSize: 13 };
 const td: React.CSSProperties = { padding: '10px 12px' };
+const nameBtn: React.CSSProperties = { background: 'none', border: 'none', padding: 0, fontWeight: 600, fontSize: 13, color: '#185FA5', cursor: 'pointer', textAlign: 'left' };
 const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
 const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
 const searchInp: React.CSSProperties = { flex: '1 1 220px', maxWidth: 320, padding: '7px 12px', borderRadius: 20, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };

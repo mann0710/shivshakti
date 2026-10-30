@@ -5,12 +5,11 @@ import BookingVenueInput from './BookingVenueInput';
 import { StatusSelect } from './BookingActions';
 import { Booking } from '../../types';
 import { useCreateBooking, useUpdateBooking } from '../../hooks/useBookings';
-import { useCustomers, useCreateCustomer } from '../../hooks/useCustomers';
+import { useCustomers } from '../../hooks/useCustomers';
+import { useResolveCustomer } from '../../hooks/useResolveCustomer';
 import { useMenus } from '../../hooks/useMenus';
 import { useEventTypes, useCreateEventType, DEFAULT_EVENTS } from '../../hooks/useDataCenter';
-import { inr, isValidPhone, cleanPhone } from '../../lib/money';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { inr } from '../../lib/money';
 
 const blank = {
   customer_id: '', newCustomerName: '', newCustomerPhone: '', customerEmail: '',
@@ -40,7 +39,7 @@ const BookingFormModal: React.FC<Props> = ({ booking, presetCustomerId, onClose,
   const { data: eventTypesList = [] } = useEventTypes();
   const createBooking = useCreateBooking();
   const updateBooking = useUpdateBooking();
-  const createCustomer = useCreateCustomer();
+  const resolveDraft = useResolveCustomer();
   const createEventType = useCreateEventType();
 
   const [form, setForm] = useState<Form>(() => (booking ? fromBooking(booking) : blank));
@@ -66,20 +65,9 @@ const BookingFormModal: React.FC<Props> = ({ booking, presetCustomerId, onClose,
   }, [booking, customers, presetCustomerId]);
 
   const resolveCustomer = async (): Promise<string | null> => {
-    if (form.customer_id) return form.customer_id;
-    const name = form.newCustomerName.trim();
-    const phone = form.newCustomerPhone.trim();
-    const email = form.customerEmail.trim();
-    if (!name) { toast.error('Select a customer or enter a new customer name'); return null; }
-    if (phone && !isValidPhone(phone)) { toast.error('Phone must be a 10-digit mobile number'); return null; }
-    if (email && !EMAIL_RE.test(email)) { toast.error('Enter a valid email address'); return null; }
-    const dup = phone ? customers.find(c => cleanPhone(c.phone ?? '') === cleanPhone(phone)) : undefined;
-    if (dup) toast(`Using existing customer ${dup.name}`);
-    const id = dup?.id ?? (await createCustomer.mutateAsync({
-      name, phone: phone ? cleanPhone(phone) : '', email: email || undefined,
-    })).id;
+    const id = await resolveDraft({ customerId: form.customer_id, name: form.newCustomerName, phone: form.newCustomerPhone, email: form.customerEmail });
     // Keep the id so a failed booking retry doesn't create the customer twice.
-    setForm(f => ({ ...f, customer_id: id }));
+    if (id) setForm(f => ({ ...f, customer_id: id }));
     return id;
   };
 

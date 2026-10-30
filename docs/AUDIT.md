@@ -105,6 +105,16 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | Business details hard-coded in PDFs | **Improved.** Centralised in `lib/shop.ts` (name, phone, email, SAC) |
 | No URL routing, phone Back left the app | **Fixed.** Hash routes per screen |
 
+## Quote and booking flow (owner feedback, checked on Kavit Mangrolya's event)
+
+| Finding | Status |
+|---|---|
+| A booking had to exist before a quote could be written | **Fixed.** Quote form creates customer + booking on save ("New event") |
+| Guest count lived only on the booking | **Fixed.** Guests are typed in the quote and copied to the booking |
+| Quote and booking statuses had to be kept in step by hand | **Fixed.** Share → Sent / Follow-up; Accepted → Confirmed (shared `useQuoteLifecycle`) |
+| Per-plate quotes showed ₹0 item prices | **Fixed.** Item prices hidden unless "Price each item" is on |
+| No single place to see where an event stands | **Fixed.** Event page with progress bar and next-step button (`EventDetail`, `lib/eventStage`) |
+
 ## Code quality
 
 | Finding | Status |

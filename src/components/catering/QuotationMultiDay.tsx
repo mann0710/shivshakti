@@ -16,6 +16,7 @@ interface Props {
   defaultDate: string;
   menuItems: PickerItem[];
   priceFor: (itemId: string) => number;
+  showPrices?: boolean;
 }
 
 const sumMeals = (meals: MealSlot[]) => meals.reduce((s, m) => s + m.subtotal, 0);
@@ -30,7 +31,7 @@ const withItems = (m: MealSlot, items: QuotationLineItem[]): MealSlot => {
 const smallInp: React.CSSProperties = { border: '1px solid #E5E5E0', borderRadius: 6, padding: '5px 7px', fontSize: 12, textAlign: 'right' };
 
 const QuotationMultiDay: React.FC<Props> = ({
-  eventDays, setEventDays, activeMealKey, setActiveMealKey, guestCount, defaultDate, menuItems, priceFor,
+  eventDays, setEventDays, activeMealKey, setActiveMealKey, guestCount, defaultDate, menuItems, priceFor, showPrices,
 }) => {
   const [draggedMeal, setDraggedMeal]       = useState<{ dayIdx: number; mealId: string } | null>(null);
   const [dragOverDayIdx, setDragOverDayIdx] = useState<number | null>(null);
@@ -246,7 +247,7 @@ const QuotationMultiDay: React.FC<Props> = ({
 
                     {isOpen && (
                       <div style={{ padding: 10, borderTop: '0.5px solid #F5E8D0', background: '#FFFCF8' }}>
-                        <QuotationItemPanels compact
+                        <QuotationItemPanels compact showPrices={showPrices}
                           menuItems={menuItems} items={meal.items}
                           selectedTitle="SELECTED FOR THIS MEAL" totalLabel="Items total → auto per plate"
                           onAdd={it => addItemToMeal(dayIdx, meal.id, it)}

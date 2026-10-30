@@ -8,6 +8,7 @@ export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export interface BookingHandlers {
   onStatus: (b: Booking, status: Booking['status']) => void;
   onEdit: (b: Booking) => void;
+  onOpen: (b: Booking) => void;
   onDelete: (b: Booking) => void;
   onQuote?: (b: Booking) => void;
   onInvoice?: (b: Booking) => void;

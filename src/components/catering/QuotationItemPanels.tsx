@@ -22,13 +22,14 @@ interface Props {
   selectedTitle: string;
   totalLabel: string;
   compact?: boolean;
+  showPrices?: boolean;
 }
 
 type Group = { subcategory: string; items: PickerItem[] };
 
 // Available menu items (searchable, grouped by category) beside the chosen items with prices.
 const QuotationItemPanels: React.FC<Props> = ({
-  menuItems, items, onAdd, onAmount, onRemove, onText, onReorder, onReset, selectedTitle, totalLabel, compact,
+  menuItems, items, onAdd, onAmount, onRemove, onText, onReorder, onReset, selectedTitle, totalLabel, compact, showPrices = true,
 }) => {
   const [search, setSearch] = useState('');
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -90,7 +91,7 @@ const QuotationItemPanels: React.FC<Props> = ({
                       onMouseEnter={e => (e.currentTarget.style.background = '#F5F5F0')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                       <span style={{ fontSize: fs, flex: 1 }}>{it.name}</span>
-                      {!!it.default_price && <span style={{ fontSize: 11, color: '#888880' }}>₹{it.default_price.toLocaleString('en-IN')}</span>}
+                      {showPrices && !!it.default_price && <span style={{ fontSize: 11, color: '#888880' }}>₹{it.default_price.toLocaleString('en-IN')}</span>}
                       <span style={{ background: '#E8750A', color: '#fff', borderRadius: 5, width: 22, height: 22, fontSize: 14, lineHeight: '22px', textAlign: 'center', flexShrink: 0 }}>+</span>
                     </button>
                   ))}
@@ -129,10 +130,12 @@ const QuotationItemPanels: React.FC<Props> = ({
                 <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>
                 <span style={{ fontSize: fs, flex: 1 }}>{it.item_name}</span>
                 {it.subcategory_name && <span className="hide-sm" style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
-                <span style={{ fontSize: 12, color: '#888880' }}>₹</span>
-                <input type="number" min="0" inputMode="decimal" value={it.amount || ''} placeholder="0"
-                  onChange={e => onAmount(it.item_id, parseFloat(e.target.value) || 0)}
-                  style={{ width: 76, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: fs, textAlign: 'right' }} />
+                {showPrices && <>
+                  <span style={{ fontSize: 12, color: '#888880' }}>₹</span>
+                  <input type="number" min="0" inputMode="decimal" value={it.amount || ''} placeholder="0"
+                    onChange={e => onAmount(it.item_id, parseFloat(e.target.value) || 0)}
+                    style={{ width: 76, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: fs, textAlign: 'right' }} />
+                </>}
                 <button onClick={() => onRemove(it.item_id)} aria-label="Remove item"
                   style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
               </div>
@@ -143,7 +146,7 @@ const QuotationItemPanels: React.FC<Props> = ({
             </div>
           ))}
         </div>
-        {items.length > 0 && (
+        {showPrices && items.length > 0 && (
           <div style={{ borderTop: '0.5px solid #E5E5E0', padding: '6px 12px', background: '#F9F8F5', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
             <span>{totalLabel}</span>
             <span style={{ fontWeight: 600 }}>₹{total.toLocaleString('en-IN')}</span>

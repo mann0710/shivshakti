@@ -99,7 +99,9 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
             </div>
             {upcoming.length === 0 && <div style={{ color: '#888880', fontSize: 12 }}>No upcoming bookings</div>}
             {upcoming.map(b => (
-              <div key={b.id} style={bookingRow}>
+              <div key={b.id} style={{ ...bookingRow, cursor: 'pointer' }} role="button" tabIndex={0} title="Open event"
+                onClick={() => onNavigate('bookings', { action: 'open', id: b.id })}
+                onKeyDown={e => e.key === 'Enter' && onNavigate('bookings', { action: 'open', id: b.id })}>
                 <Avatar name={b.customer?.name || '?'} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{b.customer?.name} — {b.event_type}</div>

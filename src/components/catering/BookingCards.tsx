@@ -23,7 +23,7 @@ const BookingCards: React.FC<Props> = ({ bookings, handlers }) => {
         <div key={b.id} className="list-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{b.customer?.name ?? '—'}</div>
+              <button type="button" onClick={() => handlers.onOpen(b)} style={{ background: 'none', border: 'none', padding: 0, fontWeight: 600, fontSize: 14, color: '#185FA5', cursor: 'pointer', textAlign: 'left' }}>{b.customer?.name ?? '—'} ›</button>
               {b.customer?.phone && <div style={{ fontSize: 12, color: '#888880' }}>{b.customer.phone}</div>}
             </div>
             <StatusPill status={b.status} />

@@ -3,25 +3,27 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { todayIST } from '../lib/ist';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBookings, useUpdateBooking } from '../hooks/useBookings';
+import { useBookings } from '../hooks/useBookings';
+import { useQuoteEvent } from '../hooks/useQuoteEvent';
+import { useQuoteLifecycle } from '../hooks/useQuoteLifecycle';
+import { useStoredState } from '../hooks/useStoredState';
 import { useMenuItemsFull } from '../hooks/useMenuBuilder';
 import { useItemPrices } from '../hooks/useItemPrices';
 import QuotationPackagePicker from '../components/catering/QuotationPackagePicker';
 import { useDataCenter } from '../hooks/useDataCenter';
 import {
   useQuotations, useCreateQuotation, useUpdateQuotation,
-  useUpdateQuotationStatus, useDeleteQuotation,
+  useDeleteQuotation,
   Quotation, QuotationLineItem, EventDay,
 } from '../hooks/useQuotations';
 import { downloadPDF, getDayNumber } from '../lib/pdf/quotationPdf';
-import { shareQuotation } from '../lib/quotationShare';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import QuotationList from '../components/catering/QuotationList';
 import QuotationItemPanels, { PickerItem, ItemTextField } from '../components/catering/QuotationItemPanels';
 import QuotationMultiDay, { genId } from '../components/catering/QuotationMultiDay';
 import QuotationCharges, { Charge, Discount } from '../components/catering/QuotationCharges';
-import QuotationBookingFields from '../components/catering/QuotationBookingFields';
+import QuotationEventFields from '../components/catering/QuotationEventFields';
 
 interface Props { onNavigate?: Navigate }
 
@@ -33,10 +35,12 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   const createQuotation = useCreateQuotation();
   const updateQuotation = useUpdateQuotation();
   const qc = useQueryClient();
-  const updateStatus    = useUpdateQuotationStatus();
   const deleteQuotation = useDeleteQuotation();
   const { confirm, dialog } = useConfirm();
-  const updateBooking = useUpdateBooking();
+  const ev = useQuoteEvent(bookings);
+  const lifecycle = useQuoteLifecycle(onNavigate);
+  // Per-plate pricing by default; item prices only when switched on (per device).
+  const [prefs, setPrefs] = useStoredState('shivshakti.quotePrefs', () => ({ itemPrices: false }));
   const intent = useNavIntent('quotations');
   const intentHandled = useRef(false);
   const formRef = useRef<HTMLDivElement>(null);
@@ -44,7 +48,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   // ── form state ────────────────────────────────────────────────────────────
   const [showForm, setShowForm]             = useState(false);
   const [editingId, setEditingId]           = useState<string | null>(null);
-  const [selectedBookingId, setSelectedBookingId] = useState('');
+  const selectedBookingId = ev.bookingId;
   const [selectedItems, setSelectedItems]   = useState<QuotationLineItem[]>([]);
   const [notes, setNotes]                   = useState('');
   const [perPlate, setPerPlate]             = useState('');
@@ -87,7 +91,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   const selectedBooking  = eligibleBookings.find(b => b.id === selectedBookingId)
     ?? bookings.find(b => b.id === selectedBookingId);
 
-  const guestCount  = selectedBooking?.guest_count || 0;
+  const guestCount  = parseInt(ev.guests, 10) || 0;
   const perPlateNum = parseFloat(perPlate) || 0;
   const subtotal    = perPlateNum * guestCount;
 
@@ -122,13 +126,16 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     it => it.is_active !== false && it.subcategory?.is_active !== false && it.subcategory?.category?.is_active !== false,
   ), [menuItems]);
 
-  const priceFor = useItemPrices(menuItems, quotations);
+  const lookupPrice = useItemPrices(menuItems, quotations);
+  const hasItemPrices = selectedItems.some(i => i.amount > 0) || eventDays.some(d => d.meals.some(m => m.items.some(i => i.amount > 0)));
+  const showPrices = prefs.itemPrices || hasItemPrices;
+  const priceFor = (itemId: string) => (showPrices ? lookupPrice(itemId) : 0);
 
   const itemsTotal = selectedItems.reduce((s, i) => s + (i.amount || 0), 0);
 
   useEffect(() => {
-    if (perPlateAutoRef.current) setPerPlate(itemsTotal > 0 ? String(itemsTotal) : '');
-  }, [itemsTotal]);
+    if (perPlateAutoRef.current && showPrices) setPerPlate(itemsTotal > 0 ? String(itemsTotal) : '');
+  }, [itemsTotal, showPrices]);
 
   const toggleMultiDay = (checked: boolean) => {
     setIsMultiDay(checked);
@@ -168,7 +175,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
 
   // ── form lifecycle ────────────────────────────────────────────────────────
   const resetForm = (keepOpen = false) => {
-    setEditingId(null); setSelectedBookingId(''); setSelectedItems([]);
+    setEditingId(null); ev.reset(); setSelectedItems([]);
     setNotes(''); setPerPlate('');
     setGstChecked(false); setSavedGstRate(null); setAdditionalDiscounts([]);
     setExtraCharges([]); setTransportationCharges([]);
@@ -181,7 +188,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
 
   const openEdit = (q: Quotation) => {
     setEditingId(q.id);
-    setSelectedBookingId(q.booking_id || '');
+    ev.selectBooking(q.booking_id || '', q.is_multi_day ? undefined : q.guest_count);
     setIsMultiDay(q.is_multi_day || false);
     if (q.is_multi_day && q.event_days?.length) {
       setEventDays(q.event_days.map(d => ({ ...d, day_number: getDayNumber(d.date, q.event_days!) })));
@@ -226,13 +233,13 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     }
     intentHandled.current = true;
     openCreate();
-    if (intent.id) setSelectedBookingId(intent.id);
+    if (intent.id) ev.selectBooking(intent.id);
   }, [intent, quotationsFetched]); // eslint-disable-line
 
   // ── save ──────────────────────────────────────────────────────────────────
-  const buildPayload = () => ({
-    customer_id:      selectedBooking?.customer_id || '',
-    booking_id:       selectedBookingId,
+  const buildPayload = (ids?: { bookingId: string; customerId: string }) => ({
+    customer_id:      ids?.customerId ?? selectedBooking?.customer_id ?? '',
+    booking_id:       ids?.bookingId ?? selectedBookingId,
     items:            isMultiDay ? [] : selectedItems,
     per_plate_amount: isMultiDay ? 0 : perPlateNum,
     guest_count:      isMultiDay ? 0 : guestCount,
@@ -255,7 +262,6 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   });
 
   const handleSave = async () => {
-    if (!selectedBookingId) { toast.error('Please select a booking'); return; }
     if (isMultiDay) {
       if (eventDays.length === 0) { toast.error('Add at least one occasion'); return; }
       for (let i = 0; i < eventDays.length; i++) {
@@ -268,8 +274,10 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
       if (selectedItems.length === 0) { toast.error('Please add at least one item'); return; }
     }
 
-    const payload = buildPayload();
     try {
+      const ids = await ev.resolve();
+      if (!ids) return;
+      const payload = buildPayload(ids);
       if (editingId) {
         // Editing keeps the current status (sent / accepted) instead of resetting to draft.
         const { status: _status, ...changes } = payload;
@@ -283,11 +291,12 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
       if (isMultiDay && eventDays.length > 0) {
         const maxDate = eventDays.map(d => d.date).filter(Boolean).sort().pop() || '';
         if (maxDate) {
-          const { error: endErr } = await supabase.from('bookings').update({ end_date: maxDate }).eq('id', selectedBookingId);
+          const { error: endErr } = await supabase.from('bookings').update({ end_date: maxDate }).eq('id', ids.bookingId);
           if (endErr) toast.error(`Quotation saved, but booking end date not updated: ${endErr.message}`);
           else qc.invalidateQueries({ queryKey: ['bookings'] });
         }
       }
+      if (!isMultiDay) await ev.syncGuests(ids.bookingId);
       resetForm();
     } catch (e: any) { toast.error(e?.message || 'Failed to save quotation'); }
   };
@@ -328,34 +337,6 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     } catch (e: any) { toast.error(e?.message || 'Failed to clone'); }
   };
 
-  const handleStatus = async (q: Quotation, status: string) => {
-    try { await updateStatus.mutateAsync({ id: q.id, status }); toast.success('Status updated'); }
-    catch { toast.error('Failed to update'); return; }
-    if (status === 'accepted') await afterAccept(q);
-  };
-
-  // Accepted quote: offer to confirm its booking, then jump straight to the invoice.
-  const afterAccept = async (q: Quotation) => {
-    const booking = bookings.find(b => b.id === q.booking_id);
-    if (!booking || booking.status === 'completed' || booking.status === 'cancelled') return;
-    if (booking.status !== 'confirmed') {
-      const ok = await confirm({ title: 'Confirm the booking too?', message: `${q.customer?.name ?? 'This customer'}'s ${booking.event_type} on ${booking.event_date} will be marked Confirmed, so you can invoice it.`, confirmLabel: 'Confirm booking' });
-      if (!ok) return;
-      try { await updateBooking.mutateAsync({ id: booking.id, status: 'confirmed' }); }
-      catch (e: any) { toast.error(e?.message || 'Could not confirm booking'); return; }
-    }
-    if (!onNavigate) return;
-    toast(t => (
-      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        Booking confirmed.
-        <button onClick={() => { toast.dismiss(t.id); onNavigate('billing', { action: 'new', id: booking.id }); }}
-          style={{ background: '#E8750A', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>
-          Create invoice →
-        </button>
-      </span>
-    ), { duration: 15000 });
-  };
-
   const isSaving = createQuotation.isPending || updateQuotation.isPending;
   const editingQuotation = editingId ? quotations.find(q => q.id === editingId) : undefined;
 
@@ -363,8 +344,8 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     ...buildPayload(),
     id: editingId || 'draft',
     quotation_number: editingQuotation?.quotation_number || 'DRAFT',
-    customer: selectedBooking?.customer || null,
-    booking: selectedBooking || null,
+    customer: selectedBooking?.customer || (ev.draft.name ? { name: ev.draft.name, phone: ev.draft.phone } : null),
+    booking: selectedBooking || { event_type: ev.draft.eventType, event_date: ev.draft.date, venue: ev.draft.venue, guest_count: guestCount },
     booking_id: selectedBookingId || undefined,
     issue_date: todayIST(),
     created_at: new Date().toISOString(),
@@ -372,7 +353,6 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
 
   // Form PDF and share use what is on screen, including unsaved edits.
   const withDraft = (fn: (q: Quotation) => void) => () => {
-    if (!selectedBookingId) { toast.error('Select a booking first'); return; }
     fn(buildDraftQuotation());
   };
 
@@ -397,21 +377,22 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
           </div>
 
           <div style={{ padding: '16px' }}>
-            <QuotationBookingFields
-              bookings={eligibleBookings} bookingId={selectedBookingId} onBooking={setSelectedBookingId}
-              booking={selectedBooking} foodType={foodType} onFoodType={setFoodType}
-              isMultiDay={isMultiDay} onMultiDay={toggleMultiDay} />
+            <QuotationEventFields
+              ev={ev} bookings={eligibleBookings} editing={!!editingId}
+              foodType={foodType} onFoodType={setFoodType}
+              isMultiDay={isMultiDay} onMultiDay={toggleMultiDay}
+              itemPrices={showPrices} onItemPrices={v => setPrefs({ itemPrices: v })} lockItemPrices={hasItemPrices} />
 
             {isMultiDay ? (
               <QuotationMultiDay
                 eventDays={eventDays} setEventDays={setEventDays}
                 activeMealKey={activeMealKey} setActiveMealKey={setActiveMealKey}
                 guestCount={guestCount} defaultDate={selectedBooking?.event_date || ''}
-                menuItems={activeItems} priceFor={priceFor} />
+                menuItems={activeItems} priceFor={priceFor} showPrices={showPrices} />
             ) : (
               <>
                 <QuotationPackagePicker menuItems={activeItems} bookingMenuId={selectedBooking?.menu_id} onApply={applyPackage} />
-                <QuotationItemPanels
+                <QuotationItemPanels showPrices={showPrices}
                   menuItems={activeItems} items={selectedItems}
                   selectedTitle="SELECTED ITEMS" totalLabel="Items Total"
                   onAdd={addItem}
@@ -461,14 +442,14 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
 
             {/* PDF + share of what is on screen */}
             <div style={{ marginTop: 14, padding: '10px 14px', background: '#F5F8FF', border: '0.5px solid #B8C8F4', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', userSelect: 'none', marginRight: 'auto' }}>
+              <label style={{ display: showPrices ? 'flex' : 'none', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', userSelect: 'none', marginRight: 'auto' }}>
                 <input type="checkbox" checked={pdfWithPrices} onChange={e => setPdfWithPrices(e.target.checked)}
                   style={{ accentColor: '#E8750A', width: 14, height: 14 }} />
                 <span>Include item prices in PDF</span>
               </label>
-              <button onClick={withDraft(q => downloadPDF(q, pdfWithPrices))} style={{ ...btnSmall, background: '#378ADD' }}>⬇ Download PDF</button>
+              <button onClick={withDraft(q => downloadPDF(q, showPrices && pdfWithPrices))} style={{ ...btnSmall, background: '#378ADD' }}>⬇ Download PDF</button>
               {editingId && (
-                <button onClick={withDraft(q => { shareQuotation(q, pdfWithPrices); })} style={{ ...btnSmall, background: '#1DA851' }}>📤 Share</button>
+                <button onClick={withDraft(q => { lifecycle.share(q, showPrices && pdfWithPrices); })} style={{ ...btnSmall, background: '#1DA851' }}>📤 Share</button>
               )}
             </div>
 
@@ -485,11 +466,11 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
       <QuotationList
         quotations={quotations}
         onPdf={q => downloadPDF(q)}
-        onShare={q => { shareQuotation(q); }}
+        onShare={q => { lifecycle.share(q); }}
         onEdit={openEdit}
         onClone={handleClone}
         onDelete={handleDelete}
-        onStatus={handleStatus} />
+        onStatus={lifecycle.setStatus} />
 
       {dialog}
     </div>
