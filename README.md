@@ -62,15 +62,15 @@ Run [`supabase/migrations/20261103_backfill_advances.sql`](supabase/migrations/2
 
 ### Pre-booking pickup / delivery and hand-over payments
 
-Run [`supabase/migrations/20261104_preorder_fulfillment.sql`](supabase/migrations/20261104_preorder_fulfillment.sql) (adds `fulfillment`, `delivered_at`, `balance_paid`, `balance_mode` to `seasonal_preorders`; safe to re-run). Until it is run, the app skips these fields: pickup/delivery is guessed from the address, and the hand-over payment mode overwrites the advance mode as before. **Not yet applied on the live project.**
+Run [`supabase/migrations/20261104_preorder_fulfillment.sql`](supabase/migrations/20261104_preorder_fulfillment.sql) (adds `fulfillment`, `delivered_at`, `balance_paid`, `balance_mode` to `seasonal_preorders`; safe to re-run). Until it is run, the app skips these fields: pickup/delivery is guessed from the address, and the hand-over payment mode overwrites the advance mode as before. Applied on the live project on 31 Oct 2026.
 
 ### Document settings
 
-Run [`supabase/migrations/20261105_doc_settings.sql`](supabase/migrations/20261105_doc_settings.sql) (adds `data_center.doc_settings`; safe to re-run). Until it is run, Data Center → Documents shows a notice and every document uses the defaults. **Not yet applied on the live project.**
+Run [`supabase/migrations/20261105_doc_settings.sql`](supabase/migrations/20261105_doc_settings.sql) (adds `data_center.doc_settings`; safe to re-run). Until it is run, Data Center → Documents shows a notice and every document uses the defaults. Applied on the live project on 31 Oct 2026.
 
 ### Quotation options and price ranges
 
-Run [`supabase/migrations/20261106_quote_options.sql`](supabase/migrations/20261106_quote_options.sql) (adds `option_group`, `option_label`, `option_name`, `per_plate_max`, `total_max` to `quotations`; safe to re-run). Until it is run, "+ Add option" stays hidden and price ranges are not stored (choice groups still work, inside the dishes). **Not yet applied on the live project.**
+Run [`supabase/migrations/20261106_quote_options.sql`](supabase/migrations/20261106_quote_options.sql) (adds `option_group`, `option_label`, `option_name`, `per_plate_max`, `total_max` to `quotations`; safe to re-run). Until it is run, "+ Add option" stays hidden and price ranges are not stored (choice groups still work, inside the dishes). Applied on the live project on 31 Oct 2026, after copying `seasonal_preorders`, `data_center` and `quotations` into the `backup_20261031` schema (not exposed to the API, RLS on; drop it once you are happy).
 
 ### PDF service (Vercel)
 
