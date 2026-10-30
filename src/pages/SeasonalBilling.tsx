@@ -39,7 +39,7 @@ const SeasonalBilling: React.FC = () => {
   ];
 
   return (
-    <div>
+    <div className={tab === 'pos' ? 'pos-screen' : undefined}>
       <div className="page-topbar">
         <div>
           <div style={{ fontSize: 16, fontWeight: 600 }}>Sweets POS</div>

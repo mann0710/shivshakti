@@ -126,6 +126,7 @@ The grid-and-bill layout follows NodeDR POS.
 - **Customers:** walk-in by default. Name and mobile are required only for unpaid bills and pre-bookings. Typing a name or number suggests saved customers. New customers with a valid mobile are saved automatically.
 - **Counter bill / Pre-booking** toggle on the same screen. Pre-bookings take **Pickup from shop / Home delivery** (delivery needs the address), a date (defaults to tomorrow), an advance and the advance mode.
 - After saving: **Print** (bills: 80 mm thermal receipt; pre-bookings: a full A4 slip with customer, hand-over, items, advance, amount paid at hand-over, balance and signature lines), **WhatsApp** and **New bill**.
+- On computers and tablets the POS fills the screen: the item grid and the bill run to the bottom and only their lists scroll.
 - The bill in progress survives a page refresh. Phones get a sticky bar with the item count, total and "View bill".
 - **Bills tab:**
   - today's sales split into cash, UPI and unpaid;

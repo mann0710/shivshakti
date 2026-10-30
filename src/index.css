@@ -272,3 +272,14 @@ a { color: inherit; }
   .qcal-num { width: 100%; justify-content: center; }
   .qcal-num em { display: none; }
 }
+
+/* POS fills the screen: the item grid and the bill stretch to the bottom; only their lists scroll. */
+@media (min-width: 769px) {
+  .pos-screen { height: 100%; display: flex; flex-direction: column; }
+  .pos-screen > .page-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .pos-screen .pos-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .pos-screen .pos-layout { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+  .pos-screen .pos-layout > .pos-panel { min-height: 0; overflow: hidden; }
+  .pos-screen .pos-tiles { flex: 1; min-height: 0; max-height: none; align-content: start; }
+  .pos-screen .pos-layout > .pos-ticket { position: static; max-height: none; height: 100%; overflow: auto; }
+}
