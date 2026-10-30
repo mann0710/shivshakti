@@ -148,6 +148,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | Several quotes on one day: warn, don't block | **Done.** Same-day / venue warning in the form; only confirmed bookings block each other |
 | Calendar view of quotes | **Done.** Quotations → Calendar with day panel and "New quote on this day" |
 | Typing your own plate price dropped the alternatives' price range; price table showed ₹0 rows and a "Plate price adjustment" line | **Fixed.** Typed price = menu as listed, alternatives move it (`ownRange`); ₹0 rows hidden; own price prints one catering line |
+| ₹ printed as a box in big amounts (option prices, total band, payment steps) on server PDFs | **Fixed.** Heading stack `HEAD_FONT` falls back to Noto Sans for ₹ (Outfit has no ₹; the server has no system fonts) |
 | Downloading Option A gave one PDF with A and B, with payment steps only as percentages; list showed options as separate rows | **Fixed.** Per-option PDF/share (exact amounts) and an "all options" PDF with per-option payment amounts; list has a master row per enquiry with options under it (`lib/quoteGroups`) |
 | Choice groups were hard to understand on first use (tick dishes, then Group) | **Fixed.** "+ Alternative" on each dish, "Customer chooses 1 of 2" box with OR, Picked ticks, box sits where the dish was |
 | `Quotations.tsx` would pass 500 lines | **Fixed.** Form state moved to `useQuoteForm`; new pieces are separate components |

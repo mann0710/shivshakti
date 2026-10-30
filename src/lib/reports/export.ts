@@ -1,6 +1,6 @@
 import { Report, Range, Table, Cell, Fmt, fmtCell, isNum, rangeLabel } from './model';
 import { printHtml } from '../receipt';
-import { esc, page } from '../docs/theme';
+import { esc, page, HEAD_FONT } from '../docs/theme';
 import { slimHeader, sectionHead } from '../docs/parts';
 import { DocContext, docContext } from '../docs/context';
 import { SHOP } from '../shop';
@@ -60,7 +60,7 @@ export function reportHtml(r: Report, range: Range, ctx: DocContext = docContext
 @page { margin: 12mm 0; } @page :first { margin-top: 0; }
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; break-inside: avoid; }
 .tile { border: 1px solid #E3E3EA; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
-.tile b { font-family: Outfit, sans-serif; font-size: 19px; }
+.tile b { font-family: ${HEAD_FONT}; font-size: 19px; }
 section { margin-top: 18px; } table.t td { padding: 5px 10px; font-size: 12px; } table.t th { padding: 6px 10px; }`);
 }
 

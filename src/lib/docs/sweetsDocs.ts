@@ -1,6 +1,6 @@
 import type { ReceiptData } from '../receipt';
 import { DocContext, docContext } from './context';
-import { page, esc, money } from './theme';
+import { page, esc, money, HEAD_FONT } from './theme';
 import { header, signatures, sumRows, SumRow } from './parts';
 import { formatLineSize, formatSize, unitFromLine } from '../units';
 import { SHOP } from '../shop';
@@ -30,13 +30,13 @@ export function billHtml(r: ReceiptData, ctx: DocContext = docContext()): string
 body { width: 72mm; max-width: 72mm; margin: 0 auto; box-shadow: none; font-size: 12.5px; color: #000; }
 .bill { padding: 4px 2px; display: flex; flex-direction: column; gap: 10px; }
 .bill header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1px; font-size: 11px; }
-.wm { font-family: Outfit, sans-serif; font-size: 22px; letter-spacing: 1px; } .tag { letter-spacing: 2px; }
+.wm { font-family: ${HEAD_FONT}; font-size: 22px; letter-spacing: 1px; } .tag { letter-spacing: 2px; }
 .row { display: flex; justify-content: space-between; gap: 8px; } .rt { text-align: right; }
 .dash { border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 7px 0; } .no { font-size: 14px; }
 .occ { text-align: center; font-weight: 600; }
 .lines { display: flex; flex-direction: column; gap: 7px; }
 .totals { border-top: 1px dashed #000; padding-top: 7px; display: flex; flex-direction: column; gap: 3px; }
-.tot { border-top: 2px solid #000; margin-top: 4px; padding-top: 6px; align-items: baseline; } .t { font-family: Outfit, sans-serif; font-size: 24px; }
+.tot { border-top: 2px solid #000; margin-top: 4px; padding-top: 6px; align-items: baseline; } .t { font-family: ${HEAD_FONT}; font-size: 24px; }
 .note { font-size: 11.5px; }
 .bill footer { border-top: 1px dashed #000; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; text-align: center; }`);
 }
@@ -79,7 +79,7 @@ ${ctx.settings.slip_stub ? `<div class="stub"><span class="cut">Cut here — cou
   return page(`Pre-booking ${r.number} - ${r.customer_name}`, ctx.settings.accent, body, `
 @page { margin: 10mm 0; } @page :first { margin-top: 0; }
 .when { background: #FFF4E5; border: 1px solid #F3C98B; border-radius: 10px; padding: 12px 16px; display: flex; flex-direction: column; gap: 3px; color: #8A4B00; font-size: 12px; }
-.when b { font-family: Outfit, sans-serif; font-size: 22px; }
+.when b { font-family: ${HEAD_FONT}; font-size: 22px; }
 .stub { margin-top: 34px; border-top: 2px dashed #9A9AAA; padding: 18px 13mm 10px; background: #FAFAFC; position: relative; break-inside: avoid; display: flex; flex-direction: column; gap: 10px; }
 .cut { position: absolute; top: -10px; left: 13mm; background: #fff; padding: 0 8px; font-size: 11px; color: #5C5C6B; }
 .stub-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 150px 110px; gap: 16px; align-items: center; }

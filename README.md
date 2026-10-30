@@ -216,7 +216,7 @@ One look ("Navy & Leaf", from the logo) for everything that is printed or shared
 - **Reports:** the same header, headline tiles and tables.
 - **Data Center → Documents:** accent colour, shop address, UPI ID, bank details, contact person, quote validity, payment schedule (must add up to 100%), "on request" list, terms, and switches for the QR codes, invoice payments, invoice menu page and the slip stub, plus the bill footer line.
 - **Menu layout on paper:** courses follow the order you arranged the dishes in; dal, rice, breads, sabji / shaak, kathod and kadhi are grouped under **Main Course** (each as a sub-heading); "Including" / accompaniments always come last; a chutney is printed as "Served with …" under the farsan or starter (a "Served with" you type yourself always wins); "choose any" alternatives print inside their own course.
-- Gujarati names print correctly (Noto Sans Gujarati); amounts use the real ₹ sign.
+- Gujarati names print correctly (Noto Sans Gujarati); amounts use the real ₹ sign — headings and big amounts use Outfit, which has no ₹, so the sign always comes from Noto Sans (`HEAD_FONT` in `lib/docs/theme.ts`); the PDF server has no other fonts to fall back on.
 
 ## Catering fixes in this release
 
