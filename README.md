@@ -58,7 +58,7 @@ Run [`supabase/migrations/20261102_doc_numbers.sql`](supabase/migrations/2026110
 
 ### Older advances
 
-Run [`supabase/migrations/20261103_backfill_advances.sql`](supabase/migrations/20261103_backfill_advances.sql) once: invoices made before payment history existed kept the advance only as a total. This gives each a payment row so it shows in history. (The app also does this automatically the first time such an invoice is saved or paid, so the advance is never lost.)
+Run [`supabase/migrations/20261103_backfill_advances.sql`](supabase/migrations/20261103_backfill_advances.sql) once: invoices made before payment history existed kept the advance only as a total. This gives each a payment row so it shows in history. (The app also does this automatically the first time such an invoice is saved or paid, so the advance is never lost.) Applied on the live project on 30 Oct 2026.
 
 ### Item prices and customer GSTIN
 
