@@ -8,7 +8,6 @@ import Customers from './pages/Customers';
 import Menus from './pages/Menus';
 import Billing from './pages/Billing';
 import Finance from './pages/Finance';
-import CalendarPage from './pages/CalendarPage';
 import DataCenter from './pages/DataCenter';
 import MenuBuilder from './pages/MenuBuilder';
 import Quotations from './pages/Quotations';
@@ -17,7 +16,7 @@ import SeasonalBilling from './pages/SeasonalBilling';
 import SeasonalOccasions from './pages/SeasonalOccasions';
 import SeasonalDashboard from './pages/SeasonalDashboard';
 import SeasonalCustomers from './pages/SeasonalCustomers';
-import { Page, NAV_ITEMS, SECTIONS, PINNED, isPage } from './components/navItems';
+import { Page, NAV_ITEMS, SECTIONS, PINNED, isPage, navPage } from './components/navItems';
 import { setNavIntent, NavIntent } from './hooks/useNavIntent';
 import { useAuth } from './hooks/useAuth';
 import { useDocContextSync } from './hooks/useDocSettings';
@@ -67,12 +66,12 @@ function App() {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':   return <Dashboard onNavigate={navigate} />;
-      case 'bookings':    return <Bookings onNavigate={navigate} />;
+      case 'bookings':    return <Bookings key="bookings" onNavigate={navigate} />;
       case 'customers':   return <Customers onNavigate={navigate} />;
       case 'menus':       return <Menus />;
       case 'billing':     return <Billing onNavigate={navigate} />;
       case 'finance':     return <Finance />;
-      case 'calendar':    return <CalendarPage onNavigate={navigate} />;
+      case 'calendar':    return <Bookings key="calendar" onNavigate={navigate} startView="calendar" />;
       case 'datacenter':  return <DataCenter />;
       case 'menubuilder': return <MenuBuilder />;
       case 'quotations':        return <Quotations onNavigate={navigate} />;
@@ -100,7 +99,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <DocContextSync />
       <div className="app-layout">
-        <Sidebar currentPage={currentPage} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
+        <Sidebar currentPage={navPage(currentPage)} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
         <main className="app-main">
           {renderPage()}
         </main>
@@ -111,12 +110,12 @@ function App() {
         {PINNED.map(item => (
           <div
             key={item.page}
-            className={`bn-item${currentPage === item.page ? ' active' : ''}`}
+            className={`bn-item${navPage(currentPage) === item.page ? ' active' : ''}`}
             onClick={() => navigate(item.page)}
           >
             <span className="bn-icon">{item.icon}</span>
             <span className="bn-label">{item.label}</span>
-            {currentPage === item.page && <span className="bn-dot" />}
+            {navPage(currentPage) === item.page && <span className="bn-dot" />}
           </div>
         ))}
         {/* Hamburger */}
@@ -162,12 +161,12 @@ function App() {
                         style={{
                           display: 'flex', flexDirection: 'column', alignItems: 'center',
                           gap: 4, padding: '10px 6px', borderRadius: 10, cursor: 'pointer',
-                          background: currentPage === item.page ? '#FFF3E8' : '#F9F8F5',
-                          border: currentPage === item.page ? '1px solid #E8750A' : '1px solid transparent',
+                          background: navPage(currentPage) === item.page ? '#FFF3E8' : '#F9F8F5',
+                          border: navPage(currentPage) === item.page ? '1px solid #E8750A' : '1px solid transparent',
                         }}
                       >
                         <span style={{ fontSize: 20 }}>{item.icon}</span>
-                        <span style={{ fontSize: 11, fontWeight: currentPage === item.page ? 600 : 400, color: currentPage === item.page ? '#E8750A' : '#444440', textAlign: 'center', lineHeight: 1.2 }}>
+                        <span style={{ fontSize: 11, fontWeight: navPage(currentPage) === item.page ? 600 : 400, color: navPage(currentPage) === item.page ? '#E8750A' : '#444440', textAlign: 'center', lineHeight: 1.2 }}>
                           {item.label}
                         </span>
                       </div>

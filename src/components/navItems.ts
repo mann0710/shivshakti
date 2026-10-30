@@ -14,7 +14,6 @@ export const NAV_ITEMS: NavItem[] = [
   { page: 'menubuilder',        icon: '🏗', label: 'Menu Builder',        section: 'Operations', color: '#9B59B6' },
   { page: 'menus',              icon: '🍽', label: 'Packages',            section: 'Operations', color: '#7F77DD' },
   { page: 'finance',            icon: '📊', label: 'Finance & Analytics', section: 'Operations', color: '#0F6E56' },
-  { page: 'calendar',           icon: '📅', label: 'Calendar',            section: 'Operations', color: '#D4537E' },
   { page: 'seasonal_dashboard', icon: '🏪', label: 'Sessional Dashboard', section: 'Sessional',  color: '#7B1FA2' },
   { page: 'seasonal_billing',   icon: '🍬', label: 'Sweets POS',          section: 'Sessional',  color: '#D4537E' },
   { page: 'seasonal_items',     icon: '🪔', label: 'Sessional Items',     section: 'Sessional',  color: '#E67E22' },
@@ -30,7 +29,9 @@ export const PINNED: { page: Page; icon: string; label: string }[] = [
   { page: 'dashboard',        icon: '🏠', label: 'Home' },
   { page: 'seasonal_billing', icon: '🍬', label: 'POS' },
   { page: 'quotations',       icon: '📝', label: 'Quotes' },
-  { page: 'calendar',         icon: '📅', label: 'Calendar' },
+  { page: 'bookings',         icon: '📋', label: 'Bookings' },
 ];
 
-export const isPage = (p: string | null): p is Page => !!p && NAV_ITEMS.some(i => i.page === p);
+// "calendar" still opens: it is Bookings in calendar view.
+export const isPage = (p: string | null): p is Page => !!p && (p === 'calendar' || NAV_ITEMS.some(i => i.page === p));
+export const navPage = (p: Page): Page => (p === 'calendar' ? 'bookings' : p);

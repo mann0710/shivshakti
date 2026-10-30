@@ -3,7 +3,7 @@ import Modal from '../ui/Modal';
 import StatusPill from '../StatusPill';
 import EventStepper from './EventStepper';
 import PaymentFormModal from './PaymentFormModal';
-import { dateRange } from './BookingCards';
+import { dateRangeText as dateRange } from '../../lib/bookingBoard';
 import { useBookings } from '../../hooks/useBookings';
 import { useQuotations } from '../../hooks/useQuotations';
 import { useInvoices } from '../../hooks/useInvoices';

@@ -28,12 +28,13 @@ const fromBooking = (b: Booking): Form => ({
 interface Props {
   booking: Booking | null; // null = new booking
   presetCustomerId?: string;
+  presetDate?: string;     // "+ New booking on 25 Nov" from the calendar
   onClose: () => void;
   onSaved: (b: Booking, confirmedNow: boolean) => void;
 }
 
 // One form for both "New Booking" and "Edit Booking".
-const BookingFormModal: React.FC<Props> = ({ booking, presetCustomerId, onClose, onSaved }) => {
+const BookingFormModal: React.FC<Props> = ({ booking, presetCustomerId, presetDate, onClose, onSaved }) => {
   const { data: customers = [] } = useCustomers();
   const { data: menus = [] } = useMenus();
   const { data: eventTypesList = [] } = useEventTypes();
@@ -42,7 +43,7 @@ const BookingFormModal: React.FC<Props> = ({ booking, presetCustomerId, onClose,
   const resolveDraft = useResolveCustomer();
   const createEventType = useCreateEventType();
 
-  const [form, setForm] = useState<Form>(() => (booking ? fromBooking(booking) : blank));
+  const [form, setForm] = useState<Form>(() => (booking ? fromBooking(booking) : { ...blank, event_date: presetDate || '' }));
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm(f => ({ ...f, [k]: v }));
 

@@ -172,11 +172,22 @@ The phone bottom bar now has a **POS** button.
 - **Real amounts everywhere:** bookings, calendar, customer cards and Finance show the invoice total, else the chosen quotation, instead of a ₹0 package estimate.
 - **Bookings:** the same venue can't be double-booked across overlapping multi-day dates. Customer cards show the next upcoming event.
 - **GST-ready invoices:** with GST on, the PDF is titled **Tax Invoice** and shows the SAC code (996334), the customer's GSTIN (add it on the customer), CGST + SGST halves (IGST when the customer's GSTIN is from another state) and the amount in words. Billing shows the same split.
-- **Packages** can be reactivated ("Show inactive"). The Calendar day panel scrolls into view on phones and has a "+ New booking" shortcut.
+- **Packages** can be reactivated ("Show inactive"). The calendar (now inside Bookings) has a "+ New booking on this day" shortcut.
 - **Quote → booking → invoice:** marking a quotation Accepted offers to confirm its booking, then shows "Create invoice →". Confirmed bookings also have an **Invoice** button that opens the invoice form with that booking selected.
 - **GST stays as issued:** editing an old quotation or invoice keeps the GST rate it was issued at, even if the Data Center rate has changed since.
 - **Long lists are complete:** customers, bookings, quotations, invoices, payments and sweets load page by page, so nothing silently drops after 1,000 rows.
 - **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked.
+
+## Bookings: list, calendar and pipeline
+
+One screen, three views (the switch at the top remembers your choice; on phones it sits under the title):
+
+- **List** (default): **Upcoming** · **Needs attention** · **Past** · **Cancelled** tabs instead of six status chips. Events are grouped by month, soonest first. Each row shows the date, customer · event, time · guests · venue, the value (a quote range while choices are open), one stage chip (Inquiry → Quoted → Confirmed → Invoiced → Paid) and **one next-step button**: Make quotation, Pick farsan & accept, Mark accepted, Create invoice, Record payment, Mark completed or Close as lost. Everything else — open event page, edit, quote, invoice, kitchen menu PDF, WhatsApp, call, Google Calendar, change status, delete — is in the **⋯** menu. Missing guest counts show in amber.
+- **Needs attention:** past events still marked Inquiry / Quoted / Confirmed, or invoiced with a balance. A banner on Upcoming counts them; one tap closes each (completed, paid, or closed as lost).
+- **Summary tiles** (desktop): upcoming events and the next one, confirmed value, and how many next steps are waiting (invoices, quotes, decisions, payments, to close).
+- **Calendar:** a month coloured by stage (dots on phones), multi-day events on each of their days, today highlighted. Tap a day to see its events with meals (multi-day quotes), food type, next step, **Menu PDF** and ⋯, plus **+ New booking on that day** (the form opens on that date). The old Calendar page is folded in: the phone bar's **Bookings** button and any "Calendar" link open this view.
+- **Pipeline:** columns Inquiry → Quoted → Confirmed → Invoiced → Paid (last 60 days) with counts and totals; past-dated cards are flagged "Date passed" with the step that closes them.
+- Search (name, phone, venue, event) works in all three views. Design: the "Shiv Shakti Bookings Redesign" canvas.
 
 ## Quotation options, "choose any" dishes and the quote calendar
 
@@ -278,6 +289,8 @@ src/
   lib/quoteChoices.ts, quoteOptions.ts   choose-any groups, price ranges, accepting picks; options, same-day note, quote dates
   lib/quoteGroups.ts                     list grouping: options under one enquiry, group total and status
   hooks/useQuoteForm.ts, useAcceptFlow.tsx   quotation form state and totals; accept with option + picks
+  lib/bookingBoard.ts                    Bookings brain: tab, stage, one next step, month groups, stats, pipeline columns
+  components/catering/BookingAgenda, BookingMonth, BookingPipeline, BookingMenu, BookingBits   the three Bookings views, the ⋯ menu, shared chips
   components/catering/QuotationCalendar, QuotationOptionsBar, QuotationChoiceGroup, AlternativePicker, QuoteAcceptDialog, QuotationList, QuotationRowParts
   lib/docs/                         printed documents: theme, parts, menu blocks, quotation, invoice/event menu, sweets, settings, QR, output (PDF service → download/share, print fallback)
   api/pdf.js                        PDF service (Vercel function, headless Chrome)
