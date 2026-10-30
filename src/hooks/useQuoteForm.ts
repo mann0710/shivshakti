@@ -251,7 +251,7 @@ export const useQuoteForm = () => {
     transportationCharges, setTransportationCharges, foodType, setFoodType, optionName, setOptionName,
     isMultiDay, toggleMultiDay, eventDays, setEventDays, activeMealKey, setActiveMealKey, totals,
     showPrices, hasItemPrices, priceFor, setItemPricesPref: (v: boolean) => setPrefs({ itemPrices: v }),
-    resetForm, openCreate, openEdit, handleSave, draftQuotation, createQuotation, updateQuotation,
+    toLine, resetForm, openCreate, openEdit, handleSave, draftQuotation, createQuotation, updateQuotation,
   };
 };
 

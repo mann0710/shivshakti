@@ -164,7 +164,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
                   onText={(id, field: ItemTextField, value) => f.patchItem(id, { [field]: value })}
                   onReorder={f.reorderItems}
                   onReset={() => f.setSelectedItems([])}
-                  onChoice={f.setSelectedItems} />
+                  onChoice={f.setSelectedItems} toLine={f.toLine} />
 
                 <div style={{ marginTop: 14, background: '#F9F8F5', borderRadius: 10, padding: '12px 16px', border: '0.5px solid #E5E5E0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#666', whiteSpace: 'nowrap' }}>

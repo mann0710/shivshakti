@@ -181,8 +181,8 @@ The phone bottom bar now has a **POS** button.
 
 - **Calendar view** (Quotations → Calendar): a month of quotes by event date, coloured by status (draft, sent, accepted, not chosen / rejected). Tap a day for its quotes, a busy-day note and **+ New quote on this day** (the date is filled in). On phones the days show dots and the list sits below.
 - **Several quotes on one day are allowed.** The form warns when the date already has other quotes or the venue is booked by a confirmed event, but never blocks. Only two *confirmed* bookings at the same venue and date are refused.
-- **"Choose any N of M" groups:** in the selected dishes, tap **+ Choose-any group**, tick the dishes and **Group**. Set how many the customer picks.
-  - With item prices, the plate price becomes a **range** (cheapest to dearest picks) until the customer chooses; tick **Included in the plate price** to keep the dishes as free choices.
+- **Alternatives ("customer chooses"):** tap **+ Alternative** beside any selected dish (e.g. Churma Na Ladoo), search, and tap **Offer** on the other dish — dishes from the same course are suggested first, and dishes already in the menu can be moved in. They show as one box, "Customer chooses 1 of 2", joined by **OR**; **+ Add another alternative** adds more, and with three or more you can set how many they choose. Tap **Picked?** on a dish to record what the customer chose (works on accepted quotes too); **Remove choice** keeps all the dishes without a choice.
+  - With item prices, the plate price becomes a **range** (cheapest to dearest picks) until the customer chooses; tick **Same price whatever they pick** to keep the dishes as free choices.
   - **Fixed plate price** (beside Per Plate) quotes one price whatever they pick.
   - Works in single-day menus and in every meal of a multi-day event.
 - **Options A / B / C:** on a saved quotation, **+ Add option** copies it as the next option of the same enquiry, with its own menu, price and name (e.g. Classic, Premium). Tabs switch between options; the list keeps them together.
@@ -268,7 +268,7 @@ src/
   hooks/useReportData.ts            data for one report period
   lib/quoteChoices.ts, quoteOptions.ts   choose-any groups, price ranges, accepting picks; options, same-day note, quote dates
   hooks/useQuoteForm.ts, useAcceptFlow.tsx   quotation form state and totals; accept with option + picks
-  components/catering/QuotationCalendar, QuotationOptionsBar, QuotationChoiceGroup, QuoteAcceptDialog
+  components/catering/QuotationCalendar, QuotationOptionsBar, QuotationChoiceGroup, AlternativePicker, QuoteAcceptDialog
   lib/docs/                         printed documents: theme, parts, menu blocks, quotation, invoice/event menu, sweets, settings, QR, output (PDF service → download/share, print fallback)
   api/pdf.js                        PDF service (Vercel function, headless Chrome)
   components/DocSettingsCard.tsx    Data Center → Documents

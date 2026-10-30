@@ -53,6 +53,43 @@ export const assignGroup = (items: QuotationLineItem[], itemId: string, meta: Ch
 export const ungroup = (items: QuotationLineItem[], id: string) =>
   items.map(i => (i.choice?.id === id ? { ...i, choice: undefined, chosen: undefined } : i));
 
+// A group needs two dishes; one left over goes back to a normal dish, and "choose N" never exceeds the dishes.
+export function tidyGroups(items: QuotationLineItem[]): QuotationLineItem[] {
+  const sizes = new Map(choiceGroups(items).map(g => [g.meta.id, g.items.length]));
+  return items.map(i => {
+    if (!i.choice) return i;
+    const n = sizes.get(i.choice.id) ?? 0;
+    if (n < 2) return { ...i, choice: undefined, chosen: undefined };
+    return i.choice.pick > n ? { ...i, choice: { ...i.choice, pick: n } } : i;
+  });
+}
+
+// Puts `alt` beside the target dish (or into the target group) as an alternative; `alt` may already be in the menu.
+export function addAlternative(items: QuotationLineItem[], target: { itemId?: string; groupId?: string }, alt: QuotationLineItem): QuotationLineItem[] {
+  let meta = target.groupId ? items.find(i => i.choice?.id === target.groupId)?.choice : undefined;
+  let next = items.filter(i => i.item_id !== alt.item_id);
+  if (!meta) {
+    const base = items.find(i => i.item_id === target.itemId);
+    if (!base || base.item_id === alt.item_id) return items;
+    meta = base.choice ?? { id: newChoiceId(), label: base.subcategory_name || base.category_name || 'Choice', pick: 1 };
+    next = next.map(i => (i.item_id === base.item_id ? { ...i, choice: meta, chosen: undefined } : i));
+  }
+  const at = next.reduce((last, i, idx) => (i.choice?.id === meta!.id ? idx : last), -1);
+  const moved = { ...(items.find(i => i.item_id === alt.item_id) ?? alt), choice: meta, chosen: undefined };
+  return tidyGroups([...next.slice(0, at + 1), moved, ...next.slice(at + 1)]);
+}
+
+// Ticks what the customer picked; "choose 1" switches the pick, larger groups stop at their number.
+export function togglePicked(items: QuotationLineItem[], itemId: string): QuotationLineItem[] {
+  const it = items.find(i => i.item_id === itemId);
+  const g = it?.choice && choiceGroups(items).find(x => x.meta.id === it.choice!.id);
+  if (!it || !g) return items;
+  if (it.chosen) return items.map(i => (i.item_id === itemId ? { ...i, chosen: undefined } : i));
+  const single = g.meta.pick <= 1;
+  if (!single && pickedOf(g).length >= g.meta.pick) return items;
+  return items.map(i => (i.item_id === itemId ? { ...i, chosen: true } : single && i.choice?.id === g.meta.id ? { ...i, chosen: undefined } : i));
+}
+
 // Key of a dish within a quote: meal id (multi-day) + item id.
 export const pickKey = (itemId: string, mealId = '') => `${mealId}:${itemId}`;
 const withPicks = (items: QuotationLineItem[], picked: Set<string>, mealId = '') =>

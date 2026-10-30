@@ -93,12 +93,12 @@ const QuotationMultiDay: React.FC<Props> = ({
     });
 
   // ── meal items ──
+  const toLine = (it: PickerItem): QuotationLineItem => ({
+    item_id: it.id, item_name: it.name, category_name: it.subcategory?.category?.name || '',
+    subcategory_name: it.subcategory?.name || '', amount: priceFor(it.id),
+  });
   const addItemToMeal = (dayIdx: number, mealId: string, it: PickerItem) =>
-    patchMeal(dayIdx, mealId, m => withItems(m, [...m.items, {
-      item_id: it.id, item_name: it.name,
-      category_name: it.subcategory?.category?.name || '',
-      subcategory_name: it.subcategory?.name || '', amount: priceFor(it.id),
-    }]));
+    patchMeal(dayIdx, mealId, m => withItems(m, [...m.items, toLine(it)]));
 
   const removeItemFromMeal = (dayIdx: number, mealId: string, itemId: string) =>
     patchMeal(dayIdx, mealId, m => withItems(m, m.items.filter(x => x.item_id !== itemId)));
@@ -261,7 +261,7 @@ const QuotationMultiDay: React.FC<Props> = ({
                           onText={(id, field, v) => updateMealItemText(dayIdx, meal.id, id, field, v)}
                           onReorder={(from, to) => reorderMealItems(dayIdx, meal.id, from, to)}
                           onReset={() => patchMeal(dayIdx, meal.id, m => withItems(m, []))}
-                          onChoice={next => patchMeal(dayIdx, meal.id, m => withItems(m, next))} />
+                          onChoice={next => patchMeal(dayIdx, meal.id, m => withItems(m, next))} toLine={toLine} />
                       </div>
                     )}
                   </div>

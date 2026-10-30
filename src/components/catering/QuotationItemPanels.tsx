@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { QuotationLineItem } from '../../hooks/useQuotations';
-import { choiceGroups, setGroupMeta, assignGroup, ungroup, newChoiceId, plateRange } from '../../lib/quoteChoices';
+import { choiceGroups, setGroupMeta, ungroup, plateRange, addAlternative, togglePicked, tidyGroups } from '../../lib/quoteChoices';
 import QuotationChoiceGroup from './QuotationChoiceGroup';
+import AlternativePicker from './AlternativePicker';
 
 export interface PickerItem {
   id: string;
@@ -25,17 +26,21 @@ interface Props {
   totalLabel: string;
   compact?: boolean;
   showPrices?: boolean;
-  // Whole-list changes for "choose any" groups; omit to hide them.
+  // Whole-list changes for alternatives ("customer chooses"); omit to hide them.
   onChoice?: (next: QuotationLineItem[]) => void;
+  toLine?: (it: PickerItem) => QuotationLineItem;
 }
+
+type AltTarget = { itemId?: string; groupId?: string; name: string; course: string };
 
 type Group = { subcategory: string; items: PickerItem[] };
 
 // Available menu items (searchable, grouped by category) beside the chosen items with prices.
 const QuotationItemPanels: React.FC<Props> = ({
-  menuItems, items, onAdd, onAmount, onRemove, onText, onReorder, onReset, selectedTitle, totalLabel, compact, showPrices = true, onChoice,
+  menuItems, items, onAdd, onAmount, onRemove, onText, onReorder, onReset, selectedTitle, totalLabel, compact, showPrices = true, onChoice, toLine,
 }) => {
-  const [picking, setPicking] = useState<Set<string> | null>(null);
+  const [altFor, setAltFor] = useState<AltTarget | null>(null);
+  const canAlt = !!onChoice && !!toLine;
   const groups = choiceGroups(items);
   const [search, setSearch] = useState('');
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -71,19 +76,17 @@ const QuotationItemPanels: React.FC<Props> = ({
       style={{ flex: 1, minWidth: 0, border: 'none', borderBottom: `1px dashed ${it[field] ? on : '#E0E0DC'}`, fontSize: 11, color: it[field] ? ink : '#AAAAAA', padding: '1px 2px', background: 'transparent', outline: 'none', boxSizing: 'border-box' }} />
   );
 
-  const togglePick = (id: string) => setPicking(prev => {
-    const next = new Set(prev ?? []);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
-  // Ticked dishes become one "choose any 1" group named after their course.
-  const makeGroup = () => {
-    if (!picking || picking.size < 2) return;
-    const first = items.find(i => picking.has(i.item_id));
-    const meta = { id: newChoiceId(), label: first?.subcategory_name || first?.category_name || 'Choose any', pick: 1 };
-    onChoice?.(items.map(i => (picking.has(i.item_id) ? { ...i, choice: meta, chosen: undefined } : i)));
-    setPicking(null);
+  const pickAlt = ({ menu, existing }: { menu?: PickerItem; existing?: QuotationLineItem }) => {
+    const alt = existing ?? (menu && toLine?.(menu));
+    if (!alt || !altFor || !onChoice) return;
+    onChoice(addAlternative(items, altFor.groupId ? { groupId: altFor.groupId } : { itemId: altFor.itemId }, alt));
+    setAltFor(null);
   };
+  // Removing a dish from a choice keeps the rest tidy (a lone dish is no longer a choice).
+  const remove = (it: QuotationLineItem) => (it.choice && onChoice ? onChoice(tidyGroups(items.filter(i => i.item_id !== it.item_id))) : onRemove(it.item_id));
+  const picker = (t: AltTarget) => (
+    <AlternativePicker forName={t.name} course={t.course} menuItems={menuItems} items={items} showPrices={showPrices} onPick={pickAlt} onClose={() => setAltFor(null)} />
+  );
 
   const row = (it: QuotationLineItem, idx: number) => (
             <div key={it.item_id}
@@ -99,8 +102,10 @@ const QuotationItemPanels: React.FC<Props> = ({
                 borderBottom: '0.5px solid #F5F5F0',
               }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px 3px 8px' }}>
-                {picking && !it.choice
-                  ? <input type="checkbox" aria-label={`Put ${it.item_name} in the group`} checked={picking.has(it.item_id)} onChange={() => togglePick(it.item_id)} style={{ width: 16, height: 16, accentColor: '#E8750A' }} />
+                {it.choice && onChoice
+                  ? <button type="button" aria-pressed={!!it.chosen} onClick={() => onChoice(togglePicked(items, it.item_id))} title="Tick when the customer picks this"
+                      style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 12, cursor: 'pointer', border: `1px solid ${it.chosen ? '#3B6D11' : '#D0D0CC'}`, background: it.chosen ? '#EBF4E1' : '#fff', color: it.chosen ? '#2F5A0E' : '#888880' }}>
+                      {it.chosen ? '✓ Picked' : 'Picked?'}</button>
                   : <span title="Drag to reorder" style={{ cursor: 'grab', color: '#CCCCCA', fontSize: 15, userSelect: 'none', flexShrink: 0 }}>⠿</span>}
                 <span style={{ fontSize: fs, flex: 1 }}>{it.item_name}</span>
                 {it.subcategory_name && <span className="hide-sm" style={{ fontSize: 10, color: '#AAAAAA', whiteSpace: 'nowrap' }}>{it.subcategory_name}</span>}
@@ -110,8 +115,11 @@ const QuotationItemPanels: React.FC<Props> = ({
                     onChange={e => onAmount(it.item_id, parseFloat(e.target.value) || 0)}
                     style={{ width: 76, border: '1px solid #E5E5E0', borderRadius: 6, padding: '4px 6px', fontSize: fs, textAlign: 'right' }} />
                 </>}
-                {it.choice && onChoice && <button type="button" onClick={() => onChoice(assignGroup(items, it.item_id, null))} title="Move out of the group" style={{ fontSize: 11, color: '#888880', background: 'none', border: 'none', cursor: 'pointer' }}>↩</button>}
-                <button onClick={() => onRemove(it.item_id)} aria-label="Remove item"
+                {canAlt && !it.choice && (
+                  <button type="button" onClick={() => setAltFor({ itemId: it.item_id, name: it.item_name, course: it.subcategory_name })} title={`Let the customer choose something instead of ${it.item_name}`}
+                    style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, color: '#A84F00', background: '#FFF6EA', border: '1px solid #F2C77E', borderRadius: 12, padding: '3px 9px', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Alternative</button>
+                )}
+                <button onClick={() => remove(it)} aria-label="Remove item"
                   style={{ background: 'none', border: 'none', color: '#CC4444', fontSize: 16, cursor: 'pointer', padding: '0 2px' }}>×</button>
               </div>
               <div style={{ paddingLeft: 28, paddingRight: 12, paddingBottom: 4, display: 'flex', gap: 10 }}>
@@ -162,12 +170,6 @@ const QuotationItemPanels: React.FC<Props> = ({
       <div style={box}>
         <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #E5E5E0', background: '#F9F8F5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: '#444' }}>{selectedTitle}</span>
-          {onChoice && items.filter(i => !i.choice).length >= 2 && (picking
-            ? <span style={{ display: 'flex', gap: 6, marginLeft: 'auto', marginRight: 6 }}>
-                <button type="button" onClick={makeGroup} disabled={picking.size < 2} style={{ ...chipBtn, background: '#E8750A', color: '#fff', borderColor: '#E8750A', opacity: picking.size < 2 ? 0.5 : 1 }}>Group {picking.size} dishes</button>
-                <button type="button" onClick={() => setPicking(null)} style={chipBtn}>Cancel</button>
-              </span>
-            : <button type="button" onClick={() => setPicking(new Set())} title="Customer chooses some of these dishes" style={{ ...chipBtn, marginLeft: 'auto', marginRight: 6, color: '#A84F00', borderColor: '#E8A867' }}>+ Choose-any group</button>)}
           {items.length > 0 && (
             <button onClick={onReset} style={{ fontSize: 11, color: '#CC4444', background: 'none', border: '1px solid #CC4444', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}>Reset all</button>
           )}
@@ -175,16 +177,22 @@ const QuotationItemPanels: React.FC<Props> = ({
         <div style={{ flex: 1, overflowY: 'auto', maxHeight, padding: '4px 0' }}>
           {items.length === 0 ? (
             <div style={{ padding: '36px 12px', textAlign: 'center', color: '#AAAAAA', fontSize: 12 }}>Tap an item on the left to add it</div>
-          ) : (<>
-            {items.map((it, idx) => (it.choice ? null : row(it, idx)))}
-            {groups.map(g => (
-              <QuotationChoiceGroup key={g.meta.id} group={g} showPrices={showPrices}
-                onMeta={patch => onChoice?.(setGroupMeta(items, g.meta.id, patch))}
-                onUngroup={() => onChoice?.(ungroup(items, g.meta.id))}>
-                {items.map((it, idx) => (it.choice?.id === g.meta.id ? row(it, idx) : null))}
-              </QuotationChoiceGroup>
-            ))}
-          </>)}
+          ) : items.map((it, idx) => {
+            // Plain dish (with its alternative search), or the choice box where its first dish sits.
+            if (!it.choice) return <React.Fragment key={it.item_id}>{row(it, idx)}{altFor?.itemId === it.item_id && picker(altFor)}</React.Fragment>;
+            const g = groups.find(x => x.meta.id === it.choice!.id)!;
+            if (g.items[0].item_id !== it.item_id) return null;
+            return (
+              <React.Fragment key={g.meta.id}>
+                <QuotationChoiceGroup group={g} showPrices={showPrices}
+                  rows={items.map((x, i) => (x.choice?.id === g.meta.id ? row(x, i) : null)).filter(Boolean)}
+                  onMeta={patch => onChoice?.(setGroupMeta(items, g.meta.id, patch))}
+                  onUngroup={() => onChoice?.(ungroup(items, g.meta.id))}
+                  onAddAlternative={() => setAltFor({ groupId: g.meta.id, name: g.items.map(x => x.item_name).join(' / '), course: g.items[0].subcategory_name })} />
+                {altFor?.groupId === g.meta.id && picker(altFor)}
+              </React.Fragment>
+            );
+          })}
         </div>
         {showPrices && items.length > 0 && (
           <div style={{ borderTop: '0.5px solid #E5E5E0', padding: '6px 12px', background: '#F9F8F5', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#666' }}>
@@ -197,7 +205,6 @@ const QuotationItemPanels: React.FC<Props> = ({
   );
 };
 
-const chipBtn: React.CSSProperties = { fontSize: 11, padding: '2px 8px', borderRadius: 5, border: '1px solid #D0D0CC', background: '#fff', cursor: 'pointer' };
 const box: React.CSSProperties = { border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: '#fff' };
 
 export default QuotationItemPanels;

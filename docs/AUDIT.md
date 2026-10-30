@@ -146,6 +146,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | Several versions of one quote and record which was accepted | **Done.** Options A / B / C as sibling quotations; Mark accepted picks one, others become Not chosen |
 | Several quotes on one day: warn, don't block | **Done.** Same-day / venue warning in the form; only confirmed bookings block each other |
 | Calendar view of quotes | **Done.** Quotations → Calendar with day panel and "New quote on this day" |
+| Choice groups were hard to understand on first use (tick dishes, then Group) | **Fixed.** "+ Alternative" on each dish, "Customer chooses 1 of 2" box with OR, Picked ticks, box sits where the dish was |
 | `Quotations.tsx` would pass 500 lines | **Fixed.** Form state moved to `useQuoteForm`; new pieces are separate components |
 
 ## Code quality

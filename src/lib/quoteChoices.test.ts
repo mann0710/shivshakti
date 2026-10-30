@@ -1,4 +1,4 @@
-import { plateRange, servedItems, acceptPatch, pickKey, choiceGroups, setGroupMeta, ungroup, atMaxPrices } from './quoteChoices';
+import { plateRange, servedItems, acceptPatch, pickKey, choiceGroups, setGroupMeta, ungroup, atMaxPrices, addAlternative, togglePicked, tidyGroups } from './quoteChoices';
 import { quoteTotals } from './quoteMath';
 import { nextLabel, sameDayNote, statusText, totalText, quoteDays, siblingsOf } from './quoteOptions';
 
@@ -21,6 +21,36 @@ describe('choose-any pricing', () => {
   it('groups and ungroups dishes', () => {
     expect(choiceGroups(items)[0].items).toHaveLength(5);
     expect(choiceGroups(ungroup(items, 'g1'))).toHaveLength(0);
+  });
+});
+
+describe('alternatives', () => {
+  const menu = [dish('ladoo', 0), dish('puri', 0)];
+  menu[0].subcategory_name = 'Gujarati Sweet';
+  it('offers a dish instead of another, right after it', () => {
+    const next = addAlternative(menu, { itemId: 'ladoo' }, dish('mohanthal', 0));
+    expect(next.map(i => i.item_id)).toEqual(['ladoo', 'mohanthal', 'puri']);
+    expect(choiceGroups(next)[0].meta).toMatchObject({ label: 'Gujarati Sweet', pick: 1 });
+    const third = addAlternative(next, { groupId: choiceGroups(next)[0].meta.id }, dish('magas', 0));
+    expect(choiceGroups(third)[0].items.map(i => i.item_id)).toEqual(['ladoo', 'mohanthal', 'magas']);
+  });
+  it('moves a dish already in the menu into the choice', () => {
+    const next = addAlternative(menu, { itemId: 'ladoo' }, menu[1]);
+    expect(next).toHaveLength(2);
+    expect(choiceGroups(next)[0].items.map(i => i.item_id)).toEqual(['ladoo', 'puri']);
+  });
+  it('records the pick: switches for choose 1, stops at the limit otherwise', () => {
+    const g = addAlternative(menu, { itemId: 'ladoo' }, dish('mohanthal', 0));
+    const a = togglePicked(g, 'ladoo');
+    const b = togglePicked(a, 'mohanthal');
+    expect(b.filter(i => i.chosen).map(i => i.item_id)).toEqual(['mohanthal']);
+    const two = setGroupMeta(items, 'g1', { pick: 2 });
+    const full = togglePicked(togglePicked(two, 'jamun'), 'halwa');
+    expect(togglePicked(full, 'kulfi').filter(i => i.chosen)).toHaveLength(2);
+  });
+  it('a group left with one dish becomes a normal dish', () => {
+    const g = addAlternative(menu, { itemId: 'ladoo' }, dish('mohanthal', 0));
+    expect(choiceGroups(tidyGroups(g.filter(i => i.item_id !== 'mohanthal')))).toHaveLength(0);
   });
 });
 
