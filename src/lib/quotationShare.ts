@@ -33,13 +33,12 @@ export const quotationMessage = (q: Quotation, options: Quotation[] = []): strin
   return lines.filter(l => typeof l === 'string').join('\n');
 };
 
-// Real PDF from the PDF service; phones get the share sheet, desktops a download + WhatsApp.
+// Real PDF from the PDF service; with a saved number it opens that customer's WhatsApp chat (PDF saved to attach).
 export async function shareQuotation(q: Quotation, withPrices = true, options?: Quotation[]): Promise<ShareResult | null> {
   try {
     const res = await shareDoc(() => quotationDoc(q, { withPrices, options }), quotationMessage(q, options), q.customer?.phone);
     if (res === 'shared') toast.success('Quotation shared');
-    else if (res === 'whatsapp') toast.success('PDF downloaded — attach it in the WhatsApp chat', { duration: 5000 });
-    else toast('Share cancelled');
+    else if (res === 'cancelled') toast('Share cancelled');
     return res;
   } catch (e: any) {
     toast.error(e?.message || 'Could not share quotation');

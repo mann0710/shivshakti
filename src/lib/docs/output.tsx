@@ -62,6 +62,18 @@ export async function shareDoc(make: () => Doc, text: string, phone?: string | n
     toast('Save the PDF from the print window, then attach it in WhatsApp', { duration: 6000 });
     return 'whatsapp';
   }
+  // A saved number goes straight to that customer's chat, like POS pre-bookings; WhatsApp links
+  // cannot carry a file, so the PDF is saved for 📎 → Document.
+  if (phone) {
+    save(blob, doc.fileName);
+    if (!openWhatsApp(phone, text)) {
+      toast(t => <button type="button" onClick={() => { toast.dismiss(t.id); openWhatsApp(phone, text); }}
+        style={{ border: 'none', background: '#128C7E', color: '#fff', borderRadius: 8, padding: '10px 16px', fontSize: 14, fontWeight: 600 }}>
+        PDF saved — open WhatsApp chat</button>, { duration: 15000 });
+    }
+    toast('PDF saved. In the chat tap 📎 → Document and pick it.', { duration: 8000 });
+    return 'whatsapp';
+  }
   const file = new File([blob], doc.fileName, { type: 'application/pdf' });
   const nav = navigator as Nav;
   if (nav.canShare?.({ files: [file] })) {
@@ -78,7 +90,6 @@ export async function shareDoc(make: () => Doc, text: string, phone?: string | n
     }
   }
   save(blob, doc.fileName);
-  if (phone) openWhatsApp(phone, text);
-  else window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
   return 'whatsapp';
 }

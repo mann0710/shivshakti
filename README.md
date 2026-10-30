@@ -157,8 +157,8 @@ The phone bottom bar now has a **POS** button.
 - **One tap to the form:** dashboard quick actions (New booking, New quotation, Add customer, Create invoice) open the form directly. A booking's **Quote** action opens a new quotation with that booking already selected.
 - **Share on WhatsApp:**
   - quotations and invoices can be shared as a PDF;
-  - on a phone the PDF itself goes into WhatsApp through the share sheet;
-  - on a computer the PDF downloads and WhatsApp opens with the message ready.
+  - **straight to the saved number**, like POS pre-bookings: when the customer has a phone number, the PDF is saved and WhatsApp opens **that customer's chat** with the message ready — no need to save the number in your phone. WhatsApp links cannot carry a file, so tap 📎 → **Document** and pick the saved PDF. If the phone blocks the chat from opening, tap **PDF saved — open WhatsApp chat**;
+  - with no number saved, a phone uses the share sheet (pick WhatsApp and the contact) and a computer downloads the PDF and opens WhatsApp.
 - **Phone layouts:** booking, quotation, invoice and Sweets admin lists turn into cards on phones, so no actions are cut off. Stats show two per row. Menu Builder stacks its columns instead of squeezing three onto a phone screen.
 - **Search:** bookings, quotations and invoices can be searched by name, phone or number.
 - **Item prices:** set a **₹ price** on any Menu Builder item. Adding it to a quotation fills that price; items without one use the price you last quoted.

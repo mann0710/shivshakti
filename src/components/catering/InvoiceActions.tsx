@@ -24,8 +24,7 @@ const InvoiceActions: React.FC<Props> = ({ invoice: selected, quotation, payment
     try {
       const due = selected.balance_due > 0 ? inr(selected.balance_due) : 'Nil (fully paid)';
       const text = `Dear ${customer?.name || 'Customer'},\nInvoice ${selected.invoice_number}\nTotal: ${inr(selected.total_amount)}\nBalance due: ${due}\n\nShiv Shakti Caterers`;
-      const res = await shareDoc(make, text, customer?.phone);
-      if (res === 'whatsapp') toast.success('PDF downloaded. Attach it in the WhatsApp chat.');
+      await shareDoc(make, text, customer?.phone);
     } catch (e: any) { toast.error(e?.message || 'Could not share PDF'); }
     finally { setSharing(false); }
   };

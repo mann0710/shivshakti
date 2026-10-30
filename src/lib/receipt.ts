@@ -77,7 +77,10 @@ export function whatsAppText(r: ReceiptData): string {
   ].filter((s, i, a) => s !== '' || (a[i - 1] !== '' && i > 0)).join('\n');
 }
 
-export function openWhatsApp(phone: string, text: string) {
+// Opens the customer's own chat; false when the browser blocked the new window.
+export function openWhatsApp(phone: string, text: string): boolean {
   const digits = cleanPhone(phone);
-  window.open(`https://wa.me/91${digits}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+  const w = window.open(`https://wa.me/91${digits}?text=${encodeURIComponent(text)}`, '_blank');
+  if (w) w.opener = null;
+  return !!w;
 }

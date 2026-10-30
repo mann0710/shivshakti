@@ -50,3 +50,14 @@ describe('option PDFs', () => {
     expect(quotationMessage(A)).toContain('Option A · Total: ₹13,300');
   });
 });
+
+describe('WhatsApp straight to the saved number', () => {
+  const { openWhatsApp } = jest.requireActual('./receipt');
+  it('opens the customer chat with the message, and reports a blocked window', () => {
+    const open = jest.spyOn(window, 'open').mockReturnValueOnce({} as Window).mockReturnValueOnce(null);
+    expect(openWhatsApp('+91 99748 75588', 'Namaste')).toBe(true);
+    expect(open.mock.calls[0][0]).toBe('https://wa.me/919974875588?text=Namaste');
+    expect(openWhatsApp('9974875588', 'Hi')).toBe(false);
+    open.mockRestore();
+  });
+});
