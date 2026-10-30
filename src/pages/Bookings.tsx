@@ -6,6 +6,7 @@ import StatusPill from '../components/StatusPill';
 import { Booking } from '../types';
 import { formatDateIST } from '../lib/ist';
 import { inr } from '../lib/money';
+import { useBookingValue } from '../hooks/useBookingValue';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import BookingFormModal from '../components/catering/BookingFormModal';
@@ -32,6 +33,7 @@ interface Props { onNavigate?: Navigate }
 const Bookings: React.FC<Props> = ({ onNavigate }) => {
   const { data: bookings = [], isLoading } = useBookings();
   const { data: teamMembers = [] } = useTeamMembers();
+  const valueOf = useBookingValue();
   const updateBooking = useUpdateBooking();
   const deleteBooking = useDeleteBooking();
   const { confirm, dialog } = useConfirm();
@@ -144,7 +146,7 @@ const Bookings: React.FC<Props> = ({ onNavigate }) => {
                         </td>
                         <td style={{ ...td, color: '#666660', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={b.venue}>{b.venue || '—'}</td>
                         <td style={td}>{b.guest_count}</td>
-                        <td style={{ ...td, fontWeight: 500, whiteSpace: 'nowrap' }}>{inr(b.estimated_cost)}</td>
+                        <td style={{ ...td, fontWeight: 500, whiteSpace: 'nowrap' }}>{inr(valueOf(b))}</td>
                         <td style={td}><StatusPill status={b.status} /></td>
                         <td style={{ ...td, whiteSpace: 'nowrap' }}>
                           <StatusSelect value={b.status} onChange={s => handleStatus(b, s)} style={{ marginRight: 6 }} />

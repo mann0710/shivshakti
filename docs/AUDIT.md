@@ -42,7 +42,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | 12 | `Billing.tsx` | Negative or zero payments were possible, and Save Payment could be double-tapped. | **Fixed.** Editing a payment is capped at its own amount plus the balance due |
 | 13 | `Dashboard.tsx` | Today's events were missing from Upcoming. | **Fixed** |
 | 14 | `Customers.tsx` | "Last event" showed the oldest event; "Total spend" included cancelled bookings. | **Fixed.** Shows the next upcoming event (else the last one); cancelled bookings excluded |
-| 15 | `Finance.tsx` | Month labels broke on the 29th–31st; revenue used estimates including cancelled bookings; the event-type list was hard-coded. | **Fixed** (still based on booking estimates for event types and top customers) |
+| 15 | `Finance.tsx` | Month labels broke on the 29th–31st; revenue used estimates including cancelled bookings; the event-type list was hard-coded. | **Fixed.** Event types and top customers use invoice / quotation amounts |
 | 16 | `DataCenter.tsx` | 0% GST could not be saved. | **Fixed** |
 | 17 | `DataCenter.tsx` | The old FSSAI file was deleted before the new upload succeeded. | **Fixed** |
 | 18 | `Quotations.tsx` | Days added with "Add Occasion" show as "Day 0" in the totals panel. | **Fixed.** Numbered by date; reopened quotes too |
@@ -51,6 +51,7 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | 21 | `Quotations.tsx` | The quotation PDF day header shows the gross total while rows show offer prices. | **Fixed.** Shared `mealNet`/`dayNet` in both PDFs |
 | 22 | `useInvoices.ts` | Recalculation ignored errors; a zero-total invoice became "paid"; a completed booking never reverts. | **Fixed.** Deleting or reducing a payment sets a completed booking back to confirmed |
 | 22b | `useInvoices.ts` | Found on the live site: older invoices had an advance with no payment row, so recalculating from payments would drop it | **Fixed.** Advance turned into a payment row before any recalculation; backfill in `20261103_backfill_advances.sql` |
+| 22c | `Finance.tsx`, booking lists, calendar, customer card | Found on the live site: amounts used the package estimate, which is ₹0 for bookings priced by quotation, so "Revenue by event type" was empty | **Fixed.** Shared `useBookingValue`: invoice total, else the chosen quotation, else the estimate |
 | 23 | list hooks | Supabase returns at most 1,000 rows; customers, bookings, quotations, invoices and payments are not paged. | **Fixed.** Shared `lib/fetchAll` pages every list |
 | 24 | `Billing.tsx` | Invoice WhatsApp links had no country code. | **Fixed** |
 | 25 | `useQuotations.ts`, `useInvoices.ts` | Quotation and invoice numbers are computed in the browser, so two devices can clash. | **Fixed.** A database trigger assigns INV-/QTN- numbers under a lock (`20261102_doc_numbers.sql`) |

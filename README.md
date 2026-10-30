@@ -136,6 +136,7 @@ The phone bottom bar now has a **POS** button.
 - **Packages + Menu Builder together:** pick package lines from Menu Builder, then use **Start from package** in a quotation to add its items with their prices and the package's per-plate rate (the booking's package is preselected).
 - **Simpler billing:** one **Save changes** bar for guest counts, extra charges, discounts and transport (with Discard). Single-day invoices take the **final guest count**. Statuses read Unpaid / Part paid / Paid.
 - **Safer money:** payment edits can't exceed the balance; deleting a payment on a completed booking sets it back to confirmed; invoice and quote numbers come from the database, so two phones never get the same number.
+- **Real amounts everywhere:** bookings, calendar, customer cards and Finance show the invoice total, else the chosen quotation, instead of a ₹0 package estimate.
 - **Bookings:** the same venue can't be double-booked across overlapping multi-day dates. Customer cards show the next upcoming event.
 - **GST-ready invoices:** with GST on, the PDF is titled **Tax Invoice** and shows the SAC code (996334), the customer's GSTIN (add it on the customer), CGST + SGST halves (IGST when the customer's GSTIN is from another state) and the amount in words. Billing shows the same split.
 - **Packages** can be reactivated ("Show inactive"). The Calendar day panel scrolls into view on phones and has a "+ New booking" shortcut.

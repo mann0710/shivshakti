@@ -7,6 +7,7 @@ import StatusPill from '../components/StatusPill';
 import { formatDateIST } from '../lib/ist';
 import { Navigate } from '../hooks/useNavIntent';
 import { pickQuotation } from '../lib/quoteMath';
+import { useBookingValue } from '../hooks/useBookingValue';
 
 const eventColors = ['#E8750A', '#378ADD', '#639922', '#7F77DD', '#D4537E', '#BA7517', '#0F6E56'];
 
@@ -205,6 +206,7 @@ interface Props { onNavigate?: Navigate }
 const CalendarPage: React.FC<Props> = ({ onNavigate }) => {
   const { data: bookings = [] } = useBookings();
   const { data: quotations = [] } = useQuotations();
+  const valueOf = useBookingValue();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const dayPanel = useRef<HTMLDivElement>(null);
@@ -373,7 +375,7 @@ const CalendarPage: React.FC<Props> = ({ onNavigate }) => {
                       ) : (
                         /* Single-day: show guest count + cost */
                         <div style={{ fontSize: 11, color: '#666660', marginTop: 4 }}>
-                          {b.guest_count} guests · ₹{b.estimated_cost.toLocaleString()}
+                          {b.guest_count} guests · ₹{valueOf(b).toLocaleString()}
                         </div>
                       )}
 

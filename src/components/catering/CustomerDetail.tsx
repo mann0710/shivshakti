@@ -3,6 +3,7 @@ import StatusPill from '../StatusPill';
 import { Booking, Customer } from '../../types';
 import { Navigate } from '../../hooks/useNavIntent';
 import { formatDateIST, todayIST } from '../../lib/ist';
+import { useBookingValue } from '../../hooks/useBookingValue';
 import { waNumber } from '../../lib/quoteMath';
 import { inr } from '../../lib/money';
 import { Avatar, ORANGE, btnGhost, btnPrimary, card } from './CustomerUi';
@@ -19,7 +20,8 @@ interface Props {
 // Contact, quick actions, stats and booking history for one customer.
 const CustomerDetail: React.FC<Props> = ({ customer, bookings, onEdit, onDelete, onBack, onNavigate }) => {
   const live = bookings.filter(b => b.status !== 'cancelled');
-  const bookedValue = live.reduce((s, b) => s + (b.estimated_cost || 0), 0);
+  const valueOf = useBookingValue();
+  const bookedValue = live.reduce((s, b) => s + valueOf(b), 0);
   // Next upcoming event if there is one, else the most recent past one.
   const today = todayIST();
   const dates = live.map(b => b.event_date).sort();
@@ -77,7 +79,7 @@ const CustomerDetail: React.FC<Props> = ({ customer, bookings, onEdit, onDelete,
               </div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{inr(b.estimated_cost)}</div>
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 3 }}>{inr(valueOf(b))}</div>
               <StatusPill status={b.status} />
             </div>
           </button>

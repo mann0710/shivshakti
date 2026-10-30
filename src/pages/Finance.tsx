@@ -4,11 +4,13 @@ import { useBookings } from '../hooks/useBookings';
 import { useInvoices } from '../hooks/useInvoices';
 import { useCustomers } from '../hooks/useCustomers';
 import { statusLabel } from '../components/StatusPill';
+import { useBookingValue } from '../hooks/useBookingValue';
 
 const Finance: React.FC = () => {
   const { data: bookings = [] } = useBookings();
   const { data: invoices = [] } = useInvoices();
   const { data: customers = [] } = useCustomers();
+  const valueOf = useBookingValue();
 
   const totalRevenue = invoices.reduce((s, i) => s + i.total_amount, 0);
   const totalCollected = invoices.reduce((s, i) => s + i.advance_paid, 0);
@@ -31,19 +33,19 @@ const Finance: React.FC = () => {
   });
   const maxRevenue = Math.max(...monthlyData.map(m => m.revenue), 1);
 
-  // Revenue by event type: every type in use, cancelled bookings excluded
+  // Revenue by event type: invoice, else quotation, else estimate; cancelled bookings excluded
   const liveBookings = bookings.filter(b => b.status !== 'cancelled');
   const eventTypes = Array.from(new Set(liveBookings.map(b => b.event_type)));
   const eventRevenue = eventTypes.map(type => ({
     type,
-    revenue: liveBookings.filter(b => b.event_type === type).reduce((s, b) => s + b.estimated_cost, 0),
+    revenue: liveBookings.filter(b => b.event_type === type).reduce((s, b) => s + valueOf(b), 0),
   })).filter(e => e.revenue > 0).sort((a, b) => b.revenue - a.revenue);
   const maxEventRev = Math.max(...eventRevenue.map(e => e.revenue), 1);
 
   // Top customers
   const customerSpend = customers.map(c => ({
     customer: c,
-    spend: liveBookings.filter(b => b.customer_id === c.id).reduce((s, b) => s + b.estimated_cost, 0),
+    spend: liveBookings.filter(b => b.customer_id === c.id).reduce((s, b) => s + valueOf(b), 0),
     count: liveBookings.filter(b => b.customer_id === c.id).length,
   })).sort((a, b) => b.spend - a.spend).slice(0, 5);
 
