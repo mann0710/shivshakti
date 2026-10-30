@@ -56,6 +56,10 @@ It is safe to run more than once. It:
 
 Run [`supabase/migrations/20261102_doc_numbers.sql`](supabase/migrations/20261102_doc_numbers.sql) **before** deploying this version: new invoices and quotations get their number from a database trigger (continuing from the highest existing one). Applied on the live project on 30 Oct 2026.
 
+### Older advances
+
+Run [`supabase/migrations/20261103_backfill_advances.sql`](supabase/migrations/20261103_backfill_advances.sql) once: invoices made before payment history existed kept the advance only as a total. This gives each a payment row so it shows in history. (The app also does this automatically the first time such an invoice is saved or paid, so the advance is never lost.)
+
 ### Item prices and customer GSTIN
 
 Run [`supabase/migrations/20261101_prices_gstin.sql`](supabase/migrations/20261101_prices_gstin.sql) (adds `menu_items.default_price` and `customers.gstin`; safe to re-run). Until it is run, the price and GSTIN fields stay hidden. Applied on the live project on 30 Oct 2026, after copying every table into the `backup_20261030` schema (not exposed to the API; drop it once you are happy).

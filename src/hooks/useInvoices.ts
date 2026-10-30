@@ -9,6 +9,23 @@ import { sumCharges } from '../lib/quoteMath';
 export const invoiceStatus = (total: number, paid: number): Invoice['status'] =>
   paid > 0 && paid >= total ? 'paid' : paid > 0 ? 'sent' : 'draft';
 
+// Older invoices kept the advance only as a total; give it a payment row so recalculation keeps it.
+const ensureAdvanceRow = async (invoiceId: string) => {
+  const [{ data: inv, error: invErr }, { count, error: cntErr }] = await Promise.all([
+    supabase.from('invoices').select('advance_paid, issue_date').eq('id', invoiceId).single(),
+    supabase.from('payments').select('id', { count: 'exact', head: true }).eq('invoice_id', invoiceId),
+  ]);
+  if (invErr) throw invErr;
+  if (cntErr) throw cntErr;
+  const advance = Number(inv?.advance_paid) || 0;
+  if (count || advance <= 0) return;
+  const { error } = await supabase.from('payments').insert({
+    invoice_id: invoiceId, amount: advance, payment_type: 'advance', payment_mode: 'cash',
+    notes: 'Advance recorded before payment history', payment_date: inv?.issue_date || todayIST(),
+  });
+  if (error) throw error;
+};
+
 // Recalculate paid/balance/status from payments; completes the booking when paid, reopens it when not.
 const recalculateInvoice = async (invoiceId: string) => {
   const { data: payments, error: payErr } = await supabase
@@ -106,6 +123,7 @@ export const useRecordPayment = () => {
       invoiceId: string; amount: number; payment_type: 'advance' | 'partial';
       payment_mode: string; notes?: string; payment_date?: string;
     }) => {
+      await ensureAdvanceRow(invoiceId);
       const { error: payErr } = await supabase.from('payments').insert({
         invoice_id: invoiceId, amount, payment_type, payment_mode, notes,
         payment_date: payment_date || todayIST(),
@@ -191,6 +209,7 @@ export const useRecalculateTotals = () => {
       additional_discounts?: { id: string; description: string; amount: number }[];
       extra_charges?: { description: string; amount: number }[];
     }) => {
+      await ensureAdvanceRow(invoiceId);
       const { data: inv } = await supabase
         .from('invoices').select('subtotal, extra_charges').eq('id', invoiceId).single();
       if (!inv) throw new Error('Invoice not found');
