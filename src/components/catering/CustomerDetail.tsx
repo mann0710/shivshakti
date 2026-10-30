@@ -23,7 +23,7 @@ const CustomerDetail: React.FC<Props> = ({ customer, bookings, onEdit, onDelete,
   const lastEvent = live.reduce<string | undefined>((d, b) => (!d || b.event_date > d ? b.event_date : d), undefined);
   const history = [...bookings].sort((a, b) => b.event_date.localeCompare(a.event_date));
   const phone = customer.phone?.trim();
-  const contact = [customer.phone, customer.email, customer.address].filter(Boolean).join(' · ');
+  const contact = [customer.phone, customer.email, customer.address, customer.gstin && `GSTIN ${customer.gstin}`].filter(Boolean).join(' · ');
 
   return (
     <div>

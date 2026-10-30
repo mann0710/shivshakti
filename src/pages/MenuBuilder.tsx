@@ -7,9 +7,12 @@ import {
   useMenuItemsFull, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem,
   MenuCategory, MenuSubcategory, MenuItem,
 } from '../hooks/useMenuBuilder';
+import { useHasPriceColumns } from '../hooks/useSchemaStatus';
+import MenuItemPrice from '../components/MenuItemPrice';
 
 const MenuBuilder: React.FC = () => {
   const { confirm, dialog: confirmDialog } = useConfirm();
+  const hasPrice = useHasPriceColumns();
   const { data: categories = [] } = useMenuCategories();
   const { data: subcategories = [] } = useMenuSubcategories();
   const { data: items = [], refetch: refetchItems } = useMenuItemsFull();
@@ -37,6 +40,7 @@ const MenuBuilder: React.FC = () => {
   const [newSubName, setNewSubName] = useState('');
   const [newSubCatId, setNewSubCatId] = useState('');
   const [newItemName, setNewItemName] = useState('');
+  const [newItemPrice, setNewItemPrice] = useState('');
   // Items add form has its own independent category+subcategory selection
   const [addItemCatId, setAddItemCatId] = useState('');
   const [addItemSubId, setAddItemSubId] = useState('');
@@ -151,10 +155,13 @@ const MenuBuilder: React.FC = () => {
     if (!newItemName.trim()) { toast.error('Enter item name'); return; }
     if (!addItemSubId) { toast.error('Select a subcategory'); return; }
     try {
-      const result: any = await createItem.mutateAsync({ name: newItemName.trim(), subcategory_id: addItemSubId });
+      const result: any = await createItem.mutateAsync({
+        name: newItemName.trim(), subcategory_id: addItemSubId, default_price: parseFloat(newItemPrice) || null,
+      });
       // Force-refetch so the new item appears immediately
       await refetchItems();
       setNewItemName('');
+      setNewItemPrice('');
       // Navigate the filter to show exactly where the new item was added
       setSelectedCatId(addItemCatId);
       setSelectedSubId(addItemSubId);
@@ -162,6 +169,11 @@ const MenuBuilder: React.FC = () => {
       if (result?.id) setLastAddedItemId(result.id);
       toast.success(`"${result?.name ?? 'Item'}" added under ${subcategories.find(s => s.id === addItemSubId)?.name ?? ''}`);
     }
+    catch (e: any) { toast.error(e.message || 'Failed'); }
+  };
+
+  const handleItemPrice = async (item: MenuItem, default_price: number | null) => {
+    try { await updateItem.mutateAsync({ id: item.id, default_price }); toast.success(`${item.name}: ${default_price ? `₹${default_price}` : 'price cleared'}`); }
     catch (e: any) { toast.error(e.message || 'Failed'); }
   };
 
@@ -404,6 +416,9 @@ const MenuBuilder: React.FC = () => {
                 <input style={{ ...inp, flex: 1 }} placeholder="New item name…" value={newItemName}
                   onChange={e => setNewItemName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleAddItem()} />
+                {hasPrice && <input style={{ ...inp, width: 76 }} type="number" min="0" inputMode="decimal" placeholder="₹ price"
+                  value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddItem()} />}
                 <button style={btnAdd} onClick={handleAddItem}>+</button>
               </div>
             </div>
@@ -433,6 +448,7 @@ const MenuBuilder: React.FC = () => {
                           <span style={{ color: '#E8750A' }}>{item.subcategory?.category?.name}</span>
                           {' / '}{item.subcategory?.name}
                         </div>
+                        {hasPrice && <div style={{ marginTop: 4 }}><MenuItemPrice value={item.default_price} onSave={p => handleItemPrice(item, p)} /></div>}
                       </div>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button onClick={() => handleToggleItem(item)} style={{ ...pill, background: item.is_active ? '#EAF3DE' : '#F5F5F3', color: item.is_active ? '#3B6D11' : '#AAAAAA' }}>
@@ -450,7 +466,7 @@ const MenuBuilder: React.FC = () => {
         </div>
 
         <div style={{ marginTop: 14, padding: '10px 14px', background: '#F0F4FF', border: '0.5px solid #B8C8F4', borderRadius: 8, fontSize: 12, color: '#3353A4' }}>
-          💡 Each column has its own search. Click a <strong>category</strong> to filter subcategories & items by that category. Click a <strong>subcategory</strong> to filter items. Inactive items are hidden in Quotations.
+          💡 Each column has its own search. Click a <strong>category</strong> to filter subcategories & items by that category. Click a <strong>subcategory</strong> to filter items. Inactive items are hidden in Quotations. The <strong>₹ price</strong> is filled in when the item is added to a quotation.
         </div>
       </div>
       {confirmDialog}

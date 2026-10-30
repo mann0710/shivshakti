@@ -52,6 +52,10 @@ It is safe to run more than once. It:
 - adds `pack_sizes` (shop default sizes) to `data_center`;
 - adds running bill numbers (`bill_no`) to `seasonal_orders`.
 
+### Item prices and customer GSTIN
+
+Run [`supabase/migrations/20261101_prices_gstin.sql`](supabase/migrations/20261101_prices_gstin.sql) (adds `menu_items.default_price` and `customers.gstin`; safe to re-run). Until it is run, the price and GSTIN fields stay hidden. Applied on the live project on 30 Oct 2026, after copying every table into the `backup_20261030` schema (not exposed to the API; drop it once you are happy).
+
 Then open **Sessional Items** and click **Review & merge** to fold old one-row-per-pack items into single items (see below).
 
 Until the SQL is run, the app keeps working in a compatible mode and shows a yellow banner. Standard 250 g / 500 g / 750 g / 1 kg packs work. Custom sizes, manual pack prices, categories, per-piece items and bill numbers need the update.
@@ -120,7 +124,8 @@ The phone bottom bar now has a **POS** button.
   - on a computer the PDF downloads and WhatsApp opens with the message ready.
 - **Phone layouts:** booking, quotation, invoice and Sweets admin lists turn into cards on phones, so no actions are cut off. Stats show two per row. Menu Builder stacks its columns instead of squeezing three onto a phone screen.
 - **Search:** bookings, quotations and invoices can be searched by name, phone or number.
-- **Smarter quotations:** adding an item pre-fills the price you last used for it.
+- **Item prices:** set a **₹ price** on any Menu Builder item. Adding it to a quotation fills that price; items without one use the price you last quoted.
+- **GST-ready invoices:** with GST on, the PDF is titled **Tax Invoice** and shows the SAC code (996334), the customer's GSTIN (add it on the customer), CGST + SGST halves (IGST when the customer's GSTIN is from another state) and the amount in words. Billing shows the same split.
 - **Packages** can be reactivated ("Show inactive"). The Calendar day panel scrolls into view on phones and has a "+ New booking" shortcut.
 - **Quote → booking → invoice:** marking a quotation Accepted offers to confirm its booking, then shows "Create invoice →". Confirmed bookings also have an **Invoice** button that opens the invoice form with that booking selected.
 - **GST stays as issued:** editing an old quotation or invoice keeps the GST rate it was issued at, even if the Data Center rate has changed since.
@@ -180,13 +185,13 @@ src/
   pages/                            one file per screen
 supabase/
   schema.sql                        baseline schema (inferred from the code, for local dev)
-  migrations/                       SQL to run on the live database (pack sizes, security/RLS)
+  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN)
 ```
 
 ## Tests and checks
 
 ```bash
-CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, PDFs, nav
+CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, PDFs, nav
 npx tsc --noEmit -p .                             # type check
 npx eslint src --ext .ts,.tsx                     # lint (the hosted build fails on warnings when CI=true)
 ```

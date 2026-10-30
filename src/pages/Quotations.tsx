@@ -115,7 +115,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   const transportationChargesTotal = transportationCharges.reduce((s, c) => s + (c.amount || 0), 0);
   const finalTotal               = discountedSubtotal + gstAmount + extraChargesTotal + transportationChargesTotal;
 
-  // ── menu items + smart default prices ─────────────────────────────────────
+  // ── menu items + default prices ───────────────────────────────────────────
   const activeItems = useMemo(() => menuItems.filter(
     it => it.is_active !== false && it.subcategory?.is_active !== false && it.subcategory?.category?.is_active !== false,
   ), [menuItems]);
@@ -128,7 +128,9 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
         .forEach(it => { if (it.amount > 0 && !map.has(it.item_id)) map.set(it.item_id, it.amount); }));
     return map;
   }, [quotations]);
-  const priceFor = (itemId: string) => lastPrices.get(itemId) || 0;
+  const savedPrices = useMemo(() => new Map(menuItems.map(it => [it.id, it.default_price || 0])), [menuItems]);
+  // Menu Builder price first, else the last quoted price.
+  const priceFor = (itemId: string) => savedPrices.get(itemId) || lastPrices.get(itemId) || 0;
 
   const itemsTotal = selectedItems.reduce((s, i) => s + (i.amount || 0), 0);
 

@@ -1,9 +1,10 @@
 import React from 'react';
 import { Invoice } from '../../types';
 import { Quotation } from '../../hooks/useQuotations';
+import { taxSplit } from '../../lib/gst';
 import { ORANGE } from './InvoiceUi';
 
-interface Props { invoice: Invoice; quotation?: Quotation; showGST: boolean }
+interface Props { invoice: Invoice; quotation?: Quotation; showGST: boolean; gstNumber?: string }
 
 const Row: React.FC<{ label: React.ReactNode; value: string; color?: string }> = ({ label, value, color = '#666660' }) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '3px 0', fontSize: 12, color }}>
@@ -12,7 +13,7 @@ const Row: React.FC<{ label: React.ReactNode; value: string; color?: string }> =
 );
 
 // Saved totals of an invoice: subtotal, charges, GST, discount, paid and balance.
-const InvoiceTotals: React.FC<Props> = ({ invoice: inv, quotation, showGST }) => {
+const InvoiceTotals: React.FC<Props> = ({ invoice: inv, quotation, showGST, gstNumber }) => {
   const perPlate = quotation?.per_plate_amount ?? 0;
   const due = inv.balance_due > 0;
   const dueColor = due ? '#A32D2D' : '#3B6D11';
@@ -23,7 +24,9 @@ const InvoiceTotals: React.FC<Props> = ({ invoice: inv, quotation, showGST }) =>
       {(inv.extra_charges || []).map((ec, i) => (
         <Row key={i} label={ec.description || 'Extra Charge'} value={`+₹${(ec.amount || 0).toLocaleString()}`} />
       ))}
-      {showGST && inv.gst_rate > 0 && <Row label={`GST @${inv.gst_rate}%`} value={`+₹${inv.gst_amount.toLocaleString()}`} />}
+      {showGST && taxSplit(inv.gst_amount, inv.gst_rate, gstNumber, inv.booking?.customer?.gstin).map(t => (
+        <Row key={t.label} label={t.label} value={`+₹${t.amount.toLocaleString()}`} />
+      ))}
       {(inv.transportation_charge || 0) > 0 && <Row label="Transportation" value={`+₹${inv.transportation_charge.toLocaleString()}`} />}
       {inv.discount_amount > 0 && (
         <Row color="#3B6D11" value={`-₹${inv.discount_amount.toLocaleString()}`}

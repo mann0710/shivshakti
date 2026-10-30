@@ -5,6 +5,7 @@ export interface Customer {
   email?: string;
   address: string;
   notes?: string;
+  gstin?: string | null;
   created_at: string;
 }
 

@@ -354,7 +354,7 @@ const Billing: React.FC<Props> = () => {
                   onApply={() => applyTotals('Transportation charge applied!', 'Failed to apply transport')} pending={recalcTotals.isPending}
                   applied={(selected.transportation_charge || 0) > 0 ? `Applied: +₹${selected.transportation_charge.toLocaleString()}` : undefined} />
 
-                <InvoiceTotals invoice={selected} quotation={selectedInvoiceQuotation} showGST={showGST} />
+                <InvoiceTotals invoice={selected} quotation={selectedInvoiceQuotation} showGST={showGST} gstNumber={dc?.gst_number} />
 
                 <PaymentHistory key={selected.id} payments={paymentHistory} />
 

@@ -23,6 +23,7 @@ export interface MenuItem {
   subcategory_id: string;
   subcategory?: MenuSubcategory & { category?: MenuCategory };
   name: string;
+  default_price?: number | null;
   is_active: boolean;
   created_at: string;
 }
@@ -158,9 +159,11 @@ export const useMenuItemsFull = () =>
 export const useCreateMenuItem = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ name, subcategory_id }: { name: string; subcategory_id: string }) => {
+    mutationFn: async ({ default_price, ...item }: { name: string; subcategory_id: string; default_price?: number | null }) => {
+      // Price is only sent when set, so adding items still works before the price migration.
+      const row = default_price ? { ...item, default_price } : item;
       const { data, error } = await supabase
-        .from('menu_items').insert({ name, subcategory_id, is_active: true }).select().single();
+        .from('menu_items').insert({ ...row, is_active: true }).select().single();
       if (error) throw error;
       return data;
     },

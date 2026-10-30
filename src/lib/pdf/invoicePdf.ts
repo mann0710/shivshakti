@@ -3,6 +3,8 @@ import jsPDF from 'jspdf';
 import { formatDateIST } from '../ist';
 import { Payment, Invoice } from '../../types';
 import { Quotation, QuotationLineItem } from '../../hooks/useQuotations';
+import { amountInWords, taxSplit } from '../gst';
+import { SHOP } from '../shop';
 
 // ─── PDF logo (preloaded at module level) ─────────────────────────────────────
 const _iPdfLogo = (() => { const i = new Image(); i.src = '/logo.png'; return i; })();
@@ -21,6 +23,8 @@ export const buildInvoicePdf = (
   let y = 0;
 
   const hasLogo = _iPdfLogo.complete && _iPdfLogo.naturalWidth > 0;
+  const taxed = inv.gst_rate > 0 && inv.gst_amount > 0;
+  const customer = inv.booking?.customer;
 
   // ── Header bar ────────────────────────────────────────────────────────────
   doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, 36, 'F');
@@ -30,11 +34,11 @@ export const buildInvoicePdf = (
     try { doc.addImage(_iPdfLogo as any, 'PNG', M, y, 40, 29); } catch {}
   }
   doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(26, 35, 126);
-  doc.text('INVOICE', W - M, y + 11, { align: 'right' });
+  doc.text(taxed ? 'TAX INVOICE' : 'INVOICE', W - M, y + 11, { align: 'right' });
   doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 78);
   doc.text(inv.invoice_number, W - M, y + 18, { align: 'right' });
   doc.text(`Date: ${formatDateIST(inv.issue_date, 'dd-MM-yyyy')}`, W - M, y + 25, { align: 'right' });
-  if (gstNumber) doc.text(`GSTIN: ${gstNumber}`, W - M, y + 32, { align: 'right' });
+  if (gstNumber) doc.text(`GSTIN: ${gstNumber}${taxed ? `  ·  SAC: ${SHOP.sac}` : ''}`, W - M, y + 32, { align: 'right' });
   y = 43;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -81,7 +85,6 @@ export const buildInvoicePdf = (
 
   // ── Info block ────────────────────────────────────────────────────────────
   const booking = inv.booking;
-  const customer = booking?.customer;
   infoRow('Invoice No.', inv.invoice_number);
   infoRow('Customer', customer?.name || '—');
   if (customer?.phone) infoRow('Phone', customer.phone);
@@ -97,7 +100,7 @@ export const buildInvoicePdf = (
   if (booking?.venue) infoRow('Venue', booking.venue);
   if (booking?.guest_count) infoRow('Guests', String(booking.guest_count));
   if (quotation?.food_type) infoRow('Food Type', quotation.food_type);
-  if (gstNumber) infoRow('GSTIN', gstNumber);
+  if (customer?.gstin) infoRow('Customer GSTIN', customer.gstin);
   y += 6;
 
   // ── Event Schedule ────────────────────────────────────────────────────────
@@ -347,10 +350,12 @@ export const buildInvoicePdf = (
   }
   if ((inv.transportation_charge || 0) > 0)
     summaryRow('Transportation', `Rs.${inv.transportation_charge.toLocaleString('en-IN')}`);
-  if (inv.gst_rate > 0)
-    summaryRow(`GST @${inv.gst_rate}%`, `Rs.${inv.gst_amount.toLocaleString('en-IN')}`);
+  for (const t of taxSplit(inv.gst_amount, inv.gst_rate, gstNumber, customer?.gstin))
+    summaryRow(t.label, `Rs.${t.amount.toLocaleString('en-IN')}`);
   summaryRow('Payable Amount', `Rs.${inv.total_amount.toLocaleString('en-IN')}`, true, [26, 35, 126]);
-  y += 3;
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(80, 80, 78);
+  doc.text(doc.splitTextToSize(amountInWords(inv.total_amount), CW - 4), M + 2, y + 5);
+  y += 10;
 
   summaryRow('Amount Paid', `Rs.${inv.advance_paid.toLocaleString('en-IN')}`, false, [34, 120, 34]);
   const balColor: [number, number, number] = inv.balance_due > 0 ? [163, 45, 45] : [34, 120, 34];

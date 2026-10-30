@@ -78,6 +78,8 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | Opening a saved quotation (or pressing any invoice "Apply") recalculated GST at today's Data Center rate, e.g. a 5% quote became 18% | **Fixed.** Quotes and invoices keep the rate they were issued at |
 | Accepting a quote left the booking unconfirmed and invoicing as separate manual steps | **Fixed.** Accepting offers "Confirm booking", then a "Create invoice" shortcut; confirmed bookings have an Invoice button |
 | "+ New booking" from a customer didn't fill in the customer | **Fixed** |
+| Menu Builder items had no stored price, so quotes started at ₹0 for new items | **Fixed.** `menu_items.default_price`, editable inline; quotations fill it, falling back to the last quoted price |
+| Invoice not GST-complete (no CGST/SGST split, SAC code or customer GSTIN) | **Fixed.** Tax Invoice title, SAC 996334, customer GSTIN, CGST/SGST (IGST for other-state GSTIN), amount in words |
 
 ## Security (Supabase Security Advisor: 22 errors, 1 warning)
 
@@ -91,13 +93,12 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 
 ## Catering — UX and missing basics (open)
 
-- Two unrelated menu systems (Packages and Menu Builder); catalog items have no default price.
+- Two unrelated menu systems (Packages and Menu Builder).
 - Invoice status "sent" means partly paid. (Accepting a quote now offers to confirm the booking and jump to the invoice.)
 - Single-day invoices can't take the final guest count. The Billing preview has four separate "Apply" buttons.
 - Missing confirmations on some deletes (payments, quotation days and meals, event types, team members). Packages can't be re-activated.
 - No search on the Quotations and Invoices lists. Quotations can't be shared on WhatsApp.
 - Business name, address and terms are hard-coded in the PDFs (now centralised for receipts in `lib/shop.ts`).
-- The invoice is not GST-complete (no CGST/SGST split, SAC code or customer GSTIN).
 - No URL routing, so the phone Back button leaves the app.
 
 ## Code quality

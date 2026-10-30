@@ -4,4 +4,5 @@ export const SHOP = {
   tagline: 'Caterers & Sweets',
   phone: '9879529967',
   email: 'shivshakticatering.2005@gmail.com',
+  sac: '996334', // SAC: catering services for events and functions
 };

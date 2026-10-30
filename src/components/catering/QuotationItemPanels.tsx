@@ -4,6 +4,7 @@ import { QuotationLineItem } from '../../hooks/useQuotations';
 export interface PickerItem {
   id: string;
   name: string;
+  default_price?: number | null;
   subcategory?: { name: string; category?: { name: string } | null } | null;
 }
 
@@ -88,7 +89,8 @@ const QuotationItemPanels: React.FC<Props> = ({
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, width: '100%', padding: '5px 12px 5px 24px', cursor: 'pointer', background: 'transparent', border: 'none', textAlign: 'left', color: 'inherit' }}
                       onMouseEnter={e => (e.currentTarget.style.background = '#F5F5F0')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      <span style={{ fontSize: fs }}>{it.name}</span>
+                      <span style={{ fontSize: fs, flex: 1 }}>{it.name}</span>
+                      {!!it.default_price && <span style={{ fontSize: 11, color: '#888880' }}>₹{it.default_price.toLocaleString('en-IN')}</span>}
                       <span style={{ background: '#E8750A', color: '#fff', borderRadius: 5, width: 22, height: 22, fontSize: 14, lineHeight: '22px', textAlign: 'center', flexShrink: 0 }}>+</span>
                     </button>
                   ))}
