@@ -333,6 +333,8 @@ body.modal-open { overflow: hidden; }
   .todo-row .ui-btn { grid-column: 2 / -1; justify-self: start; }
 }
 
-/* The counter takes the whole screen on a computer; its own Back control leaves it. */
+/* Full screen (a choice saved on the device, hooks/usePosFull) hides the sidebar on a computer; Back leaves the counter. */
 .app-layout.pos-full .app-sidebar { display: none; }
+.pos-fullbtn { margin-left: auto; margin-right: 8px; white-space: nowrap; }
+@media (max-width: 768px) { .pos-fullbtn { display: none; } }
 .app-layout.pos-full .pos-back { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px 0 4px; border: none; background: none; font-size: 15px; font-weight: 600; color: var(--ink); cursor: pointer; }

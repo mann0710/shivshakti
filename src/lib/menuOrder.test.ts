@@ -1,4 +1,4 @@
-import { planCourses, roleOf, isAccompaniment } from './menuOrder';
+import { planCourses, roleOf, isAccompaniment, subGroups, showSubs } from './menuOrder';
 import { courseGrid } from './docs/menu';
 import { choiceGroups } from './quoteChoices';
 
@@ -28,6 +28,14 @@ describe('menu order (design A)', () => {
     expect(names(plan[1])).toEqual(['Puri', 'Ringan Bataka Nu Shaak', 'Desi Vaal', 'South Boll', 'Taj-Laving Rice', 'Gujarati Varani Dal']);
     expect(names(plan[2])).toEqual(['Green Salad', 'Aachar', 'Water Jug']);
   });
+  it('groups each course by subcategory so Farsan shows inside Main Course', () => {
+    const main = planCourses(menu, { merge: true })[1];
+    const groups = subGroups(main);
+    expect(groups.map(g => `${g.name}: ${g.entries.map(e => e.item!.item_name).join(', ')}`)).toEqual([
+      'Indian Breads: Puri', 'Gujarati Vegetables: Ringan Bataka Nu Shaak', 'Kathod: Desi Vaal', 'Farsan: South Boll', 'Aromatic Rice: Taj-Laving Rice', 'Delicious Dal: Gujarati Varani Dal']);
+    expect(showSubs(groups)).toBe(true);
+    expect(showSubs(subGroups(planCourses(menu, { merge: true })[2]))).toBe(false);
+  });
   it('a course the owner set wins, and placed accompaniments stay where they are', () => {
     const own = menu.map(i => (i.item_name === 'South Boll' ? { ...i, course: 'Farsan' } : i.item_name === 'Green Salad' ? { ...i, course: 'Salads' } : i));
     expect(planCourses(own, { merge: true }).map(c => c.name)).toEqual(['Sweet', 'Main Course', 'Farsan', 'Salads', 'Including']);
@@ -36,6 +44,12 @@ describe('menu order (design A)', () => {
     const html = courseGrid(menu, false);
     expect(html).toContain('<div class="with">with Coconut Chutney</div>');
     expect(html.match(/Coconut Chutney/g)).toHaveLength(1);
+  });
+  it('prints subcategory headings inside a course that mixes them, none when it does not', () => {
+    const html = courseGrid(menu, false);
+    expect(html).toContain('<div class="sub-h">Farsan</div>');
+    expect(html).toContain('<div class="sub-h">Indian Breads</div>');
+    expect(courseGrid([d('A', 'Sweet', 'Gujarati Sweet'), d('B', 'Sweet', 'Gujarati Sweet')], false)).not.toContain('sub-h');
   });
   it('keeps every dish when counting prices (no merge)', () => {
     expect(planCourses(menu).pop()!.entries).toHaveLength(4);

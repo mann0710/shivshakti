@@ -3,7 +3,7 @@ import { mealNet } from '../quoteMath';
 import { formatDateIST } from '../ist';
 import { esc, money, cap, timeText } from './theme';
 import { choiceGroups, pickedOf, servedItems, plateRange, ChoiceGroup } from '../quoteChoices';
-import { planCourses, servedNames, Course } from '../menuOrder';
+import { planCourses, servedNames, subGroups, showSubs, Course, Entry } from '../menuOrder';
 
 // Menu blocks shared by quotations, invoices and the event menu.
 // Courses in the owner's order with one Main Course and accompaniments last (lib/menuOrder).
@@ -60,12 +60,17 @@ export function courseGrid(all: QuotationLineItem[], prices: PriceShow, mode: 'q
       return `<div class="course pick"><div class="course-h">${p.title}<span class="num">${p.meta}</span></div>${p.hint}${p.list}</div>`;
     }
     const meta = prices === true && c.sum > 0 ? `${money(c.sum)} / plate` : `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}`;
-    const body = c.entries.map(e => {
+    const entry = (e: Entry) => {
       if (!e.choice) return dish(e.item, itemPrice(e.item, prices));
       const p = choiceParts(e.choice, prices);
       return `<div class="pickbox"><div class="course-h">${p.title}<span class="num">${p.meta}</span></div>${p.hint}${p.list}</div>`;
-    }).join('');
-    return `<div class="course${c.entries.length > 8 ? ' wide' : ''}"><div class="course-h">${esc(c.name)}<span class="num">${meta}</span></div><div class="list">${body}</div></div>`;
+    };
+    // A course mixing subcategories lists them under small headings (Main Course › Farsan).
+    const groups = subGroups(c);
+    const heads = showSubs(groups);
+    const body = groups.map(g => `${heads && g.name ? `<div class="sub-h">${esc(g.name)}</div>` : ''}${g.entries.map(entry).join('')}`).join('');
+    const rows = c.entries.length + (heads ? groups.length : 0);
+    return `<div class="course${rows > 8 ? ' wide' : ''}"><div class="course-h">${esc(c.name)}<span class="num">${meta}</span></div><div class="list">${body}</div></div>`;
   }).join('')}</div>`;
 }
 

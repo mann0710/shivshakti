@@ -13,6 +13,7 @@ import { isOpenPreorder } from '../lib/preorders';
 import { unpaidCount } from '../lib/dues';
 import type { Page } from '../components/navItems';
 import { useNavIntent, canGoBack } from '../hooks/useNavIntent';
+import { usePosFull } from '../hooks/usePosFull';
 import { posStart, PosTabId as Tab } from '../lib/posIntent';
 
 const currentYear = new Date().getFullYear();
@@ -56,6 +57,8 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
     ['reports', 'Reports', 'Reports', 0],
   ];
 
+  const [full, setFull] = usePosFull();
+
   return (
     <div className={`sweets-pos${tab === 'pos' ? ' pos-screen' : ''}`}>
       <div className="page-topbar">
@@ -66,6 +69,8 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
             <div className="hide-sm" style={{ fontSize: 12, color: '#5A5A55', marginTop: 2 }}>Tap a box size to add it</div>
           </div>
         </div>
+        <button type="button" className="ui-btn pos-fullbtn" aria-pressed={full} onClick={() => setFull(!full)}
+          title={full ? 'Show the sidebar again' : 'Hide the sidebar while you sell'}>{full ? 'Exit full screen' : '⛶ Full screen'}</button>
         {(tab === 'orders' || tab === 'preorders') && (
           <select style={{ border: '1px solid #D0D0CC', borderRadius: 8, padding: '5px 10px', minHeight: 44, fontSize: 13, background: '#fff' }}
             value={year} onChange={e => setYear(Number(e.target.value))} aria-label="Year">

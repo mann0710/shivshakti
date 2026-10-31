@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { QuotationLineItem } from '../../hooks/useQuotations';
-import type { Course } from '../../lib/menuOrder';
+import { subGroups, showSubs, Course } from '../../lib/menuOrder';
 import { coursesOf } from '../../lib/quoteSummary';
 import { tidyGroups } from '../../lib/quoteChoices';
 import type { PickerItem } from '../../lib/quoteLines';
@@ -9,6 +9,7 @@ import { inr } from '../../lib/money';
 import AddDish from './AddDish';
 import DishEditor from './DishEditor';
 import ChoiceDialog from './ChoiceDialog';
+import InlineName from './InlineName';
 
 interface Props {
   items: QuotationLineItem[];
@@ -26,19 +27,23 @@ const pickOf = (c: Course) => c.entries.find(e => e.choice)?.choice;
 type Drag = { id: string; course?: undefined } | { course: string; id?: undefined };
 
 // The menu as courses of dish chips; "choose" courses are highlighted. Tap a dish to edit it,
-// drag a dish to any spot or course, drag a course by its grip, click a course name to rename it.
+// drag a dish to any spot or course, drag a course by its grip, click a course name to rename it,
+// add an empty course and drag dishes into it. Courses that mix subcategories show them as sections.
 const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, preview, onChange, compact }) => {
   const courses = useMemo(() => coursesOf(items), [items]);
   const [edit, setEdit] = useState<{ id: string; el: HTMLElement } | null>(null);
   const [choose, setChoose] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [over, setOver] = useState<string | null>(null);
-  const [naming, setNaming] = useState<{ from: string; text: string } | null>(null);
-  const cancelled = useRef(false);
+  const [naming, setNaming] = useState<string | null>(null);
+  // Empty courses the owner added; one exists for real once a dish is dropped in.
+  const [extra, setExtra] = useState<string[]>([]);
+  const [newCourse, setNewCourse] = useState(false);
   const [adding, setAdding] = useState(false);
   const skip = useMemo(() => new Set(items.map(i => i.item_id)), [items]);
   const add = (it: PickerItem) => onChange([...items, toLine(it)]);
   const names = courses.map(c => c.name);
+  const empty = extra.filter(n => !names.includes(n));
   const courseOf = (id: string) => courses.find(c => c.entries.some(e => (e.choice ? e.choice.items : [e.item!]).some(i => i.item_id === id)))?.name ?? '';
   const end = () => { setDrag(null); setOver(null); };
   const start = (e: React.DragEvent, d: Drag, ghost?: Element | null) => {
@@ -56,8 +61,8 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
     end();
   };
   const overOn = (e: React.DragEvent, key: string) => { if (!drag) return; e.preventDefault(); e.stopPropagation(); setOver(key); };
-  // Esc unmounts the box and fires blur; that blur must not save.
-  const rename = () => { if (naming && !cancelled.current) onChange(renameCourse(items, naming.from, naming.text)); cancelled.current = false; setNaming(null); };
+  const rename = (from: string, to: string | null) => { if (to !== null) onChange(renameCourse(items, from, to)); setNaming(null); };
+  const addCourse = (name: string | null) => { if (name && !names.includes(name) && !extra.includes(name)) setExtra([...extra, name]); setNewCourse(false); };
 
   const chip = (i: QuotationLineItem, course: string) => {
     return (
@@ -73,6 +78,23 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
         </button>
         <button type="button" className="x" aria-label={`Remove ${i.item_name}`} onClick={() => onChange(tidyGroups(items.filter(x => x.item_id !== i.item_id)))}>×</button>
       </span>
+    );
+  };
+
+  // A course's chips, split into subcategory sections when it mixes them (Main Course › Farsan).
+  const sections = (c: Course) => {
+    const groups = subGroups(c);
+    const chipsOf = (g: { entries: Course['entries'] }) => g.entries.flatMap(e => (e.choice ? e.choice.items : [e.item!])).map(i => chip(i, c.name));
+    if (!showSubs(groups)) return <div className="q-chips">{groups.flatMap(chipsOf)}</div>;
+    return (
+      <div className="q-subs">
+        {groups.map((g, k) => (
+          <div key={g.name || `choice${k}`} className="q-sub">
+            <span className="q-sub-l">{g.name || 'Customer picks'}</span>
+            <div className="q-chips">{chipsOf(g)}</div>
+          </div>
+        ))}
+      </div>
     );
   };
 
@@ -97,26 +119,37 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
               <span className="q-course-title">
                 <span className="q-grip" draggable title="Drag to move this course" aria-hidden="true"
                   onDragStart={e => start(e, { course: c.name }, e.currentTarget.closest('.q-course'))} onDragEnd={end}>⠿</span>
-                {naming?.from === c.name
-                  ? <input className="q-cname-in" autoFocus aria-label={`New name for ${c.name}`} value={naming.text} onChange={e => setNaming({ from: c.name, text: e.target.value })}
-                      onBlur={rename} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { cancelled.current = true; setNaming(null); } }} />
-                  : <button type="button" className="q-cname" title="Rename this course in this quote" onClick={() => setNaming({ from: c.name, text: c.name })}>{c.name}</button>}
+                {naming === c.name
+                  ? <InlineName className="q-cname-in" value={c.name} label={`New name for ${c.name}`} onDone={to => rename(c.name, to)} />
+                  : <button type="button" className="q-cname" title="Rename this course in this quote" onClick={() => setNaming(c.name)}>{c.name}</button>}
                 <span className="n">{g ? `· customer picks ${Math.min(Math.max(1, g.meta.pick), g.items.length)} of ${g.items.length}` : dishes.length > 1 ? `· ${dishes.length}` : ''}</span></span>
               <span className="q-course-acts">
                 {!compact && <span className="r">{right(c)}</span>}
                 {(dishes.length > 1 || g) && <button type="button" className="q-mini" onClick={() => setChoose(c.name)}>{g ? 'Edit the choice' : `Let ${who} choose`}</button>}
               </span>
             </div>
-            <div className="q-chips">{dishes.map(i => chip(i, c.name))}</div>
+            {sections(c)}
           </div>
         );
       })}
+      {empty.map(n => (
+        <div key={n} className={`q-course empty${over === `c:${n}` ? ' drop' : ''}`} onDragOver={e => overOn(e, `c:${n}`)} onDrop={e => dropOn(e, n)}>
+          <div className="q-course-head">
+            <span className="q-course-title"><b className="q-cname">{n}</b> <span className="n">· empty</span></span>
+            <button type="button" className="q-mini" onClick={() => setExtra(extra.filter(x => x !== n))}>Remove</button>
+          </div>
+          <p className="q-hint">Drag dishes here, or tap a dish and pick “{n}” as its course.</p>
+        </div>
+      ))}
+      {newCourse
+        ? <InlineName className="q-cname-in q-newcourse-in" label="New course name" placeholder="Course name, e.g. Live counter" onDone={addCourse} />
+        : items.length > 0 && <button type="button" className="q-newcourse" onClick={() => setNewCourse(true)}>+ New course</button>}
       {!items.length && !compact && <p className="q-hint">No dishes yet. Type a dish above, or start from a package.</p>}
       {compact && (adding
         ? <AddDish menu={menu} skip={skip} onPick={add} showPrices={showPrices} autoFocus placeholder="Type a dish name" onBlurEmpty={() => setAdding(false)} />
         : <div className="q-chips"><button type="button" className="q-mini" onClick={() => setAdding(true)}>+ Dish</button></div>)}
       {editing && <DishEditor anchor={edit!.el} item={editing} items={items} menu={menu} toLine={toLine} onChange={onChange} onClose={() => setEdit(null)}
-        courses={names} course={courseOf(editing.item_id)} onCourse={name => onChange(setCourse(items, editing.item_id, name))} />}
+        courses={[...names, ...empty]} course={courseOf(editing.item_id)} onCourse={name => onChange(setCourse(items, editing.item_id, name))} />}
       {course && <ChoiceDialog course={course} items={items} menu={menu} who={who} toLine={toLine} preview={preview} onChange={onChange} onClose={() => setChoose(null)} />}
     </div>
   );

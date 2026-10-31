@@ -41,7 +41,7 @@ export const SETTING_ROWS = [
   R('team', 'Team list for events', 'cooks helpers staff members'),
   R('data', 'Import from Excel', 'upload xlsx csv dishes sweets customers'), R('data', 'Download everything', 'export excel xlsx'), R('data', 'Backup copy', 'backup json'),
   R('data', 'Recycle bin', 'deleted restore'), R('data', 'Database updates', 'migration schema'),
-  R('device', 'Text size', 'font bigger smaller zoom large small a+ a-'),
+  R('device', 'Text size', 'font bigger smaller zoom large small a+ a-'), R('device', 'Sweets POS full screen', 'pos counter sidebar hide'),
 ];
 
 // Groups with at least one row matching every word typed, and those rows' labels.

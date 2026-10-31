@@ -55,6 +55,8 @@ h2 { font-family: ${HEAD_FONT}; font-size: 19px; font-weight: 600; color: ${NAVY
 .course.wide .list { columns: 2; column-gap: 36px; }
 .course-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-family: ${HEAD_FONT}; font-size: 12.5px; font-weight: 600; letter-spacing: 1.5px; color: var(--accent-text); text-transform: uppercase; margin-bottom: 3px; }
 .course-h span { font-family: 'Noto Sans', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0; color: #5C5C6B; text-transform: none; white-space: nowrap; }
+.sub-h { font-size: 11.5px; font-weight: 600; color: #5C5C6B; margin: 7px 0 1px; break-after: avoid; }
+.list .sub-h:first-child { margin-top: 0; }
 .dish { padding: 3px 0 4px; border-bottom: 1px dotted #E3E3EA; break-inside: avoid; }
 .dl { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; line-height: 1.35; }
 .dl .n { flex: 1; }

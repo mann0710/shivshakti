@@ -66,3 +66,19 @@ export function planCourses(all: QuotationLineItem[], opts: { merge?: boolean; g
   }
   return [...courses.filter(c => placed.has(c)), ...courses.filter(c => !placed.has(c))];
 }
+
+export interface SubGroup { name: string; entries: Entry[] }
+
+// A course's dishes by Menu Builder subcategory, in the order they come; a "choose any" group stays one block.
+export function subGroups(c: Course): SubGroup[] {
+  const out: SubGroup[] = [];
+  for (const e of c.entries) {
+    const name = e.choice ? '' : (e.item.subcategory_name || e.item.category_name || '').trim();
+    const g = name ? out.find(x => x.name === name) : undefined;
+    if (g) g.entries.push(e); else out.push({ name, entries: [e] });
+  }
+  return out;
+}
+
+// Subcategory headings only help when a course mixes subcategories.
+export const showSubs = (groups: SubGroup[]) => new Set(groups.map(g => g.name).filter(Boolean)).size > 1;

@@ -366,3 +366,14 @@
 .q-course.drop { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .q-course.drag { opacity: 0.45; }
 .q-dish[draggable] { cursor: grab; }
+
+/* Subcategory sections inside a course, and empty courses the owner added */
+.q-subs { display: flex; flex-direction: column; gap: 6px; }
+.q-sub { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; align-items: start; }
+.q-sub-l { font-size: 12px; font-weight: 700; color: #7A4A0A; text-transform: uppercase; letter-spacing: 0.5px; padding-top: 14px; overflow-wrap: anywhere; }
+.q-course.empty { border-style: dashed; background: #fff; }
+.q-course.empty .q-hint { margin: 0; }
+.q-newcourse { align-self: flex-start; border: 1px dashed #D6D4CC; background: #fff; color: #8A4B00; font: inherit; font-size: 13.5px; font-weight: 600; border-radius: 10px; padding: 0 14px; min-height: 44px; cursor: pointer; }
+.q-newcourse:hover { background: #FFF8EC; }
+.q-newcourse-in { align-self: flex-start; }
+@media (max-width: 768px) { .q-sub { grid-template-columns: 1fr; gap: 2px; } .q-sub-l { padding-top: 4px; } }

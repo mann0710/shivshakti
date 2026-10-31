@@ -21,6 +21,7 @@ import MobileNav from './components/MobileNav';
 import { setNavIntent, NavIntent } from './hooks/useNavIntent';
 import { leaveThen } from './hooks/useLeaveGuard';
 import { useAuth } from './hooks/useAuth';
+import { usePosFull } from './hooks/usePosFull';
 import { useDocContextSync } from './hooks/useDocSettings';
 import LoginScreen from './components/LoginScreen';
 import SetPasswordDialog from './components/settings/SetPasswordDialog';
@@ -43,6 +44,7 @@ function App() {
     return isPage(saved) ? saved : 'dashboard';
   });
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [posFull] = usePosFull();
   const auth = useAuth();
   const signOut = async () => { await auth.signOut(); queryClient.clear(); };
 
@@ -109,7 +111,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <DocContextSync />
-      <div className={`app-layout${page === 'seasonal_billing' ? ' pos-full' : ''}`}>
+      <div className={`app-layout${page === 'seasonal_billing' && posFull ? ' pos-full' : ''}`}>
         <Sidebar currentPage={navPage(page)} role={role} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
         <main className="app-main">
           {renderPage()}
