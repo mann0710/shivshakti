@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Box, measure } from '../../lib/viewport';
 import '../../styles/bookings-dialogs.css';
 
 export interface MenuItem {
@@ -39,19 +40,19 @@ const focusItem = (box: HTMLElement | null, to: number | 'first' | 'last' | 'che
   els[i].focus();
 };
 
-const place = (r: DOMRect, rows: number): React.CSSProperties => {
-  const h = Math.min(rows * 44 + 40, window.innerHeight * 0.7);
-  const below = window.innerHeight - r.bottom - 8 >= h || r.top < h;
-  return { width: Math.min(WIDTH, window.innerWidth - 16), right: Math.max(8, window.innerWidth - r.right),
-    ...(below ? { top: Math.min(r.bottom + 6, window.innerHeight - h - 8) } : { bottom: window.innerHeight - r.top + 6 }) };
+const place = (r: Box, rows: number): React.CSSProperties => {
+  const h = Math.min(rows * 44 + 40, r.vh * 0.7);
+  const below = r.vh - r.bottom - 8 >= h || r.top < h;
+  return { width: Math.min(WIDTH, r.vw - 16), right: Math.max(8, r.vw - r.right),
+    ...(below ? { top: Math.min(r.bottom + 6, r.vh - h - 8) } : { bottom: r.vh - r.top + 6 }) };
 };
 
 // Beside the main menu when there is room, else on top of it with a Back row.
-const placeSub = (menu: DOMRect, item: DOMRect, rows: number): { style: React.CSSProperties; inPlace: boolean } => {
+const placeSub = (menu: Box, item: Box, rows: number): { style: React.CSSProperties; inPlace: boolean } => {
   const h = rows * 44 + 24;
-  const top = Math.max(8, Math.min(item.top - 6, window.innerHeight - h - 8));
+  const top = Math.max(8, Math.min(item.top - 6, menu.vh - h - 8));
   if (menu.left - SUB_WIDTH - 6 >= 8) return { style: { width: SUB_WIDTH, left: menu.left - SUB_WIDTH - 6, top }, inPlace: false };
-  if (menu.right + SUB_WIDTH + 6 <= window.innerWidth - 8) return { style: { width: SUB_WIDTH, left: menu.right + 6, top }, inPlace: false };
+  if (menu.right + SUB_WIDTH + 6 <= menu.vw - 8) return { style: { width: SUB_WIDTH, left: menu.right + 6, top }, inPlace: false };
   return { style: { width: menu.width, left: menu.left, top: menu.top }, inPlace: true };
 };
 
@@ -85,13 +86,13 @@ const ActionMenu: React.FC<Props> = ({ label, groups, trigger, triggerClass, tri
   const toggle = () => {
     if (at) return close();
     const rows = groups.reduce((n, g) => n + g.length, 0);
-    setAt(place(btn.current!.getBoundingClientRect(), rows));
+    setAt(place(measure(btn.current!), rows));
   };
 
   const openSub = (item: MenuItem, key: string, el: HTMLElement) => {
     subFrom.current = el;
     const rows = (item.submenu ?? []).reduce((n, g) => n + g.length, 0) + 1;
-    setSub({ key, ...placeSub(main.current!.getBoundingClientRect(), el.getBoundingClientRect(), rows) });
+    setSub({ key, ...placeSub(measure(main.current!), measure(el), rows) });
   };
 
   // Keys stay inside the menu so a dialog behind it does not close too.

@@ -8,7 +8,7 @@
 .pp-head .ui-btn { min-height: 44px; padding: 0 18px; white-space: nowrap; flex: none; }
 .pp-layout { display: grid; grid-template-columns: minmax(300px, 390px) minmax(0, 1fr); gap: 18px; align-items: start; }
 .pp-list, .pp-detail { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.pp-detail { gap: 14px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+.pp-detail { gap: 14px; position: sticky; top: 12px; max-height: calc(100vh / var(--zoom) - 24px); overflow-y: auto; }
 
 .pp-search { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #E0E0DA; border-radius: 10px; padding: 0 12px; min-height: 44px; }
 .pp-search input { border: none; font-size: 14px; flex: 1; min-width: 0; background: transparent; color: var(--ink); height: 42px; }
@@ -93,7 +93,7 @@
 
 /* Floating ⋯ menu */
 .pp-menu-away { position: fixed; inset: 0; z-index: 450; }
-.pp-menu { position: fixed; z-index: 451; width: 260px; max-height: 70vh; overflow-y: auto; background: #fff; border: 1px solid #E0E0DA; border-radius: 12px; box-shadow: 0 12px 32px rgba(26,26,24,0.16); padding: 6px; display: flex; flex-direction: column; }
+.pp-menu { position: fixed; z-index: 451; width: 260px; max-height: calc(70vh / var(--zoom)); overflow-y: auto; background: #fff; border: 1px solid #E0E0DA; border-radius: 12px; box-shadow: 0 12px 32px rgba(26,26,24,0.16); padding: 6px; display: flex; flex-direction: column; }
 .pp-mi { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-align: left; border: none; background: none; font-size: 14px; color: var(--ink); padding: 0 12px; min-height: 44px; border-radius: 8px; cursor: pointer; text-decoration: none; }
 .pp-mi:hover, .pp-mi:focus { background: #F5F3EE; outline: none; }
 .pp-mi.strong { font-weight: 600; }
@@ -161,7 +161,7 @@
 }
 
 /* Sign in */
-.lg-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #F5F5F0; padding: 16px; }
+.lg-wrap { min-height: calc(100vh / var(--zoom)); display: flex; align-items: center; justify-content: center; background: #F5F5F0; padding: 16px; }
 .lg-card { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 28px 28px 24px; width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 14px; text-align: left; }
 .lg-card.center { text-align: center; align-items: center; }
 .lg-mark { width: 56px; height: 56px; border-radius: 12px; background: #FFE9D2; color: #8A4B00; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; align-self: center; }

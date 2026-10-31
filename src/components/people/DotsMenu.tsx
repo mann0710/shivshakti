@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { measure } from '../../lib/viewport';
 import '../../styles/people.css';
 
 export interface DotsItem { label: string; onClick?: () => void; href?: string; danger?: boolean; hint?: string; sep?: boolean; strong?: boolean }
@@ -32,9 +33,9 @@ const DotsMenu: React.FC<Props> = ({ label, items, className = '' }) => {
 
   const toggle = () => {
     if (at) return close();
-    const r = btn.current!.getBoundingClientRect();
-    const below = window.innerHeight - r.bottom > 320;
-    setAt({ right: Math.max(8, window.innerWidth - r.right), ...(below ? { top: r.bottom + 6 } : { bottom: window.innerHeight - r.top + 6 }) });
+    const r = measure(btn.current!);
+    const below = r.vh - r.bottom > 320;
+    setAt({ right: Math.max(8, r.vw - r.right), ...(below ? { top: r.bottom + 6 } : { bottom: r.vh - r.top + 6 }) });
   };
 
   return (

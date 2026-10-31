@@ -187,7 +187,7 @@
 .mb-banner > span { flex: 1; min-width: 0; }
 .mb-banner .ui-btn { border-color: #E8A867; color: #8A4B00; font-weight: 600; font-size: 13px; min-height: 44px; flex-shrink: 0; }
 .mb-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
-.mb-tree { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; max-height: calc(100vh - 220px); overflow-y: auto; position: sticky; top: 12px; }
+.mb-tree { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; max-height: calc(100vh / var(--zoom) - 220px); overflow-y: auto; position: sticky; top: 12px; }
 .mb-node { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: none; background: none; border-radius: 9px; padding: 0 10px; min-height: 40px; cursor: pointer; color: var(--ink); font-size: 14px; }
 .mb-node:hover { background: #FAF8F4; }
 .mb-node.cat { font-weight: 500; min-height: 44px; }

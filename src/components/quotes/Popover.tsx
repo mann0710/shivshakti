@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { measure } from '../../lib/viewport';
 
 interface Props {
   anchor: HTMLElement | null;
@@ -19,11 +20,11 @@ const Popover: React.FC<Props> = ({ anchor, label, width = 260, onClose, childre
 
   useLayoutEffect(() => {
     if (!anchor) return;
-    const r = anchor.getBoundingClientRect();
+    const r = measure(anchor);
     const h = box.current?.offsetHeight ?? 300;
-    const below = window.innerHeight - r.bottom > h + 12 || r.top < h + 12;
-    const left = r.left + width <= window.innerWidth - 8 ? r.left : Math.max(8, r.right - width);
-    setAt({ left, width, ...(below ? { top: r.bottom + 6 } : { bottom: window.innerHeight - r.top + 6 }) });
+    const below = r.vh - r.bottom > h + 12 || r.top < h + 12;
+    const left = r.left + width <= r.vw - 8 ? r.left : Math.max(8, r.right - width);
+    setAt({ left, width, ...(below ? { top: r.bottom + 6 } : { bottom: r.vh - r.top + 6 }) });
   }, [anchor, width]);
 
   useEffect(() => {

@@ -113,14 +113,14 @@
 
 /* ─── Popovers, menus and pickers ─── */
 .q-pop-back { position: fixed; inset: 0; z-index: 450; }
-.q-pop { position: fixed; z-index: 451; background: #fff; border: 1px solid #E0E0DA; border-radius: 12px; box-shadow: 0 12px 32px rgba(26, 26, 24, 0.16); display: flex; flex-direction: column; max-height: 70vh; overflow: hidden; }
+.q-pop { position: fixed; z-index: 451; background: #fff; border: 1px solid #E0E0DA; border-radius: 12px; box-shadow: 0 12px 32px rgba(26, 26, 24, 0.16); display: flex; flex-direction: column; max-height: calc(70vh / var(--zoom)); overflow: hidden; }
 .q-menu { padding: 6px; overflow-y: auto; display: flex; flex-direction: column; }
 .q-menu button { display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 14px; color: var(--ink); padding: 0 12px; min-height: 44px; border-radius: 8px; cursor: pointer; }
 .q-menu button:hover { background: #F7F5F0; }
 .q-menu button.danger { color: #A32D2D; }
 .q-menu button small { color: #6B6B66; font-size: 12px; }
 .q-menu hr { border: none; height: 1px; background: #EEEEE8; margin: 4px 6px; }
-.q-picker { display: flex; flex-direction: column; min-height: 0; max-height: 70vh; }
+.q-picker { display: flex; flex-direction: column; min-height: 0; max-height: calc(70vh / var(--zoom)); }
 .q-pick-head { padding: 12px 12px 8px; font-weight: 700; font-size: 14.5px; display: flex; flex-direction: column; }
 .q-pick-head small { font-weight: 400; font-size: 12px; color: #6B6B66; }
 .q-pick-search { margin: 0 12px 6px; border: 2px solid var(--accent); border-radius: 10px; padding: 0 12px; min-height: 44px; font: inherit; font-size: 14px; }

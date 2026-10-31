@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { FOOD_STYLES, FoodStyle } from '../../lib/foodStyles';
+import { measure } from '../../lib/viewport';
 import '../../styles/menu-sheet.css';
 
 interface Props { anchor: HTMLElement; value: FoodStyle[]; label: string; onToggle: (s: FoodStyle) => void; onClose: () => void }
@@ -12,11 +13,11 @@ const StylePicker: React.FC<Props> = ({ anchor, value, label, onToggle, onClose 
   const box = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
-  const r = anchor.getBoundingClientRect();
-  const below = window.innerHeight - r.bottom > 200;
+  const r = measure(anchor);
+  const below = r.vh - r.bottom > 200;
   const at: React.CSSProperties = {
-    left: Math.max(8, Math.min(r.left, window.innerWidth - WIDTH - 8)),
-    ...(below ? { top: r.bottom + 4 } : { bottom: window.innerHeight - r.top + 4 }),
+    left: Math.max(8, Math.min(r.left, r.vw - WIDTH - 8)),
+    ...(below ? { top: r.bottom + 4 } : { bottom: r.vh - r.top + 4 }),
   };
 
   useEffect(() => {

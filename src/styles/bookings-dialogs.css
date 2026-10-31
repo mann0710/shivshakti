@@ -68,7 +68,7 @@ textarea.bkf-input { resize: vertical; min-height: 76px; }
 .am-trigger[aria-expanded="true"] { background: #F7F5F0; border-color: #C9C9C2; }
 .am-text { border: none; background: none; font: inherit; font-size: 14px; font-weight: 600; color: #8A4B00; min-height: 44px; padding: 0 4px; cursor: pointer; }
 .am-veil { position: fixed; inset: 0; z-index: 450; }
-.am-pop { position: fixed; z-index: 451; box-sizing: border-box; max-height: 70vh; overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14); padding: 6px; display: flex; flex-direction: column; }
+.am-pop { position: fixed; z-index: 451; box-sizing: border-box; max-height: calc(70vh / var(--zoom)); overflow-y: auto; background: #fff; border: 1px solid var(--line); border-radius: 13px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14); padding: 6px; display: flex; flex-direction: column; }
 .am-pop.sub { z-index: 452; }
 .am-sep { display: block; height: 6px; border-top: 1px solid #F0EFEA; margin: 6px 6px 0; }
 .am-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; min-height: 44px; padding: 0 12px; border: none; border-radius: 9px; background: transparent; font: inherit; font-size: 14px; color: var(--ink); text-align: left; text-decoration: none; cursor: pointer; }
