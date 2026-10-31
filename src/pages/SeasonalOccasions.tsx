@@ -1,195 +1,93 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import SweetsTabs from '../components/SweetsTabs';
+import { Navigate } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import {
-  useSeasonalOccasions, useCreateSeasonalOccasion, useUpdateSeasonalOccasion, useDeleteSeasonalOccasion,
-  SeasonalOccasion,
+  useSeasonalOccasions, useCreateSeasonalOccasion, useDeleteSeasonalOccasion, SeasonalOccasion,
 } from '../hooks/useSeasonalOccasions';
+import { useSeasonalItems } from '../hooks/useSeasonalItems';
+import { useSeasonalOrders } from '../hooks/useSeasonalOrders';
+import { useSeasonalPreorders } from '../hooks/useSeasonalPreorders';
+import { seasonCount } from '../lib/occasions';
+import { todayIST } from '../lib/ist';
+import OccasionCard from '../components/sweets/OccasionCard';
+import OccasionDialog from '../components/sweets/OccasionDialog';
+import { useSeasonActions } from '../components/sweets/useSeasonActions';
+import '../styles/sweets.css';
 
-const SeasonalOccasions: React.FC = () => {
+const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Could not save');
+
+// Seasons on first, then by start date; undated ones last.
+const byOrder = (a: SeasonalOccasion, b: SeasonalOccasion) =>
+  Number(b.is_active) - Number(a.is_active) || (a.start_date || '9').localeCompare(b.start_date || '9') || a.name.localeCompare(b.name);
+
+// Occasions: the festivals sweets are sold for, with dates, counts and the season switch.
+const SeasonalOccasions: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate }) => {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const { data: occasions = [], isLoading } = useSeasonalOccasions();
-  const createOccasion = useCreateSeasonalOccasion();
-  const updateOccasion = useUpdateSeasonalOccasion();
-  const deleteOccasion = useDeleteSeasonalOccasion();
+  const { data: items = [] } = useSeasonalItems();
+  const { data: orders = [] } = useSeasonalOrders();
+  const { data: preorders = [] } = useSeasonalPreorders();
+  const create = useCreateSeasonalOccasion();
+  const del = useDeleteSeasonalOccasion();
+  const season = useSeasonActions();
+  const [name, setName] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
+  const today = todayIST();
 
-  const [newName, setNewName] = useState('');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState('');
+  const list = useMemo(() => [...occasions].sort(byOrder), [occasions]);
+  const counts = useMemo(() => new Map(occasions.map(o => [o.id, seasonCount(o, orders, preorders)])), [occasions, orders, preorders]);
+  const open = occasions.find(o => o.id === editing);
 
-  const handleAdd = async () => {
-    const name = newName.trim();
-    if (!name) { toast.error('Occasion name required'); return; }
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const n = name.trim();
+    if (!n) { toast.error('Type the occasion name first'); return; }
     try {
-      await createOccasion.mutateAsync(name);
-      setNewName('');
-      toast.success('Occasion added');
-    } catch (e: any) {
-      toast.error(e.message || 'Error');
-    }
+      const made = await create.mutateAsync(n);
+      setName('');
+      setEditing(made.id);
+      toast.success(`${n} added · set its dates`);
+    } catch (err) { toast.error(errorText(err)); }
   };
 
-  const startEdit = (occ: SeasonalOccasion) => {
-    setEditingId(occ.id);
-    setEditingName(occ.name);
+  const remove = async (o: SeasonalOccasion) => {
+    if (!(await confirm({ title: `Delete ${o.name}?`, message: 'Its sweets become all-year sweets. End the season instead to hide them for now.', confirmLabel: 'Delete', danger: true }))) return;
+    try { await del.mutateAsync(o.id); setEditing(null); toast.success('Deleted'); } catch (err) { toast.error(errorText(err)); }
   };
-
-  const saveEdit = async (id: string) => {
-    const name = editingName.trim();
-    if (!name) { toast.error('Name required'); return; }
-    try {
-      await updateOccasion.mutateAsync({ id, name });
-      setEditingId(null);
-      toast.success('Updated');
-    } catch (e: any) {
-      toast.error(e.message || 'Error');
-    }
-  };
-
-  const toggleActive = async (occ: SeasonalOccasion) => {
-    try {
-      await updateOccasion.mutateAsync({ id: occ.id, is_active: !occ.is_active });
-      toast.success(occ.is_active ? 'Deactivated' : 'Activated');
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!(await confirm({ title: 'Delete occasion?', message: 'Items linked to it become all-year items. Deactivate it instead to hide it for now.', confirmLabel: 'Delete', danger: true }))) return;
-    try {
-      await deleteOccasion.mutateAsync(id);
-      toast.success('Deleted');
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
-  const active = occasions.filter(o => o.is_active);
-  const inactive = occasions.filter(o => !o.is_active);
 
   return (
-    <div>
-      <div className="page-topbar">
+    <div className="sw-page">
+      <div className="sw-head end">
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Occasions</div>
-          <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>
-            {active.length} active · {inactive.length} inactive
-          </div>
+          <h1>Occasions</h1>
+          <SweetsTabs current="seasonal_occasions" onNavigate={onNavigate} />
+          <span className="sw-sub">Festivals you sell sweets for · turn one on and its sweets appear on the POS</span>
         </div>
+        <form className="sw-add" aria-label="Add occasion" onSubmit={add}>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="New occasion, e.g. Makar Sankranti" aria-label="New occasion name" />
+          <button type="submit" className="ui-btn primary" disabled={create.isPending}>Add</button>
+        </form>
       </div>
 
-      <div className="page-content">
-        {/* Add form */}
-        <div style={card}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Add Occasion</div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-            <div style={{ flex: 1, maxWidth: 360 }}>
-              <label style={lbl}>Occasion Name</label>
-              <input
-                style={{ ...inp, width: '100%', marginTop: 4 }}
-                value={newName}
-                onChange={e => setNewName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAdd()}
-                placeholder="e.g. Diwali, Raksha Bandhan, Makar Sankranti..."
-              />
-            </div>
-            <button style={btnPrimary} onClick={handleAdd} disabled={createOccasion.isPending}>
-              + Add
-            </button>
-          </div>
-        </div>
-
-        {isLoading ? (
-          <div style={{ color: '#888880', fontSize: 13 }}>Loading...</div>
-        ) : occasions.length === 0 ? (
-          <div style={{ color: '#888880', fontSize: 13, textAlign: 'center', marginTop: 32 }}>
-            No occasions yet. Add your first one above.
-          </div>
-        ) : (
-          <div style={{ background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 12, overflow: 'hidden' }}>
-            <table className="stack-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#F9F8F5', borderBottom: '0.5px solid #E5E5E0' }}>
-                  <th style={th}>Occasion Name</th>
-                  <th style={th}>Status</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {occasions.map((occ, idx) => (
-                  <tr
-                    key={occ.id}
-                    style={{
-                      borderBottom: idx < occasions.length - 1 ? '0.5px solid #F0F0EC' : 'none',
-                      opacity: occ.is_active ? 1 : 0.55,
-                    }}
-                  >
-                    <td style={td}>
-                      {editingId === occ.id ? (
-                        <input
-                          style={{ ...inp, minWidth: 220 }}
-                          value={editingName}
-                          onChange={e => setEditingName(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') saveEdit(occ.id);
-                            if (e.key === 'Escape') setEditingId(null);
-                          }}
-                          autoFocus
-                        />
-                      ) : (
-                        <span style={{ fontWeight: 500 }}>{occ.name}</span>
-                      )}
-                    </td>
-                    <td style={td}>
-                      <span style={{
-                        fontSize: 11, padding: '3px 10px', borderRadius: 20,
-                        background: occ.is_active ? '#EAF3DE' : '#F5F5F0',
-                        color: occ.is_active ? '#3B6D11' : '#888880',
-                        fontWeight: 600,
-                      }}>
-                        {occ.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td style={{ ...td, textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        {editingId === occ.id ? (
-                          <>
-                            <button style={{ ...btnSm, color: '#1A237E' }} onClick={() => saveEdit(occ.id)}>Save</button>
-                            <button style={btnSm} onClick={() => setEditingId(null)}>Cancel</button>
-                          </>
-                        ) : (
-                          <>
-                            <button style={btnSm} onClick={() => startEdit(occ)}>Edit</button>
-                            <button
-                              style={{ ...btnSm, color: occ.is_active ? '#888880' : '#3B6D11' }}
-                              onClick={() => toggleActive(occ)}
-                            >
-                              {occ.is_active ? 'Deactivate' : 'Activate'}
-                            </button>
-                            <button style={{ ...btnSm, color: '#E24B4A' }} onClick={() => handleDelete(occ.id)}>Delete</button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {isLoading ? <div className="sw-empty">Loading…</div>
+        : list.length === 0 ? <div className="sw-empty">No occasions yet. Add your first festival above.</div>
+        : (
+          <div className="sw-occ-grid">
+            {list.map(o => (
+              <OccasionCard key={o.id} o={o} today={today} busy={season.busy}
+                sweets={items.filter(i => i.occasion_id === o.id)} count={counts.get(o.id) ?? { bills: 0, bookings: 0 }}
+                onEdit={() => setEditing(o.id)} onSee={() => onNavigate?.('seasonal_items', { action: 'open', id: o.id })}
+                onStart={() => season.start(o)} onEnd={() => season.end(o)} onDelete={() => remove(o)} />
+            ))}
           </div>
         )}
-      </div>
+
+      {open && <OccasionDialog key={open.id} o={open} onClose={() => setEditing(null)} onDelete={() => remove(open)} />}
       {confirmDialog}
     </div>
   );
 };
-
-const btnPrimary: React.CSSProperties = { background: '#1A237E', color: '#fff', border: 'none', padding: '7px 18px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
-const btnSm: React.CSSProperties = { background: '#F5F5F0', border: '0.5px solid #E5E5E0', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#444' };
-const card: React.CSSProperties = { background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16, marginBottom: 16 };
-const lbl: React.CSSProperties = { fontSize: 11, color: '#888880', fontWeight: 500, display: 'block' };
-const inp: React.CSSProperties = { border: '1px solid #E5E5E0', borderRadius: 7, padding: '7px 10px', fontSize: 13, background: '#fff' };
-const th: React.CSSProperties = { padding: '10px 14px', fontWeight: 600, textAlign: 'left', fontSize: 12, color: '#888880' };
-const td: React.CSSProperties = { padding: '10px 14px' };
 
 export default SeasonalOccasions;

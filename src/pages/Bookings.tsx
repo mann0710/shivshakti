@@ -7,14 +7,16 @@ import { useInvoices } from '../hooks/useInvoices';
 import { useBookingValue } from '../hooks/useBookingValue';
 import { useAcceptFlow } from '../hooks/useAcceptFlow';
 import { useStoredState } from '../hooks/useStoredState';
+import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Booking, Invoice } from '../types';
 import { formatDateIST, todayIST } from '../lib/ist';
 import { inr } from '../lib/money';
 import { downloadDoc } from '../lib/docs/output';
+import { siblingsOf } from '../lib/quoteOptions';
 import { eventMenuDoc } from '../lib/docs/invoiceDoc';
-import { bookingView, BookingView, boardStats, groupByMonth, sortForTab, dateRangeText, Tab, TABS } from '../lib/bookingBoard';
+import { bookingView, BookingView, boardStats, groupByMonth, sortForTab, dateRangeText, festivalDays, neverInvoiced, Tab, TABS } from '../lib/bookingBoard';
 import BookingFormModal from '../components/catering/BookingFormModal';
 import EventDetail from '../components/catering/EventDetail';
 import PaymentFormModal from '../components/catering/PaymentFormModal';
@@ -23,6 +25,7 @@ import BookingMonth from '../components/catering/BookingMonth';
 import BookingPipeline from '../components/catering/BookingPipeline';
 import { BoardActions } from '../components/catering/BookingMenu';
 import { calendarUrl, promptCalendar } from '../components/catering/BookingCalendar';
+import '../styles/bookings-dialogs.css';
 
 type View = 'list' | 'calendar' | 'pipeline';
 const VIEWS: { id: View; label: string }[] = [{ id: 'list', label: 'List' }, { id: 'calendar', label: 'Calendar' }, { id: 'pipeline', label: 'Pipeline' }];
@@ -42,6 +45,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const { data: quotes = [] } = useQuotations();
   const { data: invoices = [] } = useInvoices();
   const { data: teamMembers = [] } = useTeamMembers();
+  const { data: occasions = [] } = useSeasonalOccasions();
   const valueOf = useBookingValue();
   const updateBooking = useUpdateBooking();
   const deleteBooking = useDeleteBooking();
@@ -70,6 +74,8 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const groups = groupByMonth(sortForTab(inTab(tab), tab));
   const stats = boardStats(views);
   const attention = views.filter(v => v.tab === 'attention').length;
+  const festivals = useMemo(() => festivalDays(occasions), [occasions]);
+  const eventView = views.find(v => v.b.id === eventId);
 
   const setStatus = async (b: Booking, status: Booking['status']) => {
     try {
@@ -83,7 +89,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
     const what = <><b>{b.event_type}</b> for <b>{b.customer?.name ?? 'this customer'}</b> on {dateRangeText(b)}</>;
     const invoice = invoices.find(i => i.booking_id === b.id);
     if (invoice) {
-      if (await confirm({ title: 'This booking has an invoice', message: <>{what} has invoice <b>{invoice.invoice_number}</b>, so it can't be deleted here and its payments stay safe. Mark the booking Cancelled instead?</>, confirmLabel: 'Mark cancelled' })) setStatus(b, 'cancelled');
+      if (await confirm({ title: 'This booking has an invoice', message: <>{what} has invoice <b>{invoice.invoice_number}</b>, so it can't be deleted here and its payments stay safe. Mark it lost or cancelled instead?</>, confirmLabel: 'Mark cancelled' })) setStatus(b, 'cancelled');
       return;
     }
     const linked = quotes.filter(q => q.booking_id === b.id);
@@ -99,6 +105,9 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
     } catch (e: any) { toast.error(e?.message || 'Failed to delete'); }
   };
   const go: Navigate = (page, i) => onNavigate?.(page, i);
+  const closeAsLost = async (b: Booking) => {
+    if (await confirm({ title: 'Close as lost or cancelled?', message: <><b>{b.customer?.name}</b> · {b.event_type} on {dateRangeText(b)} moves to Lost or cancelled. You can change it back from ⋯ → Change status.</>, confirmLabel: 'Close as lost' })) setStatus(b, 'cancelled');
+  };
 
   // The one button on each booking.
   const run = async (v: BookingView) => {
@@ -109,8 +118,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
       case 'invoice': return go('billing', { action: 'new', id: b.id });
       case 'payment': return v.invoice && setPaying(v.invoice);
       case 'complete': return setStatus(b, 'completed');
-      case 'close':
-        if (await confirm({ title: 'Close as lost?', message: <><b>{b.customer?.name}</b> · {b.event_type} on {dateRangeText(b)} moves to Cancelled. You can change it back from ⋯ → Change status.</>, confirmLabel: 'Close as lost' })) setStatus(b, 'cancelled');
+      case 'close': return closeAsLost(b);
     }
   };
   const actions: BoardActions = {
@@ -119,8 +127,11 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
     edit: b => setFormFor(b),
     quote: b => go('quotations', { action: 'new', id: b.id }),
     invoice: b => go('billing', { action: 'new', id: b.id }),
+    pay: v => v.invoice && setPaying(v.invoice),
+    accept: q => accept.accept(q),
+    send: q => accept.share(q, true, siblingsOf(q, quotes)),
     menuPdf: v => downloadDoc(() => eventMenuDoc(v.b, v.quote)),
-    status: setStatus,
+    status: (b, s) => (s === 'cancelled' ? closeAsLost(b) : setStatus(b, s)),
     remove,
     calendarHref: b => calendarUrl(b, teamEmails),
     newOn: d => { setPresetDate(d); setFormFor('new'); },
@@ -130,7 +141,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
     <div role="group" aria-label="View" className={cls} style={{ background: '#fff', border: '1px solid #E0E0DA', borderRadius: 10, padding: 3, gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
       {VIEWS.map(o => (
         <button key={o.id} type="button" aria-pressed={view === o.id} onClick={() => { setForced(undefined); setPref({ view: o.id }); }}
-          style={{ border: 'none', borderRadius: 7, padding: '8px 14px', font: 'inherit', fontSize: 13, cursor: 'pointer', minHeight: 38,
+          style={{ border: 'none', borderRadius: 7, padding: '8px 14px', font: 'inherit', fontSize: 13, cursor: 'pointer', minHeight: 44,
             background: view === o.id ? '#1A1A18' : 'transparent', color: view === o.id ? '#fff' : '#4A4A45', fontWeight: view === o.id ? 600 : 400 }}>{o.label}</button>
       ))}
     </div>
@@ -156,13 +167,10 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
             <div role="tablist" aria-label="Which bookings" className="bk-tabs">
               {TABS.map(t => {
                 const n = inTab(t.id).length;
-                const warm = t.id === 'attention' && n > 0;
                 return (
                   <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
-                    style={{ border: 'none', background: 'none', font: 'inherit', fontSize: 14, cursor: 'pointer', padding: '10px 0 12px', whiteSpace: 'nowrap',
-                      fontWeight: tab === t.id ? 600 : 400, color: warm ? '#8A4B00' : tab === t.id ? '#1A1A18' : '#4A4A45', borderBottom: `2px solid ${tab === t.id ? '#E8750A' : 'transparent'}` }}>
-                    {t.label}{' '}
-                    <span style={warm ? { padding: '1px 7px', borderRadius: 10, background: '#FBE3C5', color: '#7A3A00', fontSize: 12, fontWeight: 600 } : { color: '#6B6B66' }}>{n}</span>
+                    className={`bk-tab${t.id === 'attention' && n > 0 ? ' warm' : ''}`}>
+                    {t.label} <span className="n">{n}</span>
                   </button>
                 );
               })}
@@ -175,9 +183,9 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
         {view === 'list' && tab === 'upcoming' && attention > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', background: '#FFF6EA', border: '1px solid #F3D3AD', borderRadius: 12, padding: '12px 16px' }}>
             <span style={{ fontSize: 14, color: '#6B3A00', flex: '1 1 260px' }}>
-              <b>{attention} past event{attention > 1 ? 's are' : ' is'} still open.</b> Mark each one completed, paid or closed so your totals stay right.
+              <b>{attention} past event{attention > 1 ? 's are' : ' is'} still open.</b> Mark each one completed or cancelled so your totals stay right.
             </span>
-            <button type="button" onClick={() => setTab('attention')} style={{ border: '1px solid #E8A867', background: '#fff', color: '#8A4B00', font: 'inherit', fontSize: 13, fontWeight: 600, padding: '8px 14px', borderRadius: 8, cursor: 'pointer', minHeight: 40 }}>Review {attention}</button>
+            <button type="button" onClick={() => setTab('attention')} style={{ border: '1px solid #E8A867', background: '#fff', color: '#8A4B00', font: 'inherit', fontSize: 13, fontWeight: 600, padding: '8px 14px', borderRadius: 8, cursor: 'pointer', minHeight: 44 }}>Review {attention}</button>
           </div>
         )}
 
@@ -191,16 +199,16 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
         )}
 
         {isLoading ? <div style={emptyBox}>Loading bookings…</div>
-          : view === 'calendar' ? <BookingMonth views={shown} actions={actions} today={today} />
-          : view === 'pipeline' ? <BookingPipeline views={shown} actions={actions} today={today} />
+          : view === 'calendar' ? <BookingMonth views={shown} actions={actions} today={today} festivals={festivals} />
+          : view === 'pipeline' ? <BookingPipeline views={shown} actions={actions} today={today} unbilled={neverInvoiced(views).length} onInvoices={() => go('billing')} />
           : <BookingAgenda groups={groups} actions={actions}
               empty={q ? 'No bookings match your search' : tab === 'attention' ? 'Nothing needs attention' : `No ${TABS.find(t => t.id === tab)!.label.toLowerCase()} bookings`} />}
       </div>
 
-      {eventId && onNavigate && <EventDetail bookingId={eventId} onClose={() => setEventId(null)} onNavigate={onNavigate} onEdit={b => setFormFor(b)} />}
+      {eventView && onNavigate && <EventDetail view={eventView} actions={actions} onClose={() => setEventId(null)} onNavigate={onNavigate} />}
       {formFor && (
         <BookingFormModal booking={formFor === 'new' ? null : formFor} presetCustomerId={presetCustomerId} presetDate={presetDate}
-          onClose={closeForm} onSaved={(saved, confirmedNow) => { closeForm(); if (confirmedNow) promptCalendar(saved, teamEmails); }} />
+          onClose={closeForm} onSaved={closeForm} />
       )}
       {paying && <PaymentFormModal invoice={paying} onClose={() => setPaying(null)} />}
       {accept.ui}
@@ -218,7 +226,7 @@ const Stat: React.FC<{ label: string; value: string; note: string }> = ({ label,
 );
 
 const emptyBox: React.CSSProperties = { background: '#fff', border: '1px solid #E5E5E0', borderRadius: 14, padding: 40, textAlign: 'center', color: '#6B6B66', fontSize: 14 };
-const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600, minHeight: 40 };
-const searchInp: React.CSSProperties = { flex: '0 1 300px', minWidth: 200, padding: '9px 12px', borderRadius: 10, border: '1px solid #E0E0DA', fontSize: 13, background: '#fff', color: '#1A1A18', boxSizing: 'border-box', marginBottom: 6 };
+const btnPrimary: React.CSSProperties = { background: 'var(--primary)', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 10, fontSize: 14, cursor: 'pointer', fontWeight: 600, minHeight: 44 };
+const searchInp: React.CSSProperties = { flex: '0 1 300px', minWidth: 200, minHeight: 44, padding: '9px 12px', borderRadius: 10, border: '1px solid #E0E0DA', fontSize: 13, background: '#fff', color: '#1A1A18', boxSizing: 'border-box', marginBottom: 6 };
 
 export default Bookings;

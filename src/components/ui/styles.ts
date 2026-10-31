@@ -1,14 +1,14 @@
 import React from 'react';
 
-// Shared inline styles for the Sessional screens (navy theme).
-export const NAVY = '#1A237E';
-export const NAVY_SOFT = '#EEF0FB';
+// Shared inline styles for the sweets screens; colours come from the CSS tokens in index.css.
+export const NAVY = 'var(--primary)';
+export const NAVY_SOFT = '#FFF1E3';
 export const MUTED = '#888880';
-export const DANGER = '#C0392B';
+export const DANGER = 'var(--danger)';
 export const SUCCESS = '#3B6D11';
 
-export const btnPrimary: React.CSSProperties = { background: NAVY, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 600 };
-export const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '7px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
+export const btnPrimary: React.CSSProperties = { background: NAVY, color: '#fff', border: 'none', padding: '10px 16px', minHeight: 40, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 600 };
+export const btnGhost: React.CSSProperties = { background: '#fff', border: '1px solid #D9D8D2', padding: '9px 14px', minHeight: 40, borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
 export const btnSm: React.CSSProperties = { background: '#F5F5F0', border: '0.5px solid #E5E5E0', padding: '5px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: '#444' };
 export const card: React.CSSProperties = { background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16, marginBottom: 14 };
 export const cardTitle: React.CSSProperties = { fontSize: 13, fontWeight: 600, marginBottom: 12 };
@@ -22,7 +22,7 @@ export const empty: React.CSSProperties = { color: MUTED, fontSize: 13, textAlig
 
 export const segBtn = (on: boolean): React.CSSProperties => ({
   flex: 1, padding: '7px 12px', fontSize: 12, border: 'none', cursor: 'pointer',
-  background: on ? NAVY : '#F9F8F5', color: on ? '#fff' : '#444', fontWeight: on ? 600 : 500,
+  background: on ? '#1A1A18' : '#F9F8F5', color: on ? '#fff' : '#444', fontWeight: on ? 600 : 500,
 });
 export const segWrap: React.CSSProperties = { display: 'flex', border: '1px solid #E5E5E0', borderRadius: 8, overflow: 'hidden' };
 

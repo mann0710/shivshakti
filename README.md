@@ -178,6 +178,56 @@ The phone bottom bar now has a **POS** button.
 - **Long lists are complete:** customers, bookings, quotations, invoices, payments and sweets load page by page, so nothing silently drops after 1,000 rows.
 - **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked.
 
+## One look across the app (redesign, Nov 2026)
+
+Design: the "Shiv Shakti — Master Design" canvas (its first board maps every screen, popup and printout to its design).
+
+- **Sidebar:** Home, Customers, Bookings, Quotations, Invoices, Money · *Catering:* Menu Builder, Packages · *Sweets:* Sweets today, Sweets POS, Sweet items · Settings. Occasions and sweets customers are tabs on **Sweet items**. Old names: Dashboard → Home, Billing → Invoices, Finance & Analytics → Money, Sessional Dashboard → Sweets today, Sessional Items → Sweet items, Data Center → Settings.
+- **Phone bar:** Home · POS · Bookings · Quotes · More. **More** is a sheet with every page, grouped like the sidebar, and Sign out.
+- **Buttons:** main buttons use a deeper orange (`--primary` in `index.css`) so white text is readable; the bright brand orange stays for picks and borders.
+- **Popups:** Esc closes only the top popup; focus stays inside and returns to where you were; the page behind doesn't scroll. A form with typed changes asks "Throw away what you typed?" before closing. `Modal` also has a side-panel variant (`variant="panel"`). Confirms that delete say **Keep** instead of Cancel.
+- **Toasts:** one place, bottom centre, above the phone bar, 6 seconds.
+- **Home → Needs you:** money to collect, sweets pre-bookings with no advance, quotes waiting for a reply or still drafts, unpaid sweets bills, and past events with no invoice, most urgent first, each with one button (`lib/cateringTodo.ts`).
+- **Quotations → tidy-up:** quotes that don't match their booking are listed in a banner and **Fix all** sets them: confirmed or done → accepted, cancelled or passed with no answer → not chosen. A quote still waiting for the customer's pick is left alone (`lib/quoteSync.ts`).
+- **Invoices:** *Ready to invoice* (confirmed events with a quote) and *Past events with no invoice* (with the quoted total) sit above the list.
+- **Money:** invoices of cancelled bookings no longer count; the average is per invoiced event.
+- **Settings → GST on bills:** Not GST-registered (bill of supply), 5% or 18%. An old 12% setting is flagged.
+- **Accept with advance:** the Accept dialog records an advance taken there and then (amount + cash/UPI/bank). It's saved on the booking and fills in on the invoice when it is made.
+- **Occasion dates:** occasions get a first and last day; bills and pre-bookings inside the dates count for that season, and Sweets today counts down to the festival.
+
+### Screens rebuilt to the master design
+
+- **Home:** "Needs you" first (two actions per row, Later, See all), then To collect, Received, Next 30 days and Quotes tiles, Next events and Sweets this week. Phone: the same with a **+ New** sheet.
+- **Quotations:** follow-ups first (Waiting for the customer, Drafts to send), tabs To do / Accepted / Declined & expired / All, a side panel for the selected quote. A quote with options is one row with lettered option lines under it. The editor **saves as you type** (a new quote is created on the first change), has option tabs plus **Compare**, a sticky summary with "Ready to send?", and a **Send** dialog (WhatsApp on a computer with the PDF saved to attach; the share sheet on a phone). The old quote calendar view is gone: Bookings → Calendar shows every event.
+- **Invoices:** Waiting for money, Ready to invoice, Past events with no invoice (with **Mark all as settled outside**). The invoice editor saves as you type; **Record payment** is the main action.
+- **Money:** period picker, received / to collect / booked / past-no-invoice tiles, who owes by age, coming in, received each month (catering vs sweets), payments received, **Add a spend** and **Paste from Excel** (`spends` table), and **Download for CA** (one CSV with a section per part).
+- **Customers:** one list for catering and sweets (matched by phone), filters All / Catering / Sweets / Owes money, a "saved twice" banner with **Combine** (gives the copies one name, with Undo), history across both, and one customer form that warns when the phone number already exists.
+- **Bookings:** a shorter booking form (customer picker, event chips, food style, notes; status is set later), the event page as a side panel (stages, next step, quotes, invoice, payments, advance), and a grouped ⋯ menu with arrow keys. A booking whose quote is only a draft is still an Inquiry ("Send quote"); one confirmed while its sent quote waits for the customer's pick stays Quoted. Food style is saved in `bookings.food_type`.
+- **Sweets today:** season strip from the occasion dates, today's tiles (cancelled bills never count), pre-bookings due with Hand over, What to make by day, This season so far, and Reports links that open the POS tab.
+- **Sweet items / Occasions:** kg price with box sizes, season filters; occasions show their dates and counts and are edited in a small dialog.
+- **Settings:** eight groups with their status and search; each change saves by itself with Undo. Items that have no data yet say "Coming soon".
+- **Counter on a computer:** the POS takes the whole screen; **‹ Back** returns to the app.
+
+### Sweets POS (redesign)
+
+- **Counter:** "Bill / Pre-booking" toggle; every box size is a one-tap button; **Loose (weight or ₹)** on each sweet; the tile order stays put during the day; 48 px − / + and real buttons for Discount, Note and Clear bill (Clear has an Undo toast instead of a confirm).
+- **Paying:** Cash (quick "cash handed over" amounts and change to give back), UPI (amount + QR from the UPI ID in Settings, then **Received**), **Cash + UPI** (type the cash, UPI fills in the rest) or Unpaid (needs name and phone; warns if the customer already owes).
+- **Hold:** park a bill and serve the next customer; **Held bills** brings it back.
+- **Bills:** Collect takes part payments (cash or UPI); what's short stays due. **Remind** on WhatsApp. ⋯ More → Take back items or **Cancel bill** with a reason (the number stays, marked cancelled). Only test bills can be deleted.
+- **Pre-bookings:** Booked → Packed → Handed over. Hand-over collects what's paid; a shortfall stays as a due under Bills → Unpaid.
+- **Day close:** opening cash + cash from bills, advances, hand-overs and old dues − cash taken out = should be in the drawer; count the notes, see the difference, keep cash for tomorrow, then close and print an 80 mm summary. Reopen if needed.
+- **Phone:** a Back control leaves the POS; short tab names; every button is at least 44 px.
+
+### Database updates for this release
+
+Run in the Supabase SQL editor, in order (both are additive and safe to re-run):
+
+1. `supabase/migrations/20261107_pos_payments_dayclose.sql` — payment lists, paid amount and time, cancelled bills, pre-booking payments, and the `seasonal_day_closes` table (staff-only).
+2. `supabase/migrations/20261108_advance_occasion_dates.sql` — booking food style, advance on bookings, and occasion dates.
+3. `supabase/migrations/20261109_spends.sql` — the `spends` table for Money → Add a spend (staff-only).
+
+Until they run, the app hides Cancel bill and Day close and saves bills without the new fields.
+
 ## Bookings: list, calendar and pipeline
 
 One screen, three views (the switch at the top remembers your choice; on phones it sits under the title):

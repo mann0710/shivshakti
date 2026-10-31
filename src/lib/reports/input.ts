@@ -5,6 +5,7 @@ import type { SeasonalItem } from '../itemCatalog';
 import type { Booking, Invoice, Payment } from '../../types';
 import { nameKey } from '../itemCatalog';
 import { handedOverOn, istDay } from '../preorders';
+import { billDue, isCancelled } from '../dues';
 import { Range, inRange } from './model';
 
 // Everything a report may need; each builder picks what it uses.
@@ -12,8 +13,8 @@ export interface ReportInput {
   range: Range;
   today: string;
   occasionId: string;            // '' = all occasions
-  orders: SeasonalOrder[];       // bills created in the range
-  unpaidOrders: SeasonalOrder[]; // every unpaid bill, any date
+  orders: SeasonalOrder[];       // bills made in the range, plus older ones paid in it
+  unpaidOrders: SeasonalOrder[]; // every bill with money due, any date
   preorders: SeasonalPreorder[]; // all pre-bookings
   items: SeasonalItem[];
   occasions: SeasonalOccasion[];
@@ -28,9 +29,11 @@ export const UNCATEGORISED = 'Uncategorised';
 const byOccasion = (inp: ReportInput) => <T extends { occasion_id?: string }>(list: T[]) =>
   inp.occasionId ? list.filter(x => x.occasion_id === inp.occasionId) : list;
 
-export const billsIn = (inp: ReportInput) => byOccasion(inp)(inp.orders.filter(o => inRange(istDay(o.created_at), inp.range)));
+// Bills made in the range; cancelled ones keep their number but are not sales.
+export const billsIn = (inp: ReportInput) => byOccasion(inp)(inp.orders.filter(o => !isCancelled(o) && inRange(istDay(o.created_at), inp.range)));
 export const preordersOf = (inp: ReportInput) => byOccasion(inp)(inp.preorders);
-export const unpaidOf = (inp: ReportInput) => byOccasion(inp)(inp.unpaidOrders);
+export const ordersOf = (inp: ReportInput) => byOccasion(inp)(inp.orders);
+export const unpaidOf = (inp: ReportInput) => byOccasion(inp)(inp.unpaidOrders.filter(o => billDue(o) > 0));
 
 // Pre-bookings count as sales on the day they are handed over.
 export const handedOverIn = (inp: ReportInput) => preordersOf(inp).filter(p => inRange(handedOverOn(p), inp.range));

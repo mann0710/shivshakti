@@ -57,7 +57,7 @@ const MergeDuplicatesModal: React.FC<Props> = ({ plans, onClose }) => {
             <div style={{ fontSize: 11, color: '#888880', margin: '2px 0 6px' }}>From: {p.sourceNames.join(', ')}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {p.preview.map(r => (
-                <span key={r.size} style={{ fontSize: 11, background: '#EEF0FB', color: NAVY, borderRadius: 10, padding: '2px 8px' }}>
+                <span key={r.size} style={{ fontSize: 11, background: '#F3F2EE', color: NAVY, borderRadius: 10, padding: '2px 8px' }}>
                   {r.label} {inr(r.newPrice)}{r.oldPrice === null ? ' (new)' : ''}
                 </span>
               ))}

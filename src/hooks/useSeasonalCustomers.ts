@@ -44,7 +44,7 @@ export const useCreateSeasonalCustomer = () => {
 export const useUpdateSeasonalCustomer = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: SeasonalCustomerPayload & { id: string }) => {
+    mutationFn: async ({ id, ...updates }: Partial<SeasonalCustomerPayload> & { id: string }) => {
       const { data, error } = await supabase
         .from('seasonal_customers')
         .update(updates)

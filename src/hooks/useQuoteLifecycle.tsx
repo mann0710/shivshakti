@@ -3,7 +3,6 @@ import toast from 'react-hot-toast';
 import { Quotation, useUpdateQuotationStatus } from './useQuotations';
 import { useUpdateBooking } from './useBookings';
 import { Navigate } from './useNavIntent';
-import { shareQuotation } from '../lib/quotationShare';
 
 const OPEN = new Set(['inquiry', 'followup', 'pending']);
 
@@ -19,17 +18,17 @@ export const useQuoteLifecycle = (onNavigate?: Navigate) => {
     await updateBooking.mutateAsync({ id: q.booking_id, status });
   };
 
-  const invoiceToast = (bookingId: string) => {
-    if (!onNavigate) { toast.success('Booking confirmed'); return; }
+  // "QTN-0023 accepted · Kavit's booking confirmed  [Create invoice]"
+  const acceptedToast = (q: Quotation) => {
+    const who = String(q.customer?.name || '').trim().split(/\s+/)[0];
+    const text = `${q.quotation_number} accepted${who ? ` · ${who}'s booking confirmed` : ''}`;
+    if (!onNavigate || !q.booking_id) { toast.success(text); return; }
     toast(t => (
-      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        Booking confirmed.
-        <button onClick={() => { toast.dismiss(t.id); onNavigate('billing', { action: 'new', id: bookingId }); }}
-          style={{ background: '#E8750A', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 12 }}>
-          Create invoice →
-        </button>
+      <span className="q-toast">
+        {text}
+        <button type="button" onClick={() => { toast.dismiss(t.id); onNavigate('billing', { action: 'new', id: q.booking_id }); }}>Create invoice</button>
       </span>
-    ), { duration: 15000 });
+    ), { duration: 8000 });
   };
 
   // Accepted confirms the booking; Sent moves an inquiry to follow-up.
@@ -38,26 +37,23 @@ export const useQuoteLifecycle = (onNavigate?: Navigate) => {
       await updateStatus.mutateAsync({ id: q.id, status });
       if (status === 'accepted') {
         await bookingTo(q, 'confirmed');
-        if (q.booking_id) invoiceToast(q.booking_id);
+        acceptedToast(q);
       } else {
         if (status === 'sent') await bookingTo(q, 'followup');
-        toast.success('Status updated');
+        toast.success(status === 'rejected' ? `${q.quotation_number} marked lost` : status === 'sent' ? `${q.quotation_number} marked sent` : 'Status updated');
       }
     } catch (e: any) { toast.error(e?.message || 'Failed to update'); }
   };
 
-  // Sharing a draft marks it Sent.
-  const share = async (q: Quotation, withPrices = true, options?: Quotation[]) => {
-    const res = await shareQuotation(q, withPrices, options);
-    // Every draft in the PDF is now sent.
-    const drafts = (options?.length ? options : [q]).filter(o => o.status === 'draft');
-    if ((res === 'shared' || res === 'whatsapp') && drafts.length) {
-      try {
-        for (const o of drafts) await updateStatus.mutateAsync({ id: o.id, status: 'sent' });
-        await bookingTo(q, 'followup');
-      } catch { /* sharing already succeeded */ }
-    }
+  // Every draft that went out is now sent; the booking moves to follow-up.
+  const markSent = async (list: Quotation[]) => {
+    const drafts = list.filter(o => o.status === 'draft');
+    if (!drafts.length) return;
+    try {
+      for (const o of drafts) await updateStatus.mutateAsync({ id: o.id, status: 'sent' });
+      await bookingTo(list[0], 'followup');
+    } catch { /* sending already succeeded */ }
   };
 
-  return { setStatus, share };
+  return { setStatus, markSent };
 };

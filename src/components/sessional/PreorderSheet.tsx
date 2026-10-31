@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
 import { SeasonalItem } from '../../lib/itemCatalog';
 import { buildSheet, columnTotal, dueLabel } from '../../lib/preorderSheet';
-import { balanceOf, isOpenPreorder, STATUS_LABEL } from '../../lib/preorders';
+import { balanceOf, isOpenPreorder, isPacked, STATUS_LABEL } from '../../lib/preorders';
 import { inr } from '../../lib/money';
 import { todayIST } from '../../lib/ist';
 import { PRE_STATUS, NAVY, DANGER, SUCCESS, MUTED } from '../ui/styles';
@@ -15,12 +15,12 @@ interface Props {
   onOpen: (p: SeasonalPreorder) => void;
 }
 
-// The paper register as a to-do list: tick Packed, tick Given (collects the balance), totals per sweet.
+// The paper register as a to-do list: tick Packed, tick Given (collects the balance), tap a name to open the booking.
 const PreorderSheet: React.FC<Props> = ({ preorders, items, onPacked, onHandover, onOpen }) => {
   const sheet = useMemo(() => buildSheet(preorders, items), [preorders, items]);
   const today = todayIST();
   const live = preorders.filter(p => p.status !== 'cancelled');
-  const packed = live.filter(p => p.status === 'ready' || p.status === 'delivered').length;
+  const packed = live.filter(isPacked).length;
   const given = live.filter(p => p.status === 'delivered').length;
 
   if (!sheet.rows.length) return <div style={{ color: MUTED, fontSize: 13, textAlign: 'center', padding: 32 }}>No pre-bookings here.</div>;
@@ -49,7 +49,7 @@ const PreorderSheet: React.FC<Props> = ({ preorders, items, onPacked, onHandover
               return (
                 <tr key={p.id} className={p.status === 'cancelled' ? 'x' : p.status === 'delivered' ? 'done' : ''}>
                   <td className="stick s0 c">
-                    <input type="checkbox" aria-label={`Packed for ${p.customer_name}`} checked={p.status === 'ready' || p.status === 'delivered'}
+                    <input type="checkbox" aria-label={`Packed for ${p.customer_name}`} checked={isPacked(p)}
                       disabled={!open} onChange={() => onPacked(p)} />
                   </td>
                   <td className="stick s1 c">

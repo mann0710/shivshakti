@@ -4,11 +4,15 @@ import { roundMoney } from './units';
 export type PreStatus = SeasonalPreorder['status'];
 export type Fulfillment = 'pickup' | 'delivery';
 
-// pending → confirmed → ready (packed) → delivered; cancelled at any point.
+// Booked → Packed → Handed over; cancelled at any point. Older 'confirmed' rows read as booked.
 export const OPEN_STATUSES: PreStatus[] = ['pending', 'confirmed', 'ready'];
 export const STATUS_LABEL: Record<PreStatus, string> = {
-  pending: 'Pending', confirmed: 'Confirmed', ready: 'Packed', delivered: 'Handed over', cancelled: 'Cancelled',
+  pending: 'Booked', confirmed: 'Booked', ready: 'Packed', delivered: 'Handed over', cancelled: 'Cancelled',
 };
+
+export const isPacked = (p: Pick<SeasonalPreorder, 'status'>) => p.status === 'ready' || p.status === 'delivered';
+// Ticking Packed moves a booking to packed; unticking puts it back to booked.
+export const packedToggle = (p: Pick<SeasonalPreorder, 'status'>): PreStatus => (p.status === 'ready' ? 'pending' : 'ready');
 
 export const isOpenPreorder = (p: Pick<SeasonalPreorder, 'status'>) => OPEN_STATUSES.includes(p.status);
 export const balanceOf = (p: Pick<SeasonalPreorder, 'total_amount' | 'advance_paid'>) => Math.max(0, roundMoney(p.total_amount - p.advance_paid));

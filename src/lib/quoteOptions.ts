@@ -26,6 +26,11 @@ export const totalText = (q: Pick<Quotation, 'total_amount' | 'total_max'>) =>
 export const plateText = (q: Pick<Quotation, 'per_plate_amount' | 'per_plate_max'>) =>
   q.per_plate_max && q.per_plate_max > q.per_plate_amount ? `${inr(q.per_plate_amount)} – ${inr(q.per_plate_max)}` : inr(q.per_plate_amount);
 
+// Guests on the quote, else the booking's, else the largest meal.
+export const quoteGuests = (q: Pick<Quotation, 'guest_count' | 'booking' | 'event_days'>): number =>
+  q.guest_count || q.booking?.guest_count
+  || Math.max(0, ...(q.event_days || []).flatMap(d => (d.meals || []).map(m => m.guest_count || 0)));
+
 // ISO dates a quote covers: its meal dates, else the booking's date range.
 export function quoteDays(q: Pick<Quotation, 'is_multi_day' | 'event_days' | 'booking'>): string[] {
   const meal = q.is_multi_day ? (q.event_days ?? []).map(d => d.date).filter(Boolean) : [];

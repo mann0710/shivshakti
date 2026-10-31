@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
-import { SeasonalOrderItem } from './useSeasonalOrders';
+import { SeasonalOrderItem, useHasPosPayments, omitFields } from './useSeasonalOrders';
 import { useHasPreorderColumns } from './useSchemaStatus';
+import type { Payment } from '../lib/payments';
 
 export type { SeasonalOrderItem };
 
@@ -29,20 +30,18 @@ export interface SeasonalPreorder {
   delivered_at?: string | null;
   balance_paid?: number;
   balance_mode?: 'cash' | 'upi' | null;
+  // After the POS payments migration.
+  payments?: Payment[];
 }
 
 const NEW_FIELDS = ['fulfillment', 'delivered_at', 'balance_paid', 'balance_mode'] as const;
 
-// Drops the newer fields until the migration has been run.
+// Drops the newer fields until their migrations have been run.
 const useFitRow = () => {
   const ready = useHasPreorderColumns();
-  return <T extends object>(row: T): T => {
-    if (ready) return row;
-    const out: any = { ...row };
-    NEW_FIELDS.forEach(f => delete out[f]);
-    return out;
-  };
-}
+  const ledger = useHasPosPayments();
+  return <T extends object>(row: T): T => omitFields(row, [...(ready ? [] : NEW_FIELDS), ...(ledger ? [] : ['payments'])]);
+};
 
 export type SeasonalPreorderPayload = Omit<SeasonalPreorder, 'id' | 'created_at'>;
 

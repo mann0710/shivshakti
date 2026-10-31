@@ -7,17 +7,19 @@ import { cap } from './BookingActions';
 import BookingMenu, { BoardActions } from './BookingMenu';
 import { StageChip, NextButton, detailLine } from './BookingBits';
 
-interface Props { views: BookingView[]; actions: BoardActions; today: string }
+interface Props { views: BookingView[]; actions: BoardActions; today: string; festivals?: Map<string, string[]> }
 
 const iso = (d: Date) => format(d, 'yyyy-MM-dd');
+const NO_FESTIVALS = new Map<string, string[]>();
 
-// Calendar view: a month coloured by stage; picking a day shows its events, meals and next steps.
-const BookingMonth: React.FC<Props> = ({ views, actions: a, today }) => {
+// Calendar view: a month coloured by stage with festival days marked; picking a day shows its events, meals and next steps.
+const BookingMonth: React.FC<Props> = ({ views, actions: a, today, festivals = NO_FESTIVALS }) => {
   const [month, setMonth] = useState(() => startOfMonth(parseISO(today)));
   const [picked, setPicked] = useState(today);
   const days = useMemo(() => eachDayOfInterval({ start: startOfWeek(month), end: endOfWeek(endOfMonth(month)) }), [month]);
   const live = views.filter(v => v.stage !== 'cancelled');
   const dayViews = onDay(live, picked);
+  const dayFests = festivals.get(picked) ?? [];
   const inMonth = live.filter(v => v.start.slice(0, 7) === iso(month).slice(0, 7));
   const busy = new Set(days.filter(d => isSameMonth(d, month) && onDay(live, iso(d)).length).map(iso)).size;
   const waiting = inMonth.filter(v => v.next).length;
@@ -52,18 +54,20 @@ const BookingMonth: React.FC<Props> = ({ views, actions: a, today }) => {
               const evs = onDay(live, key);
               const sel = key === picked;
               const out = !isSameMonth(d, month);
+              const fests = festivals.get(key) ?? [];
               return (
                 <button key={key} type="button" className="bk-cell" onClick={() => setPicked(key)} aria-pressed={sel}
-                  aria-label={`${format(d, 'd MMMM')}${evs.length ? `, ${evs.length} event${evs.length > 1 ? 's' : ''}` : ''}`}
+                  aria-label={`${format(d, 'd MMMM')}${fests.length ? `, ${fests.join(', ')}` : ''}${evs.length ? `, ${evs.length} event${evs.length > 1 ? 's' : ''}` : ''}`}
                   style={{ background: sel ? '#FFF6EA' : out ? '#FAFAF7' : '#fff', boxShadow: sel ? 'inset 0 0 0 2px #E8750A' : 'none' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: key === today ? '#E8750A' : out ? '#9A9A93' : '#1A1A18' }}>{format(d, 'd')}</span>
+                  {fests.map(f => <span key={f} className="bk-chip bk-fest"><b>{f}</b> Sweets rush</span>)}
                   {evs.slice(0, 2).map(v => (
                     <span key={v.b.id} className="bk-chip" style={{ background: STAGE_STYLE[v.stage].bg, color: STAGE_STYLE[v.stage].fg }}>
                       <b>{v.b.customer?.name?.split(' ')[0] ?? '—'}</b> {v.b.event_type}
                     </span>
                   ))}
                   {evs.length > 2 && <span className="bk-chip" style={{ color: '#6B6B66' }}>+{evs.length - 2} more</span>}
-                  <span className="bk-dots">{evs.slice(0, 3).map(v => <i key={v.b.id} style={{ background: STAGE_STYLE[v.stage].dot }} />)}</span>
+                  <span className="bk-dots">{fests.length > 0 && <i className="fest" />}{evs.slice(0, 3).map(v => <i key={v.b.id} style={{ background: STAGE_STYLE[v.stage].dot }} />)}</span>
                 </button>
               );
             })}
@@ -76,6 +80,7 @@ const BookingMonth: React.FC<Props> = ({ views, actions: a, today }) => {
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{formatDateIST(picked, 'EEE, d MMM')}</h3>
               <span style={{ fontSize: 12.5, color: '#6B6B66' }}>{dayViews.length ? `${dayViews.length} event${dayViews.length > 1 ? 's' : ''}` : 'Free'}</span>
             </div>
+            {dayFests.length > 0 && <span className="bk-fest-note">{dayFests.join(', ')} · sweets rush on this day</span>}
             {dayViews.map(v => {
               const meals = (v.quote?.event_days ?? []).filter(d => d.date === picked).flatMap(d => d.meals ?? []);
               return (
@@ -118,8 +123,8 @@ const BookingMonth: React.FC<Props> = ({ views, actions: a, today }) => {
   );
 };
 
-const navBtn: React.CSSProperties = { width: 40, height: 40, border: '1px solid #E0E0DA', background: '#fff', borderRadius: 9, font: 'inherit', fontSize: 17, cursor: 'pointer' };
-const ghostBtn: React.CSSProperties = { minHeight: 40, padding: '8px 12px', borderRadius: 9, border: '1px solid #E0E0DA', background: '#fff', font: 'inherit', fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' };
+const navBtn: React.CSSProperties = { width: 44, height: 44, border: '1px solid #E0E0DA', background: '#fff', borderRadius: 9, font: 'inherit', fontSize: 17, cursor: 'pointer' };
+const ghostBtn: React.CSSProperties = { minHeight: 44, padding: '8px 12px', borderRadius: 9, border: '1px solid #E0E0DA', background: '#fff', font: 'inherit', fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' };
 const panel: React.CSSProperties = { background: '#fff', border: '1px solid #E5E5E0', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 };
 
 export default BookingMonth;

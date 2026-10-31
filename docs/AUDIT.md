@@ -162,6 +162,23 @@ Scope: the whole app (catering and sweets). Each finding is marked **Fixed** or 
 | Choice groups were hard to understand on first use (tick dishes, then Group) | **Fixed.** "+ Alternative" on each dish, "Customer chooses 1 of 2" box with OR, Picked ticks, box sits where the dish was |
 | `Quotations.tsx` would pass 500 lines | **Fixed.** Form state moved to `useQuoteForm`; new pieces are separate components |
 
+## Whole-app redesign (master design canvas, 31 Oct 2026)
+
+Independent UX review of the master canvas, then fixed in the design. These items are also in code now:
+
+| Finding | Status |
+|---|---|
+| White text on #E8750A buttons is about 2.9:1, below the 4.5:1 minimum | **Fixed.** Main buttons use `--primary` #B45309 (5:1); bright orange only for picks and borders |
+| Sidebar names didn't match what people say (Sessional, Data Center, Billing, Finance & Analytics); Invoices hard to find | **Fixed.** One nav model (`navItems.ts`): Home, Customers, Bookings, Quotations, Invoices, Money / Catering / Sweets / Settings; Occasions and sweets customers as tabs on Sweet items |
+| One Esc closed every stacked popup; no focus trap, scroll lock or focus return; typed forms closed on a stray tap | **Fixed.** `Modal` keeps a stack, traps focus, locks scroll, returns focus, and asks before throwing away typed changes (`dirty`) |
+| Two toast hosts, top-right over the phone header | **Fixed.** One host, bottom centre above the phone bar |
+| Phone "More" drawer was clickable divs with no close or Esc | **Fixed.** `MobileNav`: real buttons, a dialog with close and Esc |
+| 16 of 22 quotes didn't match their booking (confirmed with draft quotes, cancelled with open quotes, past inquiries) | **Fixed.** Tidy-up banner with **Fix all** (`lib/quoteSync.ts`); a quote waiting for the customer's pick is left alone |
+| Next steps only lived in toasts and scattered alerts | **Fixed.** Home "Needs you" list (`lib/cateringTodo.ts`) |
+| 7 finished events never invoiced (₹4,49,850 quoted) were invisible | **Fixed.** Invoices shows *Past events with no invoice* and *Ready to invoice* |
+| Money counted invoices of cancelled bookings; "average" was per invoice | **Fixed** |
+| GST rate 12% stored after the Sept 2025 rate change | **Flagged.** Settings offers Not registered / 5% / 18% and warns on 12% (confirm with the CA) |
+
 ## Code quality
 
 | Finding | Status |

@@ -30,7 +30,7 @@ const CustomerFields: React.FC<Props> = ({ name, phone, address, customers, requ
       <button type="button" onClick={() => setOpen(true)}
         style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 10, border: '1px dashed #D0D0CC', background: '#FAFAF8', cursor: 'pointer', fontSize: 13, color: '#555' }}>
         👤 <span style={{ flex: 1, textAlign: 'left' }}>Walk-in customer</span>
-        <span style={{ color: '#1A237E', fontWeight: 600, fontSize: 12 }}>+ Add details</span>
+        <span style={{ color: '#8A4B00', fontWeight: 600, fontSize: 12 }}>+ Add details</span>
       </button>
     );
   }

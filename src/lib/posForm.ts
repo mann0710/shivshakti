@@ -3,9 +3,14 @@ import type { SeasonalPreorder, SeasonalPreorderPayload } from '../hooks/useSeas
 import { CartLine, subtotalOf } from './cart';
 import { DiscountType, discountValue, isValidPhone, cleanPhone } from './money';
 import { Fulfillment, fulfillmentOf } from './preorders';
+import { roundMoney } from './units';
+import {
+  PayMode, PayChoice, Payment, CounterPay, billPayments, paidOf, dueOf, modeOf,
+  splitPay, payEntries, refundEntries, billLedger, preorderLedger, withAdvance,
+} from './payments';
 
+export type { PayMode, PayChoice };
 export type PosMode = 'bill' | 'preorder';
-export type PayMode = 'cash' | 'upi';
 
 export interface PosForm {
   mode: PosMode;
@@ -15,8 +20,10 @@ export interface PosForm {
   address: string;
   discount: string;
   discount_type: DiscountType;
-  payment: PayMode | 'unpaid';
-  received: string;
+  payment: PayChoice;
+  received: string;      // cash handed over, for the change
+  cash_part: string;     // Cash + UPI: the cash share
+  paid_before?: number;  // editing a bill: already received on it
   delivery_date: string;
   fulfillment?: Fulfillment; // older saved drafts lack it → pickup
   advance: string;
@@ -34,18 +41,24 @@ const tomorrow = () => {
 
 export const emptyForm = (mode: PosMode = 'bill', occasion_id = ''): PosForm => ({
   mode, occasion_id, customer_name: '', phone: '', address: '',
-  discount: '', discount_type: 'amount', payment: 'cash', received: '',
+  discount: '', discount_type: 'amount', payment: 'cash', received: '', cash_part: '', paid_before: 0,
   delivery_date: mode === 'preorder' ? tomorrow() : '', fulfillment: 'pickup', advance: '', advance_mode: 'cash', notes: '', lines: [],
 });
 
-export const formFromOrder = (o: SeasonalOrder): PosForm => ({
-  ...emptyForm('bill', o.occasion_id ?? ''),
-  customer_name: o.customer_name === WALK_IN ? '' : o.customer_name,
-  phone: o.phone ?? '', address: o.address ?? '',
-  discount: o.discount_amount ? String(o.discount_amount) : '', discount_type: 'amount',
-  payment: o.is_paid ? (o.payment_mode ?? 'cash') : 'unpaid',
-  notes: o.notes ?? '', lines: o.items,
-});
+// Editing a bill: the way to pay applies to whatever is still due.
+export const formFromOrder = (o: SeasonalOrder): PosForm => {
+  const paid = billPayments(o);
+  const mode = modeOf(paid);
+  return {
+    ...emptyForm('bill', o.occasion_id ?? ''),
+    customer_name: o.customer_name === WALK_IN ? '' : o.customer_name,
+    phone: o.phone ?? '', address: o.address ?? '',
+    discount: o.discount_amount ? String(o.discount_amount) : '', discount_type: 'amount',
+    payment: dueOf(o.total_amount, paid) > 0 ? 'unpaid' : mode === 'upi' ? 'upi' : 'cash',
+    paid_before: paidOf(paid),
+    notes: o.notes ?? '', lines: o.items,
+  };
+};
 
 export const formFromPreorder = (p: SeasonalPreorder): PosForm => ({
   ...emptyForm('preorder', p.occasion_id ?? ''),
@@ -55,18 +68,26 @@ export const formFromPreorder = (p: SeasonalPreorder): PosForm => ({
   advance_mode: p.payment_mode ?? 'cash', notes: p.notes ?? '', lines: p.items,
 });
 
-export interface Totals { subtotal: number; discount: number; total: number; advance: number; balance: number; change: number }
+export interface Totals {
+  subtotal: number; discount: number; total: number; advance: number; balance: number;
+  due: number;      // bill: to pay now
+  refund: number;   // bill edit: to hand back
+  pay: CounterPay;
+  change: number;
+}
 
 export function totalsOf(f: PosForm): Totals {
   const subtotal = subtotalOf(f.lines);
   const discount = discountValue(subtotal, f.discount, f.discount_type);
   const total = Math.max(0, subtotal - discount);
   const advance = f.mode === 'preorder' ? Math.max(0, Number(f.advance) || 0) : 0;
-  const received = Number(f.received) || 0;
+  const before = f.mode === 'bill' ? f.paid_before ?? 0 : 0;
+  const due = Math.max(0, roundMoney(total - before));
+  const pay = f.mode === 'bill' ? splitPay(f.payment, due, f.cash_part, f.received) : splitPay('unpaid', 0, '', '');
   return {
     subtotal, discount, total, advance,
     balance: Math.max(0, total - advance),
-    change: f.mode === 'bill' && f.payment === 'cash' && received > total ? received - total : 0,
+    due, refund: Math.max(0, roundMoney(before - total)), pay, change: pay.change,
   };
 }
 
@@ -75,7 +96,8 @@ export function validate(f: PosForm, t: Totals): string | null {
   if (!f.lines.length) return 'Add at least one item';
   const named = f.customer_name.trim();
   if (f.phone.trim() && !isValidPhone(f.phone)) return 'Phone must be a 10-digit mobile number';
-  if (f.mode === 'bill' && f.payment === 'unpaid' && (!named || !f.phone.trim())) return 'Unpaid bills need the customer name and phone';
+  if (f.mode === 'bill' && f.payment === 'unpaid' && t.due > 0 && (!named || !f.phone.trim())) return 'Unpaid bills need the customer name and phone';
+  if (f.mode === 'bill' && f.payment === 'split' && t.due > 0 && t.pay.cash <= 0) return 'Type the cash part, or choose UPI';
   if (f.mode === 'preorder') {
     if (!named || !f.phone.trim()) return 'Pre-bookings need the customer name and phone';
     if (!f.delivery_date) return f.fulfillment === 'delivery' ? 'Pick a delivery date' : 'Pick a pickup date';
@@ -98,19 +120,21 @@ const common = (f: PosForm, t: Totals) => ({
   notes: f.notes.trim() || undefined,
 });
 
-export const toOrderPayload = (f: PosForm, t: Totals, year: number): SeasonalOrderPayload => ({
-  ...common(f, t),
-  is_paid: f.payment !== 'unpaid',
-  payment_mode: f.payment === 'unpaid' ? null : f.payment,
-  year,
-});
+const nowIso = () => new Date().toISOString();
 
-export const toPreorderPayload = (f: PosForm, t: Totals, year: number): SeasonalPreorderPayload => ({
-  ...common(f, t),
-  advance_paid: t.advance,
-  payment_mode: t.advance > 0 ? f.advance_mode : null,
-  delivery_date: f.delivery_date || undefined,
-  fulfillment: f.fulfillment ?? 'pickup',
-  status: 'pending',
-  year,
-});
+// New bill, or an edit on top of what was already paid (extra collected or change handed back).
+export function toOrderPayload(f: PosForm, t: Totals, year: number, prior: Payment[] = [], at = nowIso()): SeasonalOrderPayload {
+  const payments = [...prior, ...payEntries(t.pay, at), ...(t.refund > 0 ? refundEntries(prior, t.refund, at) : [])];
+  return { ...common(f, t), ...billLedger(t.total, payments), year };
+}
+
+export function toPreorderPayload(f: PosForm, t: Totals, year: number, prior: Payment[] = [], at = nowIso()): SeasonalPreorderPayload {
+  return {
+    ...common(f, t),
+    ...preorderLedger(withAdvance(prior, t.advance, f.advance_mode, at)),
+    delivery_date: f.delivery_date || undefined,
+    fulfillment: f.fulfillment ?? 'pickup',
+    status: 'pending',
+    year,
+  };
+}

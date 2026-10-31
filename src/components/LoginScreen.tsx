@@ -1,64 +1,105 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import '../styles/people.css';
 
 interface Props { notStaffEmail?: string; onSignOut?: () => void }
 
-// Staff sign-in; also shown when a signed-in email isn't on the staff list.
+type Errors = { email?: string; password?: string };
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const Title: React.FC<{ long?: boolean }> = ({ long }) => (
+  <div className="lg-title"><h1>Shiv Shakti</h1><p>Catering and sweets · sign in{long ? ' to continue' : ''}</p></div>
+);
+
+// Staff sign-in with errors under the fields; also the "check your email" and "not on the team" cards.
 const LoginScreen: React.FC<Props> = ({ notStaffEmail, onSignOut }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(null);
+  const [errors, setErrors] = useState<Errors>({});
+  const [sentTo, setSentTo] = useState('');
 
   const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true); setMsg(null);
+    const found: Errors = {};
+    if (!EMAIL_RE.test(email.trim())) found.email = 'Type the email you sign in with';
+    if (!password) found.password = 'Type your password';
+    setErrors(found);
+    if (found.email || found.password) return;
+    setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setBusy(false);
-    if (error) setMsg({ text: error.message === 'Invalid login credentials' ? 'Wrong email or password.' : error.message });
+    if (error) setErrors({ password: /invalid login/i.test(error.message) ? 'Email or password is wrong. Check Caps Lock and try again.' : error.message });
   };
 
-  const reset = async () => {
-    if (!email.trim()) { setMsg({ text: 'Type your email first, then tap "Forgot password".' }); return; }
+  const forgot = async () => {
+    if (!EMAIL_RE.test(email.trim())) { setErrors({ email: 'Type your email first, then tap "Forgot password?"' }); return; }
+    setBusy(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
-    setMsg(error ? { text: error.message } : { text: 'Password reset email sent.', ok: true });
+    setBusy(false);
+    if (error) setErrors({ email: error.message });
+    else setSentTo(email.trim());
   };
+
+  if (notStaffEmail) {
+    return (
+      <div className="lg-wrap">
+        <div className="lg-card center" role="alert">
+          <h1>You're signed in, but not on the team yet</h1>
+          <p><b>{notStaffEmail}</b> can't see the shop's data. Ask the owner to add this email to the staff list in Supabase.</p>
+          <div className="lg-pair">
+            <button type="button" className="ui-btn" onClick={onSignOut}>Sign out</button>
+            <button type="button" className="ui-btn primary" onClick={() => window.location.reload()}>Check again</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (sentTo) {
+    return (
+      <div className="lg-wrap">
+        <div className="lg-card center" role="status">
+          <h1>Check your email</h1>
+          <p>We sent a link to {sentTo}. Open it on this device to set a new password. Nothing there? Check spam, or send it again in a minute.</p>
+          <button type="button" className="ui-btn" onClick={() => setSentTo('')}>Back to sign in</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div style={wrap}>
-      <div style={box}>
-        <img src="/logo.png" alt="Shiv Shakti" style={{ height: 64, display: 'block', margin: '0 auto 12px' }}
-          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-        {notStaffEmail ? (
-          <>
-            <div style={title}>Access not set up</div>
-            <p style={p}><b>{notStaffEmail}</b> is signed in but isn't on the staff list. Ask the owner to add this email in Supabase (table <code>staff</code>).</p>
-            <button style={btn} onClick={onSignOut}>Sign out</button>
-          </>
-        ) : (
-          <form onSubmit={signIn}>
-            <div style={title}>Sign in</div>
-            <label style={lbl}>Email</label>
-            <input style={inp} type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required autoFocus />
-            <label style={lbl}>Password</label>
-            <input style={inp} type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} required />
-            {msg && <div style={{ fontSize: 12, margin: '4px 0 10px', color: msg.ok ? '#3B6D11' : '#A32D2D' }}>{msg.text}</div>}
-            <button style={{ ...btn, opacity: busy ? 0.6 : 1 }} disabled={busy} type="submit">{busy ? 'Signing in…' : 'Sign in'}</button>
-            <button type="button" onClick={reset} style={link}>Forgot password?</button>
-          </form>
-        )}
-      </div>
+    <div className="lg-wrap">
+      <form className="lg-form" onSubmit={signIn} noValidate>
+        <Title />
+        <div className="lg-card">
+          <span className="lg-mark" aria-hidden="true">SS</span>
+          <Title long />
+          <label className="lg-field">Email
+            <span className={`lg-input${errors.email ? ' bad' : ''}`}>
+              <input type="email" autoComplete="username" autoFocus value={email} aria-invalid={!!errors.email}
+                onChange={e => { setEmail(e.target.value); setErrors({}); }} />
+            </span>
+            {errors.email && <span className="lg-err">{errors.email}</span>}
+          </label>
+          <label className="lg-field">Password
+            <span className={`lg-input${errors.password ? ' bad' : ''}`}>
+              <input type={show ? 'text' : 'password'} autoComplete="current-password" value={password} aria-invalid={!!errors.password}
+                onChange={e => { setPassword(e.target.value); setErrors({}); }} />
+              <button type="button" className="lg-show" aria-pressed={show} onClick={() => setShow(s => !s)}>{show ? 'Hide' : 'Show'}</button>
+            </span>
+            {errors.password && <span className="lg-err" role="alert">{errors.password}</span>}
+          </label>
+          <div className="lg-bar"><button type="submit" className="ui-btn primary lg-submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button></div>
+          <button type="button" className="lg-forgot" onClick={forgot} disabled={busy}>Forgot password?</button>
+        </div>
+        <button type="button" className="lg-forgot-row" onClick={forgot} disabled={busy}>
+          <span><b>Forgot password?</b><span>We email you a reset link</span></span><span aria-hidden="true">›</span>
+        </button>
+      </form>
     </div>
   );
 };
-
-const wrap: React.CSSProperties = { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F5F0', padding: 16 };
-const box: React.CSSProperties = { background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 14, padding: 24, width: '100%', maxWidth: 360, boxShadow: '0 8px 30px rgba(0,0,0,0.06)' };
-const title: React.CSSProperties = { fontSize: 17, fontWeight: 700, textAlign: 'center', marginBottom: 16 };
-const p: React.CSSProperties = { fontSize: 13, color: '#555', lineHeight: 1.5, marginBottom: 16, textAlign: 'center' };
-const lbl: React.CSSProperties = { fontSize: 12, color: '#888880', display: 'block', marginBottom: 4 };
-const inp: React.CSSProperties = { width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #D0D0CC', fontSize: 14, marginBottom: 12 };
-const btn: React.CSSProperties = { width: '100%', height: 44, background: '#E8750A', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer' };
-const link: React.CSSProperties = { display: 'block', margin: '12px auto 0', background: 'none', border: 'none', color: '#378ADD', fontSize: 12, cursor: 'pointer' };
 
 export default LoginScreen;

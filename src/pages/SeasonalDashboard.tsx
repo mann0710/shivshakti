@@ -1,225 +1,106 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSeasonalOrders } from '../hooks/useSeasonalOrders';
 import { useSeasonalPreorders } from '../hooks/useSeasonalPreorders';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
+import { useSeasonalItems } from '../hooks/useSeasonalItems';
 import { Navigate } from '../hooks/useNavIntent';
-import { Page } from '../components/navItems';
-import { isOpenPreorder, STATUS_LABEL } from '../lib/preorders';
-import { PRE_STATUS } from '../components/ui/styles';
+import { summarize, shopDay, dayStart } from '../lib/dayClose';
+import { occasionOn, seasonBanner } from '../lib/occasions';
+import { addDays, bookedOf, dueList, makePlan, seasonSoFar, unpaidOf } from '../lib/sweetsToday';
+import { todayIST } from '../lib/ist';
+import { inr } from '../lib/money';
+import DueList from '../components/sweets/DueList';
+import MakeList from '../components/sweets/MakeList';
+import SeasonSoFar from '../components/sweets/SeasonSoFar';
+import ChangeSeasonModal from '../components/sweets/ChangeSeasonModal';
+import '../styles/sweets.css';
 
-interface Props { onNavigate: Navigate; }
+interface Props { onNavigate: Navigate }
 
-const currentYear = new Date().getFullYear();
-const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
-
-
-const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
-  const [year, setYear] = useState(currentYear);
-  const { data: orders = [] } = useSeasonalOrders(year);
-  const { data: preorders = [] } = useSeasonalPreorders(year);
-  const { data: occasions = [] } = useSeasonalOccasions();
-
-  const occMap = Object.fromEntries(occasions.map(o => [o.id, o.name]));
-
-  // Order stats
-  const totalSales    = orders.reduce((s, o) => s + o.total_amount, 0);
-  const totalPaid     = orders.filter(o => o.is_paid).reduce((s, o) => s + o.total_amount, 0);
-  const totalUnpaid   = orders.filter(o => !o.is_paid).reduce((s, o) => s + o.total_amount, 0);
-
-  // Pre-order stats
-  const activePreorders   = preorders.filter(isOpenPreorder);
-  const totalPreorderVal  = activePreorders.reduce((s, p) => s + p.total_amount, 0);
-  const totalAdvance      = preorders.filter(p => p.status !== 'cancelled').reduce((s, p) => s + p.advance_paid, 0);
-  // Balance only on open pre-orders; delivered ones are already settled.
-  const openBalance       = activePreorders.reduce((s, p) => s + Math.max(0, p.total_amount - p.advance_paid), 0);
-
-  // Occasion breakdown
-  const occBreakdown = occasions.map(occ => {
-    const occOrders   = orders.filter(o => o.occasion_id === occ.id);
-    const occPreorders = preorders.filter(p => p.occasion_id === occ.id);
-    return {
-      id: occ.id,
-      name: occ.name,
-      orderCount: occOrders.length,
-      sales: occOrders.reduce((s, o) => s + o.total_amount, 0),
-      preorderCount: occPreorders.filter(p => p.status !== 'delivered' && p.status !== 'cancelled').length,
-    };
-  }).filter(b => b.orderCount > 0 || b.preorderCount > 0);
-
-  // Recent orders
-  const recentOrders = orders.slice(0, 5);
-  const recentPreorders = activePreorders.slice(0, 5);
-
-  return (
-    <div>
-      <div className="page-topbar">
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Sessional Dashboard</div>
-          <div style={{ fontSize: 11, color: '#888880', marginTop: 2 }}>Festival &amp; seasonal business overview</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select
-            style={{ border: '0.5px solid #D0D0CC', borderRadius: 7, padding: '5px 10px', fontSize: 13, background: '#fff' }}
-            value={year}
-            onChange={e => setYear(Number(e.target.value))}
-          >
-            {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <button style={btnPrimary} onClick={() => onNavigate('seasonal_billing')}>+ New Bill</button>
-        </div>
-      </div>
-
-      <div className="page-content">
-        {/* Sales stats */}
-        <div className="g4" style={{ marginBottom: 14 }}>
-          <StatCard label="Total Orders" value={String(orders.length)} sub={`${year}`} />
-          <StatCard label="Total Sales" value={`₹${totalSales.toLocaleString()}`} sub="All orders" />
-          <StatCard label="Collected" value={`₹${totalPaid.toLocaleString()}`} sub={`${orders.filter(o => o.is_paid).length} paid`} subColor="#3B6D11" />
-          <StatCard label="Pending Collection" value={`₹${totalUnpaid.toLocaleString()}`} sub={`${orders.filter(o => !o.is_paid).length} unpaid`} subColor={totalUnpaid > 0 ? '#C0392B' : '#3B6D11'} />
-        </div>
-
-        {/* Pre-order stats */}
-        <div className="g4" style={{ marginBottom: 14 }}>
-          <StatCard label="Active Pre-orders" value={String(activePreorders.length)} sub="Pending, confirmed, packed" subColor="#1565C0" />
-          <StatCard label="Pre-order Value" value={`₹${totalPreorderVal.toLocaleString()}`} sub="Open pre-orders" />
-          <StatCard label="Advance Collected" value={`₹${totalAdvance.toLocaleString()}`} sub="From pre-orders" subColor="#3B6D11" />
-          <StatCard label="Balance (Pre-orders)" value={`₹${openBalance.toLocaleString('en-IN')}`} sub="Yet to collect" subColor="#E65100" />
-        </div>
-
-        <div className="g2" style={{ marginBottom: 14 }}>
-          {/* Occasion breakdown */}
-          <div style={card}>
-            <div style={cardTitle}>
-              Sales by Occasion
-              <span style={cardLink} onClick={() => onNavigate('seasonal_billing')}>View all →</span>
-            </div>
-            {occBreakdown.length === 0 ? (
-              <div style={{ color: '#888880', fontSize: 12 }}>No data for {year}</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ borderBottom: '0.5px solid #F0F0EC' }}>
-                    <th style={{ textAlign: 'left', padding: '6px 0', color: '#888880', fontWeight: 600 }}>Occasion</th>
-                    <th style={{ textAlign: 'right', padding: '6px 0', color: '#888880', fontWeight: 600 }}>Orders</th>
-                    <th style={{ textAlign: 'right', padding: '6px 0', color: '#888880', fontWeight: 600 }}>Sales</th>
-                    <th style={{ textAlign: 'right', padding: '6px 0', color: '#888880', fontWeight: 600 }}>Pre-orders</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {occBreakdown.map(b => (
-                    <tr key={b.id} style={{ borderBottom: '0.5px solid #F5F5F2' }}>
-                      <td style={{ padding: '7px 0', fontWeight: 500 }}>{b.name}</td>
-                      <td style={{ padding: '7px 0', textAlign: 'right', color: '#555' }}>{b.orderCount}</td>
-                      <td style={{ padding: '7px 0', textAlign: 'right', fontWeight: 600, color: '#1A237E' }}>₹{b.sales.toLocaleString()}</td>
-                      <td style={{ padding: '7px 0', textAlign: 'right', color: b.preorderCount > 0 ? '#E65100' : '#AAAAAA' }}>
-                        {b.preorderCount > 0 ? b.preorderCount : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Quick actions */}
-          <div style={card}>
-            <div style={cardTitle}>Quick Actions</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {[
-                { icon: '🍬', label: 'New Bill',      page: 'seasonal_billing',  bg: '#EEF0FB' },
-                { icon: '📋', label: 'Pre-Booking',   page: 'seasonal_billing',  bg: '#FFF3E0' },
-                { icon: '🪔', label: 'Manage Items',  page: 'seasonal_items',    bg: '#EAF3DE' },
-                { icon: '🎊', label: 'Occasions',     page: 'seasonal_occasions',bg: '#FEECF8' },
-              ].map(a => (
-                <div key={a.label} onClick={() => onNavigate(a.page as Page)}
-                  style={{ background: a.bg, padding: '12px', borderRadius: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 18 }}>{a.icon}</span>
-                  <span style={{ fontSize: 12, fontWeight: 500 }}>{a.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="g2">
-          {/* Recent orders */}
-          <div style={card}>
-            <div style={cardTitle}>
-              Recent Orders
-              <span style={cardLink} onClick={() => onNavigate('seasonal_billing')}>View all →</span>
-            </div>
-            {recentOrders.length === 0 ? (
-              <div style={{ color: '#888880', fontSize: 12 }}>No orders for {year}</div>
-            ) : (
-              recentOrders.map(order => (
-                <div key={order.id} style={orderRow}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 500, fontSize: 13 }}>{order.customer_name}</div>
-                    <div style={{ fontSize: 11, color: '#888880', marginTop: 1 }}>
-                      {order.occasion_id ? occMap[order.occasion_id] || '—' : '—'} · {order.items.length} item(s)
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>₹{order.total_amount.toLocaleString()}</div>
-                    <div style={{ fontSize: 11, marginTop: 1, color: order.is_paid ? '#3B6D11' : '#C0392B' }}>
-                      {order.is_paid ? 'Paid' : 'Unpaid'}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Active pre-orders */}
-          <div style={card}>
-            <div style={cardTitle}>
-              Active Pre-orders
-              <span style={cardLink} onClick={() => onNavigate('seasonal_billing')}>View all →</span>
-            </div>
-            {recentPreorders.length === 0 ? (
-              <div style={{ color: '#888880', fontSize: 12 }}>No active pre-orders for {year}</div>
-            ) : (
-              recentPreorders.map(p => (
-                <div key={p.id} style={orderRow}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 500, fontSize: 13 }}>{p.customer_name}</div>
-                    <div style={{ fontSize: 11, color: '#888880', marginTop: 1 }}>
-                      {p.occasion_id ? occMap[p.occasion_id] || '—' : '—'}
-                      {p.delivery_date ? ` · Deliver: ${new Date(p.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : ''}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>₹{p.total_amount.toLocaleString()}</div>
-                    <span style={{
-                      fontSize: 10, padding: '2px 7px', borderRadius: 20, fontWeight: 600,
-                      background: PRE_STATUS[p.status]?.bg || '#F5F5F0',
-                      color: PRE_STATUS[p.status]?.color || '#555',
-                    }}>
-                      {STATUS_LABEL[p.status]}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+const IST = 'Asia/Kolkata';
+const OPEN_HOUR = 4; // the shop day runs 4 am to 4 am, as on the day close
+const DUE_ROWS = 6;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const clock = (d: Date, long: boolean) => {
+  const day = d.toLocaleDateString('en-IN', { weekday: long ? 'long' : 'short', day: 'numeric', month: 'short', timeZone: IST });
+  const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: IST }).toUpperCase();
+  return `${day}, ${time}`;
 };
 
-const StatCard: React.FC<{ label: string; value: string; sub: string; subColor?: string }> = ({ label, value, sub, subColor }) => (
-  <div style={{ background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: '14px 16px' }}>
-    <div style={{ fontSize: 11, color: '#888880', marginBottom: 6 }}>{label}</div>
-    <div style={{ fontSize: 22, fontWeight: 600 }}>{value}</div>
-    <div style={{ fontSize: 11, color: subColor || '#AAAAAA', marginTop: 3 }}>{sub}</div>
+const Tile: React.FC<{ label: string; value: string; note: string; tone?: 'bad' | 'warm'; className?: string }> = ({ label, value, note, tone, className }) => (
+  <div className={`sw-tile ${className ?? ''}`}>
+    <span className="k">{label}</span>
+    <span className={`v ${tone ?? ''}`}>{value}</span>
+    <span className="n">{note}</span>
   </div>
 );
 
-const btnPrimary: React.CSSProperties = { background: '#1A237E', color: '#fff', border: 'none', padding: '7px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
-const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16, marginBottom: 0 };
-const cardTitle: React.CSSProperties = { fontSize: 13, fontWeight: 600, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
-const cardLink: React.CSSProperties = { fontSize: 12, color: '#378ADD', cursor: 'pointer', fontWeight: 400 };
-const orderRow: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid #F0F0EC' };
+// Sweets today: the counter's numbers, pre-bookings due, what to make and the season so far.
+const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
+  const now = useMemo(() => new Date(), []);
+  const today = todayIST();
+  const { data: orders = [] } = useSeasonalOrders(now.getFullYear());
+  const { data: preorders = [] } = useSeasonalPreorders(now.getFullYear());
+  const { data: occasions = [] } = useSeasonalOccasions();
+  const { data: items = [] } = useSeasonalItems();
+  const [changing, setChanging] = useState(false);
+
+  const day = shopDay(now);
+  const counter = useMemo(() => summarize(orders, preorders, dayStart(day, OPEN_HOUR), now.toISOString()), [orders, preorders, day, now]);
+  const yesterday = useMemo(() => summarize(orders, preorders, dayStart(addDays(day, -1), OPEN_HOUR), dayStart(day, OPEN_HOUR)), [orders, preorders, day]);
+  const unpaid = useMemo(() => unpaidOf(orders, preorders), [orders, preorders]);
+  const booked = useMemo(() => bookedOf(preorders), [preorders]);
+  const due = useMemo(() => dueList(preorders).slice(0, DUE_ROWS), [preorders]);
+  const plan = useMemo(() => makePlan(preorders, today), [preorders, today]);
+  const banner = seasonBanner(occasions, today);
+  const season = occasionOn(occasions, today);
+  const soFar = useMemo(() => (season ? seasonSoFar(season, orders, preorders) : undefined), [season, orders, preorders]);
+
+  const unpaidNote = !unpaid.first ? 'Nothing to collect'
+    : unpaid.count === 1 ? `${unpaid.first.name}${unpaid.first.billNo ? ` · bill #${unpaid.first.billNo}` : ''}`
+    : `${plural(unpaid.count, 'bill')} · oldest ${unpaid.first.name}`;
+  const openPos = () => onNavigate('seasonal_billing');
+  const toPos = (id: string) => onNavigate('seasonal_billing', { action: 'open', id });
+
+  return (
+    <div className="sw-page has-cta">
+      <div className="sw-head">
+        <div>
+          <h1>Sweets today</h1>
+          <span className="sw-sub sw-desk">{clock(now, true)} · counter, pre-bookings and what to make</span>
+          <span className="sw-sub sw-phone">{clock(now, false)} · {banner.short}</span>
+        </div>
+        <div className="sw-actions sw-desk">
+          <button type="button" className="ui-btn" onClick={() => onNavigate('seasonal_billing', { action: 'new', id: 'preorder' })}>+ Pre-booking</button>
+          <button type="button" className="ui-btn primary" onClick={openPos}>Open the counter (POS)</button>
+        </div>
+      </div>
+
+      <section className="sw-banner sw-desk" aria-label="Season">
+        {banner.badge && <span className="sw-badge" aria-hidden="true">{banner.badge}</span>}
+        <span className="sw-banner-text"><b>{banner.title}</b><span>{banner.text}</span></span>
+        <button type="button" className="sw-link" onClick={() => setChanging(true)}>Change season</button>
+      </section>
+
+      <div className="sw-tiles">
+        <Tile label="Sold today" value={inr(counter.sales_total)} note={`Yesterday: ${plural(yesterday.bills_count, 'bill')} · ${inr(yesterday.sales_total)}`} />
+        <Tile className="sw-desk" label="Cash · UPI today" value={`${inr(counter.cash)} · ${inr(counter.upi_total)}`} note="Close the day to match the drawer" />
+        <Tile label="Unpaid bills" value={inr(unpaid.total)} note={unpaidNote} tone={unpaid.total > 0 ? 'bad' : undefined} />
+        <Tile label="Pre-booked" value={inr(booked.total)} note={`${plural(booked.count, 'order')} · ${inr(booked.advance)} advance taken`} tone="warm" />
+        <Tile className="sw-phone" label="Advance taken" value={inr(booked.advance)} note="" />
+      </div>
+
+      <div className="sw-two">
+        <DueList list={due} today={today} onAll={() => toPos('preorders')} />
+        <MakeList plan={plan} />
+      </div>
+
+      <SeasonSoFar season={season} data={soFar} onOccasions={() => onNavigate('seasonal_occasions')} onReports={() => toPos('reports')} />
+
+      <div className="sw-cta"><button type="button" className="ui-btn primary" onClick={openPos}>Open the counter</button></div>
+      {changing && <ChangeSeasonModal occasions={occasions} sweets={o => items.filter(i => i.occasion_id === o.id).length} onClose={() => setChanging(false)} />}
+    </div>
+  );
+};
 
 export default SeasonalDashboard;

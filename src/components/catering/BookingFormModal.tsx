@@ -1,223 +1,156 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../ui/Modal';
 import BookingVenueInput from './BookingVenueInput';
-import { StatusSelect } from './BookingActions';
-import { Booking } from '../../types';
-import { useCreateBooking, useUpdateBooking } from '../../hooks/useBookings';
+import { Booking, Customer } from '../../types';
+import { useBookings, useCreateBooking, useUpdateBooking } from '../../hooks/useBookings';
 import { useCustomers } from '../../hooks/useCustomers';
+import { useInvoices } from '../../hooks/useInvoices';
 import { useResolveCustomer } from '../../hooks/useResolveCustomer';
-import { useMenus } from '../../hooks/useMenus';
 import { useEventTypes, useCreateEventType, DEFAULT_EVENTS } from '../../hooks/useDataCenter';
-import { inr } from '../../lib/money';
-
-const blank = {
-  customer_id: '', newCustomerName: '', newCustomerPhone: '', customerEmail: '',
-  event_type: '', other: false, event_date: '', multiDay: false, end_date: '', event_time: '',
-  venue: '', guest_count: '', menu_id: '', special_instructions: '', status: 'inquiry' as Booking['status'],
-};
-type Form = typeof blank;
-
-const fromBooking = (b: Booking): Form => ({
-  ...blank, customer_id: b.customer_id, event_type: b.event_type,
-  event_date: b.event_date, multiDay: !!(b.end_date && b.end_date !== b.event_date), end_date: b.end_date || '',
-  event_time: b.event_time?.slice(0, 5) || '', venue: b.venue || '', guest_count: String(b.guest_count ?? ''),
-  menu_id: b.menu_id || '', special_instructions: b.special_instructions || '', status: b.status,
-});
+import { formatDateIST } from '../../lib/ist';
+import CustomerPicker from '../bookings/CustomerPicker';
+import EventTypePicker from '../bookings/EventTypePicker';
+import { Chips, DialogFoot, Field, Group, inputClass } from '../bookings/FormBits';
+import { BookingForm, FOOD_STYLES, blankForm, bookingFields, dayHint, formErrors, formFromBooking } from '../bookings/bookingForm';
 
 interface Props {
   booking: Booking | null; // null = new booking
   presetCustomerId?: string;
   presetDate?: string;     // "+ New booking on 25 Nov" from the calendar
   onClose: () => void;
-  onSaved: (b: Booking, confirmedNow: boolean) => void;
+  onSaved: (b: Booking) => void;
 }
 
-// One form for both "New Booking" and "Edit Booking".
+// New and edit booking: who, what and when, where and how many, notes. New bookings start as an inquiry.
 const BookingFormModal: React.FC<Props> = ({ booking, presetCustomerId, presetDate, onClose, onSaved }) => {
+  const id = useId();
   const { data: customers = [] } = useCustomers();
-  const { data: menus = [] } = useMenus();
+  const { data: bookings = [] } = useBookings();
+  const { data: invoices = [] } = useInvoices();
   const { data: eventTypesList = [] } = useEventTypes();
   const createBooking = useCreateBooking();
   const updateBooking = useUpdateBooking();
-  const resolveDraft = useResolveCustomer();
+  const resolveCustomer = useResolveCustomer();
   const createEventType = useCreateEventType();
 
-  const [form, setForm] = useState<Form>(() => (booking ? fromBooking(booking) : { ...blank, event_date: presetDate || '' }));
+  const [start, setStart] = useState<BookingForm>(() => (booking ? formFromBooking(booking) : blankForm(presetDate)));
+  const [form, setForm] = useState(start);
+  const [tried, setTried] = useState(false);
   const [saving, setSaving] = useState(false);
-  const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm(f => ({ ...f, [k]: v }));
+  const set = (patch: Partial<BookingForm>) => setForm(f => ({ ...f, ...patch }));
 
-  const eventTypes = (eventTypesList.length ? eventTypesList.map(e => e.name) : DEFAULT_EVENTS).filter(t => t !== 'Other');
-  // Unlisted types (custom ones) show as "Other" + free text.
-  const isOther = form.other || (!!form.event_type && !eventTypes.includes(form.event_type));
-  const eventType = (isOther ? form.event_type : form.event_type || eventTypes[0] || 'Wedding').trim();
+  // Most used event types first, so the chips show what this business books.
+  const types = useMemo(() => {
+    const names = (eventTypesList.length ? eventTypesList.map(e => e.name) : DEFAULT_EVENTS).filter(t => t !== 'Other');
+    const used = (t: string) => bookings.filter(b => b.event_type === t).length;
+    return names.map((t, i) => ({ t, i, n: used(t) })).sort((a, b) => b.n - a.n || a.i - b.i).map(x => x.t);
+  }, [eventTypesList, bookings]);
+  const custom = form.other || (!!form.event_type && !types.includes(form.event_type));
+  const eventType = (custom ? form.event_type : form.event_type || types[0] || 'Wedding').trim();
+  const errors = tried ? formErrors(form, eventType, !booking) : {};
+  const hint = dayHint(bookings, form.event_date, form.multiDay ? form.end_date : '', booking?.id);
 
-  const menu = menus.find(m => m.id === form.menu_id);
-  const estimate = menu ? menu.price_per_plate * (parseInt(form.guest_count) || 0) : 0;
+  const owed = useMemo(() => {
+    const m = new Map<string, number>();
+    invoices.forEach(i => { const c = i.booking?.customer_id; if (c && Number(i.balance_due) > 0) m.set(c, (m.get(c) ?? 0) + Number(i.balance_due)); });
+    return m;
+  }, [invoices]);
+  const lastEvent = useMemo(() => {
+    const m = new Map<string, Booking>();
+    bookings.forEach(b => { const p = m.get(b.customer_id); if (!p || b.event_date > p.event_date) m.set(b.customer_id, b); });
+    return m;
+  }, [bookings]);
+  const note = (c: Customer) => { const b = lastEvent.get(c.id); return b ? `${b.event_type} ${formatDateIST(b.event_date, 'd MMM yy')}` : ''; };
 
-  // Preselect a customer handed over from another page, once the list has it.
+  // A customer handed over from another page is picked once the list has it.
   const presetDone = useRef(false);
   useEffect(() => {
-    if (booking || presetDone.current || !presetCustomerId) return;
-    if (customers.some(c => c.id === presetCustomerId)) {
-      presetDone.current = true;
-      setForm(f => ({ ...f, customer_id: presetCustomerId }));
-    }
+    if (booking || presetDone.current || !presetCustomerId || !customers.some(c => c.id === presetCustomerId)) return;
+    presetDone.current = true;
+    setStart(s => ({ ...s, customer_id: presetCustomerId }));
+    setForm(f => ({ ...f, customer_id: presetCustomerId }));
   }, [booking, customers, presetCustomerId]);
 
-  const resolveCustomer = async (): Promise<string | null> => {
-    const id = await resolveDraft({ customerId: form.customer_id, name: form.newCustomerName, phone: form.newCustomerPhone, email: form.customerEmail });
-    // Keep the id so a failed booking retry doesn't create the customer twice.
-    if (id) setForm(f => ({ ...f, customer_id: id }));
-    return id;
-  };
-
   const save = async () => {
-    if (!form.event_date) { toast.error('Event date is required'); return; }
-    if (form.multiDay && !form.end_date) { toast.error('Pick the end date of the multi-day event'); return; }
-    if (form.multiDay && form.end_date < form.event_date) { toast.error('End date is before the event date'); return; }
-    if (!eventType) { toast.error('Please enter a custom event name'); return; }
-    // null (not undefined) so clearing a field on edit really clears it.
-    const fields = {
-      event_type: eventType, event_date: form.event_date, event_time: form.event_time || null,
-      end_date: form.multiDay && form.end_date ? form.end_date : null,
-      venue: form.venue.trim(), guest_count: parseInt(form.guest_count) || 0,
-      menu_id: form.menu_id || null, special_instructions: form.special_instructions, status: form.status,
-    };
+    setTried(true);
+    if (Object.keys(formErrors(form, eventType, !booking)).length) return;
     setSaving(true);
     try {
+      const fields = bookingFields(form, eventType);
       let saved: Booking;
       if (booking) {
-        saved = await updateBooking.mutateAsync({ id: booking.id, ...fields, estimated_cost: estimate || booking.estimated_cost });
+        saved = await updateBooking.mutateAsync({ id: booking.id, ...fields });
       } else {
-        const customerId = await resolveCustomer();
+        const customerId = await resolveCustomer({ customerId: form.customer_id, name: form.newName, phone: form.newPhone });
         if (!customerId) return;
-        saved = await createBooking.mutateAsync({ customer_id: customerId, ...fields, estimated_cost: estimate });
+        // Kept so a failed save does not add the customer twice.
+        set({ customer_id: customerId });
+        saved = await createBooking.mutateAsync({ customer_id: customerId, ...fields, status: 'inquiry' });
       }
-      if (isOther && !eventTypes.includes(eventType)) createEventType.mutateAsync(eventType).catch(() => {});
-      toast.success(booking ? 'Booking updated!' : 'Booking created!');
-      onSaved(saved, saved.status === 'confirmed' && booking?.status !== 'confirmed');
+      if (custom && !types.includes(eventType)) createEventType.mutateAsync(eventType).catch(() => {});
+      toast.success(booking ? 'Booking updated' : 'Booking created');
+      onSaved(saved);
     } catch (e: any) {
-      toast.error(e?.message || 'Failed to save booking');
+      toast.error(e?.message || 'Could not save the booking');
     } finally {
       setSaving(false);
     }
   };
 
-  const close = () => { if (!saving) onClose(); };
-  const footer = (
-    <>
-      <button type="button" style={btnGhost} onClick={close}>Cancel</button>
-      <button type="button" style={btnPrimary} onClick={save} disabled={saving}>
-        {saving ? 'Saving...' : booking ? 'Save Changes' : 'Create Booking'}
-      </button>
-    </>
-  );
-
   return (
-    <Modal title={booking ? 'Edit Booking' : 'New Booking'} onClose={close} footer={footer} width={600}>
-      <div style={grid}>
-        {booking ? (
-          <Field label="Customer" full>
-            <div style={{ fontSize: 14, fontWeight: 500 }}>
-              {booking.customer?.name ?? '—'} <span style={{ color: '#888880', fontWeight: 400, fontSize: 12 }}>{booking.customer?.phone}</span>
-            </div>
-          </Field>
-        ) : (
-          <>
+    <Modal title={booking ? 'Edit booking' : 'New booking'} onClose={onClose} footer={<DialogFoot label={booking ? 'Save changes' : 'Create booking'} busy={saving} onSave={save} />} width={560}
+      dirty={JSON.stringify(form) !== JSON.stringify(start)} busy={saving}>
+      <div className="bkf">
+        <p className="bkf-sub">{booking ? 'Change the details here. Change the status from the ⋯ menu.' : 'Saved as an inquiry. You can confirm it later from the quote.'}</p>
+        <Group title="Who">
+          {booking ? (
             <Field label="Customer" full>
-              <select style={inp} value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
-                <option value="">+ New customer</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ''}</option>)}
-              </select>
+              <div className="bkf-input strong" style={{ background: '#F7F5F0' }}>{booking.customer?.name ?? '—'}{booking.customer?.phone ? ` · ${booking.customer.phone}` : ''}</div>
             </Field>
-            {!form.customer_id && (
-              <>
-                <Field label="New customer name *">
-                  <input style={inp} placeholder="Full name" value={form.newCustomerName} onChange={e => set('newCustomerName', e.target.value)} />
-                </Field>
-                <Field label="Phone">
-                  <input type="tel" inputMode="tel" style={inp} placeholder="98765 43210" value={form.newCustomerPhone} onChange={e => set('newCustomerPhone', e.target.value)} />
-                </Field>
-                <Field label="Email (optional)" full>
-                  <input type="email" style={inp} placeholder="customer@example.com" value={form.customerEmail} onChange={e => set('customerEmail', e.target.value)} />
-                </Field>
-              </>
-            )}
-          </>
-        )}
-        <Field label="Event type">
-          <select style={inp} value={isOther ? 'Other' : eventType}
-            onChange={e => setForm(f => (e.target.value === 'Other'
-              ? { ...f, other: true, event_type: '' } : { ...f, other: false, event_type: e.target.value }))}>
-            {eventTypes.map(t => <option key={t}>{t}</option>)}
-            <option value="Other">Other</option>
-          </select>
-          {isOther && (
-            <input style={{ ...inp, marginTop: 6 }} placeholder="Enter custom event name" value={form.event_type}
-              onChange={e => setForm(f => ({ ...f, other: true, event_type: e.target.value }))} />
+          ) : (
+            <CustomerPicker customers={customers} pickedId={form.customer_id} newName={form.newName} newPhone={form.newPhone} error={errors.customer}
+              onPick={cid => set({ customer_id: cid, newName: '', newPhone: '' })} onNew={(name, phone) => set({ customer_id: '', newName: name, newPhone: phone })}
+              note={note} owes={c => owed.get(c.id) ?? 0} />
           )}
-        </Field>
-        <Field label="Status">
-          <StatusSelect value={form.status} onChange={s => set('status', s)} style={inp} />
-        </Field>
-        <Field label="Event date *">
-          <input type="date" style={inp} value={form.event_date} onChange={e => set('event_date', e.target.value)} />
-        </Field>
-        <Field label="Event time">
-          <input type="time" style={inp} value={form.event_time} onChange={e => set('event_time', e.target.value)} />
-        </Field>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
-            <input type="checkbox" checked={form.multiDay} style={{ accentColor: '#E8750A', width: 16, height: 16 }}
-              onChange={e => setForm(f => ({ ...f, multiDay: e.target.checked, end_date: e.target.checked ? f.end_date : '' }))} />
-            <span style={{ fontWeight: 500 }}>Multi-day event</span>
-            <span style={{ fontSize: 11, color: '#888880' }}>(spans more than one day)</span>
-          </label>
-        </div>
-        {form.multiDay && (
-          <Field label="End date *">
-            <input type="date" style={inp} value={form.end_date} min={form.event_date || undefined} onChange={e => set('end_date', e.target.value)} />
+        </Group>
+
+        <Group title="What and when">
+          <EventTypePicker types={types} value={eventType} custom={custom} error={errors.event}
+            onPick={t => set({ event_type: t, other: false })} onCustom={name => set({ event_type: name, other: true })} />
+          <Field label="Date" htmlFor={`${id}-date`} hint={hint?.text} warn={hint?.busy} error={errors.date}>
+            <input id={`${id}-date`} type="date" className={inputClass(errors.date)} value={form.event_date} onChange={e => set({ event_date: e.target.value })} />
           </Field>
-        )}
-        <Field label="Venue / Location" full>
-          <BookingVenueInput style={inp} value={form.venue} onChange={v => set('venue', v)} />
-        </Field>
-        <Field label="Guest count">
-          <input type="number" inputMode="numeric" min={0} style={inp} placeholder="e.g. 200" value={form.guest_count} onChange={e => set('guest_count', e.target.value)} />
-        </Field>
-        <Field label="Menu / Package">
-          <select style={inp} value={form.menu_id} onChange={e => set('menu_id', e.target.value)}>
-            <option value="">-- Select menu --</option>
-            {menus.map(m => <option key={m.id} value={m.id}>{m.name} ({inr(m.price_per_plate)}/plate)</option>)}
-          </select>
-        </Field>
-        {estimate > 0 && (
-          <div style={{ gridColumn: '1 / -1', background: '#EAF3DE', padding: '10px 14px', borderRadius: 8 }}>
-            <div style={{ fontSize: 11, color: '#3B6D11' }}>Estimated total</div>
-            <div style={{ fontWeight: 600, color: '#3B6D11', fontSize: 16 }}>{inr(estimate)}</div>
-          </div>
-        )}
-        <Field label="Special instructions" full>
-          <textarea style={{ ...inp, height: 70, resize: 'vertical' }} placeholder="e.g. Jain food for 50 guests..."
-            value={form.special_instructions} onChange={e => set('special_instructions', e.target.value)} />
-        </Field>
+          <Field label="Time" htmlFor={`${id}-time`}>
+            <input id={`${id}-time`} type="time" className="bkf-input" value={form.event_time} onChange={e => set({ event_time: e.target.value })} />
+          </Field>
+          <label className="bkf-check bkf-full">
+            <input type="checkbox" checked={form.multiDay} onChange={e => set({ multiDay: e.target.checked, end_date: e.target.checked ? form.end_date : '' })} />
+            Lasts more than one day
+          </label>
+          {form.multiDay && (
+            <Field label="Last day" htmlFor={`${id}-end`} error={errors.end}>
+              <input id={`${id}-end`} type="date" className={inputClass(errors.end)} value={form.end_date} min={form.event_date || undefined} onChange={e => set({ end_date: e.target.value })} />
+            </Field>
+          )}
+        </Group>
+
+        <Group title="Where and how many">
+          <Field label="Venue" htmlFor={`${id}-venue`} full>
+            <BookingVenueInput id={`${id}-venue`} className="bkf-input" value={form.venue} onChange={v => set({ venue: v })} />
+          </Field>
+          <Field label="Guests" htmlFor={`${id}-guests`} hint="A rough number is fine" phoneFull>
+            <input id={`${id}-guests`} type="number" inputMode="numeric" min={0} className="bkf-input" placeholder="e.g. 200" value={form.guest_count} onChange={e => set({ guest_count: e.target.value })} />
+          </Field>
+          <Chips label="Food style" options={FOOD_STYLES} value={form.food} onPick={food => set({ food })} phoneFull />
+          <Field label="Notes for the team" htmlFor={`${id}-notes`} full>
+            <textarea id={`${id}-notes`} rows={3} className="bkf-input" placeholder="Anything special: allergies, timing, stage counter…"
+              value={form.notes} onChange={e => set({ notes: e.target.value })} />
+          </Field>
+        </Group>
       </div>
     </Modal>
   );
 };
-
-const Field: React.FC<{ label: string; full?: boolean; children: React.ReactNode }> = ({ label, full, children }) => (
-  <label style={{ display: 'block', minWidth: 0, gridColumn: full ? '1 / -1' : undefined }}>
-    <span style={lbl}>{label}</span>
-    {children}
-  </label>
-);
-
-const grid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 };
-const btnPrimary: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
-const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '8px 14px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
-const lbl: React.CSSProperties = { fontSize: 11, color: '#888880', display: 'block', marginBottom: 4 };
-const inp: React.CSSProperties = { width: '100%', padding: '8px 10px', borderRadius: 7, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
 
 export default BookingFormModal;

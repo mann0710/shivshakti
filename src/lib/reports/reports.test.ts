@@ -69,6 +69,21 @@ describe('money reports', () => {
     expect(rows.UPI).toMatchObject({ advance: 600, total: 600 });
     expect(r.stats[0].value).toBe(2380);
   });
+  it('counts bill money when it was paid and leaves cancelled bills out of sales', () => {
+    const pay = (amount: number, at: string, mode = 'cash', kind = 'sale') => ({ amount, mode, at, kind });
+    const cancelled = bill({ id: 'bx', bill_no: 2, cancelled_at: '2026-10-21T07:00:00Z', total_amount: 500,
+      payments: [pay(500, '2026-10-21T06:00:00Z'), pay(-500, '2026-10-21T07:00:00Z', 'cash', 'refund')] });
+    const older = bill({ id: 'bo', bill_no: 3, created_at: '2026-09-25T06:00:00Z', total_amount: 500,
+      payments: [pay(200, '2026-09-25T06:00:00Z', 'upi'), pay(300, '2026-10-05T06:00:00Z', 'cash', 'due')] });
+    const part = bill({ id: 'bp', bill_no: 4, created_at: '2026-10-22T06:00:00Z', total_amount: 400, is_paid: false, payments: [pay(100, '2026-10-22T06:00:00Z')] });
+    const inp = input({ orders: [bill({}), cancelled, older, part] as any, unpaidOrders: [part, cancelled] as any });
+    const sales = salesReport(inp);
+    expect(sales.stats[0].value).toBe(980 + 400 + 1100);
+    expect(sales.stats[3].value).toBe(300);
+    const cash = paymentsReport(inp).tables[0].rows.find(x => x.mode === 'Cash');
+    expect(cash).toMatchObject({ bills: 980 + 300 + 100, handover: 800 });
+    expect(duesReport(inp).stats[1].value).toBe(300);
+  });
   it('lists dues as of today', () => {
     const r = duesReport(input());
     expect(r.stats[0].value).toBe(120 + 800);

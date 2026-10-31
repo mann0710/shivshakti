@@ -11,7 +11,7 @@ import { inr } from './money';
 export type Tab = 'upcoming' | 'attention' | 'past' | 'cancelled';
 export const TABS: { id: Tab; label: string }[] = [
   { id: 'upcoming', label: 'Upcoming' }, { id: 'attention', label: 'Needs attention' },
-  { id: 'past', label: 'Past' }, { id: 'cancelled', label: 'Cancelled' },
+  { id: 'past', label: 'Past' }, { id: 'cancelled', label: 'Lost or cancelled' },
 ];
 
 export type NextKind = 'quote' | 'pick' | 'accept' | 'invoice' | 'payment' | 'complete' | 'close';
@@ -46,7 +46,7 @@ const pickLabel = (q: Quotation, siblings: number) => {
 };
 
 // One next step per booking; past events ask to be closed so totals stay right.
-function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | undefined, toPick: Quotation | undefined, siblings: number): Next | null {
+function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | undefined, toPick: Quotation | undefined, siblings: number, drafted = false): Next | null {
   if (stage === 'cancelled') return null;
   if (invoice) {
     if (Number(invoice.balance_due) > 0) return { kind: 'payment', label: 'Record payment' };
@@ -54,7 +54,7 @@ function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | un
   }
   if (b.status === 'completed') return null;
   if (toPick) return { kind: 'pick', label: pickLabel(toPick, siblings) };
-  if (stage === 'inquiry') return past ? { kind: 'close', label: 'Close as lost' } : { kind: 'quote', label: 'Make quotation' };
+  if (stage === 'inquiry') return past ? { kind: 'close', label: 'Close as lost' } : { kind: 'quote', label: drafted ? 'Send quote' : 'Make quotation' };
   if (stage === 'quoted') return past ? { kind: 'close', label: 'Close as lost' } : { kind: 'accept', label: 'Mark accepted' };
   if (stage === 'confirmed') return past ? { kind: 'complete', label: 'Mark completed' } : { kind: 'invoice', label: 'Create invoice' };
   return null;
@@ -70,7 +70,7 @@ export function bookingView(b: Booking, ctx: { quotes: Quotation[]; invoices: In
   const sibs = (q: Quotation) => siblingsOf(q, ctx.quotes).length;
   const toPick = quotes.find(q => pendingChoice(q, sibs(q)));
   const quote = toPick ?? pickQuotation(ctx.quotes, b.id);
-  const next = nextStep(b, stage, past, invoice, toPick, toPick ? sibs(toPick) : 1);
+  const next = nextStep(b, stage, past, invoice, toPick, toPick ? sibs(toPick) : 1, quotes.some(q => q.status === 'draft'));
   const tab: Tab = stage === 'cancelled' ? 'cancelled' : past && next ? 'attention' : past ? 'past' : 'upcoming';
   const valueText = invoice ? inr(ctx.value) : quote && quote.status !== 'rejected' ? totalText(quote) : ctx.value > 0 ? inr(ctx.value) : 'No quote yet';
   return { b, stage, tab, next, quote, invoice, value: ctx.value, valueText, start, end };
@@ -110,17 +110,31 @@ export function boardStats(views: BookingView[]) {
   };
 }
 
-// Pipeline: open work plus what was paid in the last 60 days.
+// Pipeline: open work plus what was paid in the last 90 days.
 export const PIPELINE: Stage[] = ['inquiry', 'quoted', 'confirmed', 'invoiced', 'paid'];
+export const PAID_DAYS = 90;
 export function pipelineColumns(views: BookingView[], today: string) {
   const since = new Date(`${today}T00:00:00Z`);
-  since.setUTCDate(since.getUTCDate() - 60);
+  since.setUTCDate(since.getUTCDate() - PAID_DAYS);
   const cutoff = since.toISOString().slice(0, 10);
   const live = views.filter(v => v.tab === 'upcoming' || v.tab === 'attention' || (v.stage === 'paid' && v.end >= cutoff));
   return PIPELINE.map(stage => {
     const cards = sortForTab(live.filter(v => v.stage === stage), stage === 'paid' ? 'past' : 'upcoming');
-    return { stage, cards, total: cards.reduce((s, v) => s + v.value, 0) };
+    const total = cards.reduce((s, v) => s + v.value, 0);
+    const due = cards.reduce((s, v) => s + (Number(v.invoice?.balance_due) || 0), 0);
+    const note = stage === 'paid' ? `Last ${PAID_DAYS} days` : stage === 'invoiced' ? (due ? `${inr(due)} due` : '') : total ? inr(total) : '';
+    return { stage, cards, total, note };
   });
+}
+
+// Finished events with an accepted quote but no invoice: money that was never billed.
+export const neverInvoiced = (views: BookingView[]) => views.filter(v => (v.tab === 'past' || v.tab === 'attention') && v.stage === 'confirmed');
+
+// Festival markers for the calendar: each occasion on its last (main) day.
+export function festivalDays(occasions: { name: string; end_date?: string | null }[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  occasions.forEach(o => { if (o.end_date) out.set(o.end_date, [...(out.get(o.end_date) ?? []), o.name]); });
+  return out;
 }
 
 // Every booking touching a date (multi-day events cover each day).

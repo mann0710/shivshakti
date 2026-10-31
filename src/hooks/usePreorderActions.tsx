@@ -5,66 +5,70 @@ import {
 } from './useSeasonalPreorders';
 import { useHasPreorderColumns } from './useSchemaStatus';
 import { useConfirm } from '../components/ui/ConfirmDialog';
-import Modal from '../components/ui/Modal';
-import { balanceOf, STATUS_LABEL, PreStatus } from '../lib/preorders';
+import CollectModal from '../components/pos/CollectModal';
+import { balanceOf, STATUS_LABEL, PreStatus, packedToggle } from '../lib/preorders';
+import { PayMode, PayKind, preorderPayments, preorderLedger } from '../lib/payments';
+import { sendReminder } from '../lib/sessionalReceipts';
 import { inr } from '../lib/money';
-import { btnGhost, btnPrimary, inp, lbl } from '../components/ui/styles';
+import { roundMoney } from '../lib/units';
 
-// Status changes, hand-over with balance collection and delete, shared by the list and the sheet.
+type Taking = { p: SeasonalPreorder; kind: Extract<PayKind, 'handover' | 'due'> };
+const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Could not save');
+
+// Packed / cancelled, hand-over (a shortfall stays due), collecting that due later, reminders and delete.
 export const usePreorderActions = () => {
   const update = useUpdateSeasonalPreorder();
   const setStatus = useUpdateSeasonalPreorderStatus();
   const del = useDeleteSeasonalPreorder();
   const extended = useHasPreorderColumns();
   const { confirm, dialog } = useConfirm();
-  const [handing, setHanding] = useState<SeasonalPreorder | null>(null);
-  const [amount, setAmount] = useState('');
+  const [taking, setTaking] = useState<Taking | null>(null);
 
   const changeStatus = async (p: SeasonalPreorder, status: PreStatus) => {
     if (status === 'cancelled' && !(await confirm({ title: 'Cancel pre-booking?', message: `${p.customer_name}'s booking of ${inr(p.total_amount)} will be marked cancelled.`, confirmLabel: 'Cancel booking', danger: true }))) return;
-    try { await setStatus.mutateAsync({ id: p.id, status }); toast.success(`${p.customer_name}: ${STATUS_LABEL[status]}`); } catch (e: any) { toast.error(e.message); }
+    try { await setStatus.mutateAsync({ id: p.id, status }); toast.success(`${p.customer_name}: ${STATUS_LABEL[status]}`); } catch (e) { toast.error(errorText(e)); }
   };
 
-  const togglePacked = (p: SeasonalPreorder) => changeStatus(p, p.status === 'ready' ? 'confirmed' : 'ready');
+  const togglePacked = (p: SeasonalPreorder) => changeStatus(p, packedToggle(p));
 
   const remove = async (p: SeasonalPreorder) => {
     if (!(await confirm({ title: 'Delete pre-booking?', message: `${p.customer_name} (${inr(p.total_amount)}) will be removed permanently.`, confirmLabel: 'Delete', danger: true }))) return;
-    try { await del.mutateAsync(p.id); toast.success('Deleted'); } catch (e: any) { toast.error(e.message); }
+    try { await del.mutateAsync(p.id); toast.success('Deleted'); } catch (e) { toast.error(errorText(e)); }
   };
 
-  const startHandover = (p: SeasonalPreorder) => { setHanding(p); setAmount(String(balanceOf(p))); };
+  const remind = (p: SeasonalPreorder) => sendReminder(p.phone, p.customer_name, balanceOf(p), 'your sweets pre-booking');
 
-  const handOver = async (mode: 'cash' | 'upi') => {
-    if (!handing) return;
-    const p = handing;
-    const received = Math.min(balanceOf(p), Math.max(0, Number(amount) || 0));
-    // Older databases only have one payment mode, so the hand-over mode replaces it there.
-    const paid = extended
-      ? { balance_paid: (p.balance_paid ?? 0) + received, balance_mode: received > 0 ? mode : p.balance_mode ?? null, delivered_at: new Date().toISOString() }
-      : { payment_mode: received > 0 ? mode : p.payment_mode };
+  const take = async (amount: number, mode: PayMode) => {
+    if (!taking) return;
+    const { p, kind } = taking;
+    const at = new Date().toISOString();
+    const payments = [...preorderPayments(p), ...(amount > 0 ? [{ amount, mode, at, kind }] : [])];
+    const ledger = preorderLedger(payments);
+    // Older databases only have one payment mode, so the money taken now replaces it there.
+    const fields = extended ? ledger : { payments, advance_paid: ledger.advance_paid, payment_mode: amount > 0 ? mode : p.payment_mode };
+    const handover = kind === 'handover' ? { status: 'delivered' as const, ...(extended ? { delivered_at: at } : {}) } : {};
+    const left = roundMoney(p.total_amount - ledger.advance_paid);
     try {
-      await update.mutateAsync({ id: p.id, status: 'delivered', advance_paid: p.advance_paid + received, ...paid });
-      toast.success(`Handed over to ${p.customer_name}`);
-      setHanding(null);
-    } catch (e: any) { toast.error(e.message); }
+      await update.mutateAsync({ id: p.id, ...fields, ...handover });
+      toast.success(kind === 'handover'
+        ? `Handed over to ${p.customer_name}${left > 0 ? ` · ${inr(left)} stays due` : ''}`
+        : left > 0 ? `${inr(amount)} collected · ${inr(left)} still due` : `${p.customer_name} paid in full`);
+      setTaking(null);
+    } catch (e) { toast.error(errorText(e)); }
   };
 
-  const modal = handing && (
-    <Modal title={`Hand over to ${handing.customer_name}`} onClose={() => setHanding(null)} width={380}
-      footer={<button style={btnGhost} onClick={() => setHanding(null)}>Cancel</button>}>
-      <div style={{ fontSize: 13, marginBottom: 10 }}>
-        Total {inr(handing.total_amount)} · Paid {inr(handing.advance_paid)} · Balance <b>{inr(balanceOf(handing))}</b>
-      </div>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
-        <span style={lbl}>Amount received now (₹)</span>
-        <input style={inp} inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} autoFocus onFocus={e => e.target.select()} />
-      </label>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button style={{ ...btnPrimary, flex: 1, height: 46 }} disabled={update.isPending} onClick={() => handOver('cash')}>Paid by Cash</button>
-        <button style={{ ...btnPrimary, flex: 1, height: 46 }} disabled={update.isPending} onClick={() => handOver('upi')}>Paid by UPI</button>
-      </div>
-    </Modal>
+  const modal = taking && (
+    <CollectModal key={taking.p.id} due={balanceOf(taking.p)} busy={update.isPending} upiNote={`Pre-booking ${taking.p.customer_name}`}
+      title={taking.kind === 'handover' ? `Hand over to ${taking.p.customer_name}` : `Collect from ${taking.p.customer_name}`}
+      verb={taking.kind === 'handover' ? 'Hand over' : 'Collect'} allowNothing={taking.kind === 'handover'}
+      info={<>Total {inr(taking.p.total_amount)} · Paid {inr(taking.p.advance_paid)} · Balance <b>{inr(balanceOf(taking.p))}</b></>}
+      onPay={take} onClose={() => setTaking(null)} />
   );
 
-  return { changeStatus, togglePacked, remove, startHandover, ui: <>{modal}{dialog}</> };
+  return {
+    changeStatus, togglePacked, remove, remind,
+    startHandover: (p: SeasonalPreorder) => setTaking({ p, kind: 'handover' }),
+    startCollect: (p: SeasonalPreorder) => setTaking({ p, kind: 'due' }),
+    ui: <>{modal}{dialog}</>,
+  };
 };

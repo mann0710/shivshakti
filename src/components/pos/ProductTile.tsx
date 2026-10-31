@@ -9,17 +9,15 @@ interface Props {
   inCart: number;
   onAdd: (item: SeasonalItem, pack: Pack) => void;
   onOpen: (item: SeasonalItem) => void;
+  onLoose: (item: SeasonalItem) => void;
 }
-
-const MAX_CHIPS = 4;
 
 // Stable colour per name so every sweet keeps the same avatar.
 export const hueOf = (name: string) => Array.from(name).reduce((h, ch) => (h * 31 + (ch.codePointAt(0) ?? 0)) % 360, 0);
 
-// One tap on a pack adds it; tapping the name opens custom weight / amount.
-const ProductTile: React.FC<Props> = ({ item, packs, inCart, onAdd, onOpen }) => {
+// One tap on a box size adds it; the name opens quantity + sizes; "Loose" sells by weight or rupees.
+const ProductTile: React.FC<Props> = ({ item, packs, inCart, onAdd, onOpen, onLoose }) => {
   const hue = hueOf(item.name);
-  const chips = packs.slice(0, MAX_CHIPS);
   return (
     <div className={`pos-tile${inCart ? ' in-cart' : ''}`}>
       <button type="button" className="pos-tile-main" onClick={() => onOpen(item)}
@@ -33,16 +31,16 @@ const ProductTile: React.FC<Props> = ({ item, packs, inCart, onAdd, onOpen }) =>
         </span>
       </button>
       {inCart > 0 && <span className="pos-badge" aria-hidden="true">{inCart}</span>}
-      <div className="pos-packs" role="group" aria-label={`Packs of ${item.name}`}>
-        {chips.map(p => (
+      <div className="pos-packs" role="group" aria-label={`Box sizes of ${item.name}`}>
+        {packs.map(p => (
           <button key={p.size} type="button" className="pos-pack" onClick={() => onAdd(item, p)}
             aria-label={`Add ${p.label} ${item.name}, ${inr(p.price)}`}>
             <span>{p.label}</span>
             <span className="p">{inr(p.price)}</span>
           </button>
         ))}
-        <button type="button" className="pos-pack more" onClick={() => onOpen(item)}>
-          {packs.length > MAX_CHIPS ? `+${packs.length - MAX_CHIPS} more` : 'Custom'}
+        <button type="button" className="pos-loose" onClick={() => onLoose(item)}>
+          {item.unit === 'pc' ? 'Other count…' : 'Loose (weight or ₹)…'}
         </button>
       </div>
     </div>

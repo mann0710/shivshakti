@@ -1,62 +1,61 @@
 import React from 'react';
-import { box, inp, outlineBtn, xBtn } from './InvoiceUi';
 
 export interface ChargeRow { id?: string; description: string; amount: number }
 
-interface ListProps<T extends ChargeRow> {
-  heading: React.ReactNode;
-  color: string;
-  items: T[];
-  onChange: (items: T[]) => void;
-  make: () => T;
-  empty: string;
-  placeholder?: string;
+interface Props {
+  extras: ChargeRow[];
+  transport: ChargeRow[];
+  onExtras: (rows: ChargeRow[]) => void;
+  onTransport: (rows: ChargeRow[]) => void;
+  discount: string;
+  onDiscount: (text: string) => void;
+  gstRate: number;
+  gstRates: number[];
+  gstNote: string;
+  onGst: (rate: number) => void;
 }
 
-// Editable "description + amount" rows for extra charges, transport and discounts.
-function InvoiceChargeList<T extends ChargeRow>({ heading, color, items, onChange, make, empty, placeholder = 'Description' }: ListProps<T>) {
-  const patch = (i: number, p: Partial<ChargeRow>) => onChange(items.map((x, j) => (j === i ? { ...x, ...p } : x)));
+const money = (v: string) => Math.max(0, Number(v.replace(/[^\d.]/g, '')) || 0);
+
+// Editable "what + amount" rows for one list of charges.
+const Rows: React.FC<{ rows: ChargeRow[]; onChange: (rows: ChargeRow[]) => void; what: string }> = ({ rows, onChange, what }) => {
+  const patch = (i: number, p: Partial<ChargeRow>) => onChange(rows.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        {heading}
-        <button type="button" onClick={() => onChange([...items, make()])} style={outlineBtn(color)}>+ Add</button>
-      </div>
-      {items.length === 0 && <div style={{ fontSize: 11, color: '#AAAAAA', marginBottom: 6 }}>{empty}</div>}
-      {items.map((it, i) => (
-        <div key={it.id ?? i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-          <input placeholder={placeholder} value={it.description}
-            onChange={e => patch(i, { description: e.target.value })}
-            style={{ ...inp, flex: 1, minWidth: 0, fontSize: 12 }} />
-          <input type="number" min="0" inputMode="decimal" placeholder="₹ 0" value={it.amount || ''}
-            onChange={e => patch(i, { amount: parseFloat(e.target.value) || 0 })}
-            style={{ ...inp, width: 90, fontSize: 12, textAlign: 'right' }} />
-          <button type="button" aria-label="Remove" onClick={() => onChange(items.filter((_, j) => j !== i))} style={xBtn}>×</button>
+      {rows.map((r, i) => (
+        <div key={r.id ?? `${what}-${i}`} className="iv-extra">
+          <input className="lbl" value={r.description} placeholder={what} aria-label={`${what} name`} onChange={e => patch(i, { description: e.target.value })} />
+          <input className="iv-num" inputMode="decimal" value={r.amount ? `₹${r.amount.toLocaleString('en-IN')}` : ''} placeholder="₹0" aria-label={`${r.description || what} amount`}
+            onChange={e => patch(i, { amount: money(e.target.value) })} />
+          <button type="button" className="iv-x" aria-label={`Remove ${r.description || what}`} onClick={() => onChange(rows.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
     </>
   );
-}
+};
 
-interface BoxProps<T extends ChargeRow> {
-  title: string;
-  color: string;
-  items: T[];
-  onChange: (items: T[]) => void;
-  make: () => T;
-  empty: string;
-  applied?: string;
-}
-
-// A boxed charge list; Billing saves all edits with one button.
-export function InvoiceChargeBox<T extends ChargeRow>({ title, color, items, onChange, make, empty, applied }: BoxProps<T>) {
-  return (
-    <div style={box}>
-      <InvoiceChargeList heading={<div style={{ fontSize: 12, fontWeight: 600, color: '#444440' }}>{title}</div>}
-        color={color} items={items} onChange={onChange} make={make} empty={empty} />
-      {applied && <div style={{ fontSize: 11, color: '#666660', marginTop: 6 }}>{applied}</div>}
+// "Extras, discount, GST" on the invoice; every change saves by itself.
+const InvoiceChargeList: React.FC<Props> = ({ extras, transport, onExtras, onTransport, discount, onDiscount, gstRate, gstRates, gstNote, onGst }) => (
+  <section aria-label="Extras" className="iv-sec">
+    <div className="iv-sec-head">
+      <h2>Extras, discount, GST</h2>
+      <button type="button" className="mx-link" onClick={() => onExtras([...extras, { description: '', amount: 0 }])}>+ Add an extra</button>
     </div>
-  );
-}
+    <Rows rows={extras} onChange={onExtras} what="Extra" />
+    <Rows rows={transport} onChange={onTransport} what="Transport" />
+    <div className="iv-extra">
+      <label className="fixed" htmlFor="iv-discount">Discount <small>· amount or %</small></label>
+      <input id="iv-discount" className="iv-num" value={discount} placeholder="—" onChange={e => onDiscount(e.target.value.replace(/[^\d.%]/g, ''))} />
+      <span />
+    </div>
+    <div className="iv-extra">
+      <label className="fixed" htmlFor="iv-gst">GST <small>· {gstNote}</small></label>
+      <select id="iv-gst" className="iv-num" value={gstRate} disabled={gstRates.length < 2} onChange={e => onGst(Number(e.target.value))}>
+        {gstRates.map(r => <option key={r} value={r}>{r ? `${r}%` : 'Not added'}</option>)}
+      </select>
+      <span />
+    </div>
+  </section>
+);
 
 export default InvoiceChargeList;

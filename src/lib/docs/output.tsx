@@ -83,7 +83,7 @@ export async function shareDoc(make: () => Doc, text: string, phone?: string | n
       // Waiting for the PDF used up the tap; ask for one more.
       if (e?.name === 'NotAllowedError') {
         toast(t => <button type="button" onClick={() => { toast.dismiss(t.id); share().catch(() => undefined); }}
-          style={{ border: 'none', background: '#1A237E', color: '#fff', borderRadius: 8, padding: '10px 16px', fontSize: 14, fontWeight: 600 }}>
+          style={{ border: 'none', background: 'var(--primary)', color: '#fff', borderRadius: 8, padding: '10px 16px', fontSize: 14, fontWeight: 600 }}>
           PDF ready — tap to share</button>, { duration: 15000 });
         return 'shared';
       }

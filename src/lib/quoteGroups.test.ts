@@ -46,8 +46,8 @@ describe('option PDFs', () => {
     expect(doc.fileName).toBe('Kavit_QTN-0024_Options_AB.pdf');
   });
   it('the WhatsApp message lists every option', () => {
-    expect(quotationMessage(A, [A, B])).toContain('Option A: ₹13,300\nOption B: ₹18,900');
-    expect(quotationMessage(A)).toContain('Option A · Total: ₹13,300');
+    expect(quotationMessage(A, [A, B])).toContain('here are 2 menu options for your Vashtu on Wed 25 Nov:\nOption A: ₹13,300\nOption B: ₹18,900');
+    expect(quotationMessage(A)).toBe('Namaste Kavit ji, here is the quotation (Option A) for your Vashtu on Wed 25 Nov: ₹13,300 for 140 guests. — Shiv Shakti');
   });
 });
 

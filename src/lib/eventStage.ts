@@ -14,9 +14,11 @@ interface InvoiceLike { status: string; balance_due: number }
 export const eventStage = (b: BookingLike, quotes: QuoteLike[], invoice?: InvoiceLike | null): Stage => {
   if (b.status === 'cancelled') return 'cancelled';
   if (invoice) return invoice.status === 'paid' || invoice.balance_due <= 0 ? 'paid' : 'invoiced';
-  if (b.status === 'confirmed' || b.status === 'completed') return 'confirmed';
-  if (quotes.some(q => q.status !== 'rejected')) return 'quoted';
-  return 'inquiry';
+  // A draft that was never sent is still an inquiry; a confirmed booking waiting on its sent quote is still quoted.
+  const sent = quotes.some(q => q.status === 'sent');
+  const accepted = quotes.some(q => q.status === 'accepted');
+  if (b.status === 'confirmed' || b.status === 'completed') return sent && !accepted ? 'quoted' : 'confirmed';
+  return sent || accepted ? 'quoted' : 'inquiry';
 };
 
 // What to do next at each stage, shown under the progress bar.

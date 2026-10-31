@@ -1,0 +1,41 @@
+/* Home: greeting, "Needs you" with two actions per row, tiles, next events and sweets this week. */
+.hm-page { max-width: 1160px; gap: 18px; }
+.hm-sub { font-size: 13px; color: var(--muted); }
+.hm-new { display: none; }
+.needs-card .needs-acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.needs-card .needs-acts .ui-btn { min-height: 44px; font-size: 13px; padding: 0 12px; border-radius: 9px; white-space: nowrap; }
+.needs-card .needs-head span { font-size: 12.5px; }
+.needs-short { display: none; }
+.hm-more { display: none; }
+.hm-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.hm-list { padding: 14px 18px; display: flex; flex-direction: column; gap: 4px; }
+.hm-list .mx-card-head { padding: 0 0 6px; align-items: baseline; }
+.hm-ev { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid #F3F2EE; border-left: none; border-right: none; border-bottom: none; background: none; font: inherit; text-align: left; color: var(--ink); width: 100%; cursor: pointer; min-height: 56px; }
+.hm-ev:hover { background: #FFFCF6; }
+.hm-ev .mx-two-line b { font-size: 14px; }
+.hm-ev .mx-two-line span { font-size: 12.5px; }
+.hm-sw { display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid #F3F2EE; }
+.hm-sw .when { font-size: 13px; font-weight: 600; color: #8A4B00; }
+.hm-sw .when.late { color: #A32D2D; }
+.hm-sw .amt { font-size: 14px; font-weight: 600; }
+.mx-tiles.hm-tiles-phone { display: none; }
+
+@media (max-width: 768px) {
+  .hm-actions-desk { display: none !important; }
+  .hm-new { display: inline-flex; align-items: center; min-height: 52px !important; padding: 0 18px !important; border-radius: 12px !important; font-size: 16px !important; }
+  .hm-head h1 { font-size: 22px; }
+  .mx-tiles.hm-tiles-desk, .hm-two { display: none; }
+  .mx-tiles.hm-tiles-phone { display: grid; grid-template-columns: 1fr 1fr; }
+  .hm-page .needs-card { background: none; border: none; overflow: visible; display: flex; flex-direction: column; gap: 12px; }
+  .hm-page .needs-head { padding: 4px 0 0; }
+  .hm-page .needs-head span { display: none; }
+  .hm-page .needs-row { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 14px 12px; grid-template-columns: 10px minmax(0, 1fr); gap: 4px 10px; align-items: start; }
+  .hm-page .needs-row .needs-dot { margin-top: 6px; }
+  .hm-page .needs-acts { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .hm-page .needs-acts .ui-btn { min-height: 44px; font-size: 14px; grid-column: auto; justify-self: stretch; }
+  .needs-long { display: none; }
+  .needs-short { display: inline; }
+  .hm-page .needs-row.extra { display: none; }
+  .hm-page .needs-card.all .needs-row.extra { display: grid; }
+  .hm-more { display: block; width: 100%; text-align: center; text-decoration: none; }
+}

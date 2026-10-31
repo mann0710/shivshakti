@@ -1,69 +1,73 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
+import Modal from '../ui/Modal';
 import { Invoice, Payment } from '../../types';
 import { Quotation } from '../../hooks/useQuotations';
 import { invoiceDoc } from '../../lib/docs/invoiceDoc';
-import { downloadDoc, shareDoc } from '../../lib/docs/output';
+import { downloadDoc, printDoc, shareDoc } from '../../lib/docs/output';
 import { formatDateIST } from '../../lib/ist';
-import { waNumber } from '../../lib/quoteMath';
 import { inr } from '../../lib/money';
-import { btnGhost, btnPrimary } from './InvoiceUi';
+import { openWhatsApp } from '../../lib/receipt';
+import { sendReminder } from '../../lib/sessionalReceipts';
+import { SHOP } from '../../lib/shop';
+import { modeLabel } from './PaymentFields';
 
-interface Props { invoice: Invoice; quotation?: Quotation; payments: Payment[] }
-
-// WhatsApp summary, PDF share and PDF download for one invoice.
-const InvoiceActions: React.FC<Props> = ({ invoice: selected, quotation, payments: paymentHistory }) => {
-  const [sharing, setSharing] = useState(false);
-  const customer = selected.booking?.customer;
-
-  const make = () => invoiceDoc(selected, quotation, paymentHistory);
-  const downloadPDF = () => downloadDoc(make);
-
-  const sharePDF = async () => {
-    setSharing(true);
-    try {
-      const due = selected.balance_due > 0 ? inr(selected.balance_due) : 'Nil (fully paid)';
-      const text = `Dear ${customer?.name || 'Customer'},\nInvoice ${selected.invoice_number}\nTotal: ${inr(selected.total_amount)}\nBalance due: ${due}\n\nShiv Shakti Caterers`;
-      await shareDoc(make, text, customer?.phone);
-    } catch (e: any) { toast.error(e?.message || 'Could not share PDF'); }
-    finally { setSharing(false); }
-  };
-
-  const sendWhatsApp = () => {
-    const booking = selected.booking;
-    const phone = waNumber(customer?.phone);
-    const itemLines = (selected.line_items || []).map(i => `  · ${i.description}`).join('\n') || '  · Catering service';
-    const extraLines = (selected.extra_charges || []).filter(e => e.amount > 0)
-      .map(e => `${e.description}: +₹${e.amount.toLocaleString()}`).join('\n');
-    const discountLine = selected.discount_amount > 0 ? `Discount: -₹${selected.discount_amount.toLocaleString()}\n` : '';
-    const gstLine = selected.gst_rate > 0 ? `GST @${selected.gst_rate}%: ₹${selected.gst_amount.toLocaleString()}\n` : '';
-    const transportLine = (selected.transportation_charge || 0) > 0 ? `Transportation: +₹${selected.transportation_charge.toLocaleString()}\n` : '';
-    const payHistLines = paymentHistory.length
-      ? paymentHistory.map(p => `  · ₹${p.amount.toLocaleString()} (${p.payment_type}, ${p.payment_mode}) on ${formatDateIST(p.payment_date, 'dd-MM-yyyy')}`).join('\n')
-      : '  None yet';
-    const msg = encodeURIComponent(
-      `Dear ${customer?.name},\n\nYour invoice *${selected.invoice_number}* is ready.\n\n` +
-      `*Event:* ${booking?.event_type} · ${formatDateIST(booking?.event_date, 'dd-MM-yyyy')}\n` +
-      `*Venue:* ${booking?.venue || '—'} · *Guests:* ${booking?.guest_count}\n\n` +
-      `*Menu Items:*\n${itemLines}\n\n` +
-      (extraLines ? `*Extra Charges:*\n${extraLines}\n\n` : '') +
-      `*Invoice Summary*\nSubtotal: ₹${selected.subtotal.toLocaleString()}\n${gstLine}${transportLine}${discountLine}*Total: ₹${selected.total_amount.toLocaleString()}*\n\n` +
-      `*Payments:*\n${payHistLines}\n\nPaid: ₹${selected.advance_paid.toLocaleString()} | Balance: ₹${selected.balance_due.toLocaleString()}\n\nThank you!\nShiv Shakti Caterers`
-    );
-    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank');
-  };
-
-  return (
-    <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-      <button type="button" style={{ ...btnGhost, ...grow }} onClick={sendWhatsApp}>📱 WhatsApp</button>
-      <button type="button" style={{ ...btnGhost, ...grow, opacity: sharing ? 0.6 : 1 }} onClick={sharePDF} disabled={sharing}>
-        {sharing ? 'Preparing…' : '📤 Share PDF'}
-      </button>
-      <button type="button" style={{ ...btnPrimary, ...grow }} onClick={downloadPDF}>⬇ PDF</button>
-    </div>
-  );
+// WhatsApp to the saved number, else let WhatsApp ask who to send to.
+export const whatsApp = (phone: string | undefined, text: string) => {
+  if ((phone ?? '').replace(/\D/g, '').length >= 10) return openWhatsApp(phone!, text);
+  const w = window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  if (w) w.opener = null;
+  return !!w;
 };
 
-const grow: React.CSSProperties = { flex: '1 1 90px', fontSize: 12, whiteSpace: 'nowrap' };
+const summaryText = (inv: Invoice, payments: Payment[]) => {
+  const b = inv.booking;
+  const extras = (inv.extra_charges ?? []).filter(e => e.amount > 0).map(e => `${e.description}: ${inr(e.amount)}`);
+  const paid = payments.map(p => `  ${inr(p.amount)} ${modeLabel(p.payment_mode)} on ${formatDateIST(p.payment_date, 'd MMM yyyy')}`);
+  return [
+    `Namaste ${b?.customer?.name ?? ''},`, '', `Your invoice *${inv.invoice_number}* is ready.`,
+    b ? `${b.event_type} · ${formatDateIST(b.event_date, 'd MMM yyyy')}${b.venue ? ` · ${b.venue}` : ''}` : '', '',
+    `Meals: ${inr(inv.subtotal)}`, ...extras,
+    inv.transportation_charge > 0 ? `Transport: ${inr(inv.transportation_charge)}` : '',
+    inv.discount_amount > 0 ? `Discount: -${inr(inv.discount_amount)}` : '',
+    inv.gst_amount > 0 ? `GST ${inv.gst_rate}%: ${inr(inv.gst_amount)}` : '',
+    `*Total: ${inr(inv.total_amount)}*`, '',
+    ...(paid.length ? ['Payments received:', ...paid] : []),
+    `Balance: *${inr(inv.balance_due)}*`, '', `Thank you! ${SHOP.name}`,
+  ].filter((l, i, a) => l !== '' || (i > 0 && a[i - 1] !== '')).join('\n');
+};
 
-export default InvoiceActions;
+// Preview PDF and the "Send…" sheet: PDF, payment reminder, summary text or download.
+export function useInvoiceSend(inv: Invoice, quote: Quotation | undefined, payments: Payment[]) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const phone = inv.booking?.customer?.phone;
+  const name = inv.booking?.customer?.name ?? 'Customer';
+  const make = () => invoiceDoc(inv, quote, payments);
+  const run = async (job: () => unknown) => {
+    setBusy(true);
+    try { await job(); setOpen(false); } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not send'); } finally { setBusy(false); }
+  };
+  const due = inv.balance_due > 0 ? inr(inv.balance_due) : 'Nil (fully paid)';
+  const options: [string, string, () => unknown][] = [
+    ['Invoice PDF on WhatsApp', `Saves the PDF and opens ${name}'s chat`, () => shareDoc(make, `Namaste ${name},\nInvoice ${inv.invoice_number}\nTotal: ${inr(inv.total_amount)}\nBalance due: ${due}\n\n${SHOP.name}`, phone)],
+    ...(inv.balance_due > 0 ? [['Payment reminder', `Asks for the ${inr(inv.balance_due)} still due`, () => (phone ? sendReminder(phone, name, inv.balance_due, `invoice ${inv.invoice_number}`) : whatsApp(phone, `${inr(inv.balance_due)} is due for invoice ${inv.invoice_number}.`))] as [string, string, () => unknown]] : []),
+    ['Invoice as a message', 'Totals and payments as WhatsApp text', () => whatsApp(phone, summaryText(inv, payments))],
+    ['Download PDF', 'To print or email', () => downloadDoc(make)],
+  ];
+  const ui = open && (
+    <Modal title={`Send ${inv.invoice_number}`} onClose={() => setOpen(false)} width={460} busy={busy}>
+      <div className="mx-dlg">
+        <p className="mx-dlg-sub">The PDF lists every payment and a UPI QR for the balance.</p>
+        <div className="mx-cards">
+          {options.map(([title, line, job]) => (
+            <button key={title} type="button" className="mx-rcard" style={{ gridTemplateColumns: 'minmax(0, 1fr) auto' }} disabled={busy} onClick={() => run(job)}>
+              <span><b>{title}</b><small>{line}</small></span><span aria-hidden="true">›</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  );
+  return { preview: () => printDoc(make), openSend: () => setOpen(true), ui };
+}

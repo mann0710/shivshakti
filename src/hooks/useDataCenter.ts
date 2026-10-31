@@ -120,13 +120,21 @@ export const useCreateEventType = () => {
 export const useUpdateEventType = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+    // A rename also renames it on the bookings that use it.
+    mutationFn: async ({ id, name, oldName }: { id: string; name: string; oldName?: string }) => {
       const { data, error } = await supabase
         .from('event_types').update({ name }).eq('id', id).select().single();
       if (error) throw error;
+      if (oldName && oldName !== name) {
+        const { error: bookErr } = await supabase.from('bookings').update({ event_type: name }).eq('event_type', oldName);
+        if (bookErr) throw bookErr;
+      }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['event_types'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['event_types'] });
+      qc.invalidateQueries({ queryKey: ['bookings'] });
+    },
   });
 };
 

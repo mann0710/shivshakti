@@ -66,7 +66,7 @@ export const useInvoices = () =>
 export const useCreateInvoice = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ advance_mode = 'cash', ...invoice }: Partial<Invoice> & { advance_mode?: Payment['payment_mode'] }) => {
+    mutationFn: async ({ advance_mode = 'cash', advance_date, ...invoice }: Partial<Invoice> & { advance_mode?: Payment['payment_mode']; advance_date?: string | null }) => {
       const subtotal = invoice.subtotal || 0;
       const discount_amount = invoice.discount_amount || 0;
       const discount_type = invoice.discount_type || 'amount';
@@ -100,7 +100,7 @@ export const useCreateInvoice = () => {
       if (advance > 0) {
         const { error: payErr } = await supabase.from('payments').insert({
           invoice_id: data.id, amount: advance, payment_type: 'advance', payment_mode: advance_mode,
-          notes: 'Advance received before invoice', payment_date: todayIST(),
+          notes: 'Advance received before invoice', payment_date: advance_date || todayIST(),
         });
         if (payErr) throw payErr;
         await recalculateInvoice(data.id);

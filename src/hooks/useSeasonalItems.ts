@@ -155,3 +155,19 @@ export const useSavePackDefaults = () => {
     mutationFn: (pack_sizes: PackDefaults) => upsert.mutateAsync({ pack_sizes }),
   });
 };
+
+// Items on any bill or pre-booking: they keep their history, so they are hidden rather than deleted.
+export const useSoldItemIds = () =>
+  useQuery({
+    queryKey: ['seasonal_sold_item_ids'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const ids = new Set<string>();
+      for (const table of ['seasonal_orders', 'seasonal_preorders'] as const) {
+        const rows = await fetchAll<{ items: { item_id: string }[] | null }>((from, to) =>
+          supabase.from(table).select('items').range(from, to));
+        rows.forEach(r => (r.items ?? []).forEach(l => ids.add(l.item_id)));
+      }
+      return ids;
+    },
+  });

@@ -1,6 +1,6 @@
 import { quotationDoc } from './quotationDoc';
 import { invoiceDoc, eventMenuDoc } from './invoiceDoc';
-import { billHtml } from './sweetsDocs';
+import { posBillHtml } from '../thermalSlips';
 import { coursesOf, daysOf, courseGrid } from './menu';
 import { mergeDocSettings, scheduleAmounts, DEFAULT_DOC_SETTINGS } from './settings';
 import { qrSvg, upiLink } from './qr';
@@ -98,6 +98,6 @@ describe('invoice and event menu', () => {
   });
   it('80 mm bill shows the footer line', () => {
     const r = orderReceipt({ id: 'b', bill_no: 5, customer_name: 'Walk-in', phone: '', items: [], subtotal: 0, discount_amount: 0, discount_type: 'amount', total_amount: 0, is_paid: true, payment_mode: 'cash', year: 2026, created_at: '2026-10-31T10:00:00Z' } as any);
-    expect(billHtml(r, ctx)).toContain('Thank you! Visit again.');
+    expect(posBillHtml(r, ctx)).toContain('Thank you! Visit again.');
   });
 });

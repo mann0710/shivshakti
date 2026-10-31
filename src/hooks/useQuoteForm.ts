@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
-import toast from 'react-hot-toast';
+import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { todayIST } from '../lib/ist';
+import { Booking } from '../types';
 import { useBookings } from './useBookings';
 import { useQuoteEvent } from './useQuoteEvent';
 import { useStoredState } from './useStoredState';
@@ -12,15 +12,13 @@ import { useDataCenter } from './useDataCenter';
 import { useQuotations, useCreateQuotation, useUpdateQuotation, Quotation, QuotationLineItem, EventDay } from './useQuotations';
 import { getDayNumber, quoteTotals } from '../lib/quoteMath';
 import { plateRange, atMaxPrices, basePlate, ownRange, typedPrice } from '../lib/quoteChoices';
-import { genId } from '../components/catering/QuotationMultiDay';
-import type { PickerItem } from '../components/catering/QuotationItemPanels';
-import type { Charge, Discount } from '../components/catering/QuotationCharges';
+import { genId, lineOf, mergeLines, moveLine, PickerItem, Charge, Discount } from '../lib/quoteLines';
 
-// Everything the quotation form holds: event, menu, prices, charges, totals and save.
+// Everything the quotation editor holds: booking, menu, prices, charges, totals and save.
 export const useQuoteForm = () => {
-  const { data: bookings = [] } = useBookings();
+  const { data: bookings = [], isFetched: bookingsFetched } = useBookings();
   const { data: menuItems = [] } = useMenuItemsFull();
-  const { data: quotations = [], isFetched: quotationsFetched } = useQuotations();
+  const { data: quotations = [], isFetched: quotationsFetched, isLoading } = useQuotations();
   const { data: dc } = useDataCenter();
   const createQuotation = useCreateQuotation();
   const updateQuotation = useUpdateQuotation();
@@ -45,27 +43,26 @@ export const useQuoteForm = () => {
   const [optionName, setOptionName] = useState('');
   const [isMultiDay, setIsMultiDay] = useState(false);
   const [eventDays, setEventDays] = useState<EventDay[]>([]);
-  const [activeMealKey, setActiveMealKey] = useState<string | null>(null);
 
   const selectedBookingId = ev.bookingId;
   const eligibleBookings = bookings.filter(b => b.status !== 'completed' && b.status !== 'cancelled');
-  const selectedBooking = eligibleBookings.find(b => b.id === selectedBookingId) ?? bookings.find(b => b.id === selectedBookingId);
+  const selectedBooking = bookings.find(b => b.id === selectedBookingId);
 
   // A booking spanning days starts multi-day with one section per date.
   useEffect(() => {
-    if (!selectedBookingId || editingId) return;
-    const booking = bookings.find(b => b.id === selectedBookingId);
-    if (booking?.end_date && booking.end_date !== booking.event_date) {
+    if (!selectedBooking || editingId || eventDays.length) return;
+    const b = selectedBooking;
+    if (b.end_date && b.end_date !== b.event_date) {
       setIsMultiDay(true);
       const sections: EventDay[] = [];
-      const cur = new Date(booking.event_date + 'T00:00:00');
-      const end = new Date(booking.end_date + 'T00:00:00');
+      const cur = new Date(b.event_date + 'T00:00:00');
+      const end = new Date(b.end_date + 'T00:00:00');
       for (let idx = 0; cur <= end && idx < 15; idx++, cur.setDate(cur.getDate() + 1)) {
         sections.push({ day_number: idx + 1, date: cur.toLocaleDateString('en-CA'), meals: [], day_subtotal: 0 });
       }
       setEventDays(sections);
     }
-  }, [selectedBookingId]); // eslint-disable-line
+  }, [selectedBooking?.id]); // eslint-disable-line
 
   const dcGstRate = savedGstRate ?? dc?.gst_rate ?? 18;
   const guestCount = parseInt(ev.guests, 10) || 0;
@@ -102,40 +99,33 @@ export const useQuoteForm = () => {
 
   const toggleMultiDay = (checked: boolean) => {
     setIsMultiDay(checked);
-    setActiveMealKey(null);
     if (checked && eventDays.length === 0) setEventDays([{ day_number: 1, date: selectedBooking?.event_date || ev.draft.date || '', meals: [], day_subtotal: 0 }]);
     if (!checked) setEventDays([]);
   };
 
-  const toLine = (it: PickerItem): QuotationLineItem => ({
-    item_id: it.id, item_name: it.name, category_name: it.subcategory?.category?.name || '',
-    subcategory_name: it.subcategory?.name || '', amount: priceFor(it.id),
-  });
-  const addItem = (it: PickerItem) => setSelectedItems(prev => [...prev, toLine(it)]);
-  // Package items join the quote; the package price becomes the fixed per-plate rate.
-  const applyPackage = (found: PickerItem[], price: number, missing: string[]) => {
-    setSelectedItems(prev => [...prev, ...found.filter(f => !prev.some(p => p.item_id === f.id)).map(toLine)]);
+  const toLine = (it: PickerItem): QuotationLineItem => lineOf(it, priceFor(it.id));
+  const addItem = (it: PickerItem) => setSelectedItems(prev => (prev.some(p => p.item_id === it.id) ? prev : [...prev, toLine(it)]));
+  // Package dishes join (or replace) the menu; the package price becomes the fixed per-plate rate.
+  const applyPackage = (found: PickerItem[], price: number, replace: boolean) => {
+    setSelectedItems(prev => mergeLines(prev, found.map(toLine), replace));
     setAutoPrice(false);
     setPerPlate(price > 0 ? String(price) : '');
-    toast.success(`Added ${found.length} item${found.length === 1 ? '' : 's'}${missing.length ? ` · not in Menu Builder: ${missing.join(', ')}` : ''}`, { duration: 6000 });
   };
+  // Another quote's dishes, prices and notes join (or replace) this menu.
+  const copyItems = (from: Quotation, replace: boolean) => setSelectedItems(prev => mergeLines(prev, (from.items ?? []).map(i => ({ ...i, chosen: undefined })), replace));
   const patchItem = (itemId: string, change: Partial<QuotationLineItem>) => setSelectedItems(prev => prev.map(i => (i.item_id === itemId ? { ...i, ...change } : i)));
-  const reorderItems = (from: number, to: number) => setSelectedItems(prev => {
-    const next = [...prev];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    return next;
-  });
+  const reorderItems = (from: number, to: number) => setSelectedItems(prev => moveLine(prev, from, to));
   const typePerPlate = (v: string) => { setAutoPrice(false); setPerPlate(v); };
 
   const resetForm = (keepOpen = false) => {
     setEditingId(null); ev.reset(); setSelectedItems([]); setNotes(''); setPerPlate('');
     setGstChecked(false); setSavedGstRate(null); setAdditionalDiscounts([]); setExtraCharges([]); setTransportationCharges([]);
-    setIsMultiDay(false); setEventDays([]); setActiveMealKey(null); setFoodType(''); setOptionName('');
+    setIsMultiDay(false); setEventDays([]); setFoodType(''); setOptionName('');
     setAutoPrice(true);
     setShowForm(keepOpen);
   };
-  const openCreate = (date?: string) => { resetForm(true); if (date) ev.patch({ date }); };
+  // A new quote for a booking; nothing is saved until the first change.
+  const openCreate = (b: Booking) => { resetForm(true); ev.selectBooking(b.id, b.guest_count, b); };
 
   const openEdit = (q: Quotation) => {
     setEditingId(q.id);
@@ -158,14 +148,13 @@ export const useQuoteForm = () => {
     setNotes(q.notes || ''); setFoodType(q.food_type || ''); setOptionName(q.option_name || '');
     setGstChecked(q.gst_rate > 0); setSavedGstRate(q.gst_rate > 0 ? q.gst_rate : null);
     setExtraCharges(q.extra_charges || []); setTransportationCharges(q.transportation_charges || []);
-    setActiveMealKey(null);
     if (q.is_multi_day) setAutoPrice(false);
     setShowForm(true);
   };
 
-  const buildPayload = (ids?: { bookingId: string; customerId: string }) => ({
-    customer_id: ids?.customerId ?? selectedBooking?.customer_id ?? '',
-    booking_id: ids?.bookingId ?? selectedBookingId,
+  const buildPayload = () => ({
+    customer_id: selectedBooking?.customer_id ?? '',
+    booking_id: selectedBookingId || null,
     items: isMultiDay ? [] : selectedItems,
     per_plate_amount: plateLow,
     per_plate_max: perPlateMax,
@@ -188,74 +177,59 @@ export const useQuoteForm = () => {
     event_days: isMultiDay ? eventDays.map(d => ({ ...d, day_number: getDayNumber(d.date, eventDays) })) : [],
   });
 
-  // Unsaved changes: payload differs from the one captured right after opening.
-  const baseline = useRef('');
-  const snapshot = JSON.stringify(buildPayload());
-  useEffect(() => { baseline.current = ''; }, [editingId, showForm]);
-  useEffect(() => { if (showForm && !baseline.current) baseline.current = snapshot; });
-  const dirty = showForm && !!baseline.current && baseline.current !== snapshot;
+  // What autosave compares: the quote plus the event details that go to the booking.
+  const snapshot = JSON.stringify([buildPayload(), ev.draft, ev.guests]);
+  const canSave = showForm && !!selectedBooking;
 
+  // Saves quietly (autosave); a new quote carries on as an edit of the saved one.
   const handleSave = async (): Promise<Quotation | null> => {
-    if (isMultiDay) {
-      if (eventDays.length === 0) { toast.error('Add at least one occasion'); return null; }
-      for (let i = 0; i < eventDays.length; i++) {
-        const day = eventDays[i];
-        if (!day.date) { toast.error(`Occasion ${i + 1}: select a date`); return null; }
-        if (day.meals.length === 0) { toast.error(`Day ${getDayNumber(day.date, eventDays)} occasion ${i + 1}: add at least one meal`); return null; }
-      }
-    } else if (selectedItems.length === 0) { toast.error('Please add at least one item'); return null; }
-
-    try {
-      const ids = await ev.resolve();
-      if (!ids) return null;
-      const payload = buildPayload(ids);
-      let saved: Quotation;
-      if (editingId) {
-        // Editing keeps the current status (sent / accepted) instead of resetting to draft.
-        const { status: _status, ...changes } = payload;
-        saved = await updateQuotation.mutateAsync({ id: editingId, ...changes });
-        toast.success('Quotation updated');
-      } else {
-        saved = await createQuotation.mutateAsync(payload);
-        toast.success('Quotation saved');
-      }
-      if (isMultiDay && eventDays.length > 0) {
-        const maxDate = eventDays.map(d => d.date).filter(Boolean).sort().pop() || '';
-        if (maxDate) {
-          const { error } = await supabase.from('bookings').update({ end_date: maxDate }).eq('id', ids.bookingId);
-          if (error) toast.error(`Quotation saved, but booking end date not updated: ${error.message}`);
-          else qc.invalidateQueries({ queryKey: ['bookings'] });
-        }
-      }
-      if (!isMultiDay) await ev.syncGuests(ids.bookingId);
-      baseline.current = '';
-      return saved;
-    } catch (e: any) { toast.error(e?.message || 'Failed to save quotation'); return null; }
+    if (!selectedBooking) return null;
+    const payload = buildPayload();
+    let saved: Quotation;
+    if (editingId) {
+      // Editing keeps the current status (sent / accepted) instead of resetting to draft.
+      const { status: _status, ...changes } = payload;
+      saved = await updateQuotation.mutateAsync({ id: editingId, ...changes });
+    } else {
+      saved = await createQuotation.mutateAsync(payload);
+      setEditingId(saved.id);
+    }
+    const maxDate = isMultiDay ? eventDays.map(d => d.date).filter(Boolean).sort().pop() || '' : '';
+    if (maxDate && maxDate !== (selectedBooking.end_date || selectedBooking.event_date)) {
+      const { error } = await supabase.from('bookings').update({ end_date: maxDate }).eq('id', selectedBooking.id);
+      if (error) throw new Error(`Quote saved, but the booking's last day was not updated: ${error.message}`);
+      qc.invalidateQueries({ queryKey: ['bookings'] });
+    }
+    await ev.syncBooking(selectedBooking.id, !isMultiDay);
+    return saved;
   };
 
   const editingQuotation = editingId ? quotations.find(q => q.id === editingId) : undefined;
 
-  // What is on screen (unsaved edits included) as a quotation, for PDF and share.
+  // What is on screen as a quotation, for PDF, send and the summary.
   const draftQuotation = (): Quotation => ({
     ...buildPayload(),
+    status: editingQuotation?.status ?? 'draft',
+    booking_id: selectedBookingId || undefined,
     id: editingId || 'draft',
     quotation_number: editingQuotation?.quotation_number || 'DRAFT',
     option_group: editingQuotation?.option_group, option_label: editingQuotation?.option_label,
-    customer: selectedBooking?.customer || (ev.draft.name ? { name: ev.draft.name, phone: ev.draft.phone } : null),
-    booking: selectedBooking || { event_type: ev.draft.eventType, event_date: ev.draft.date, venue: ev.draft.venue, guest_count: guestCount },
-    booking_id: selectedBookingId || undefined,
-    issue_date: todayIST(),
-    created_at: new Date().toISOString(),
+    customer: selectedBooking?.customer ?? null,
+    booking: selectedBooking
+      ? { ...selectedBooking, event_type: ev.draft.eventType || selectedBooking.event_type, event_date: ev.draft.date || selectedBooking.event_date, event_time: ev.draft.time || null, guest_count: guestCount || selectedBooking.guest_count }
+      : null,
+    issue_date: editingQuotation?.issue_date || todayIST(),
+    created_at: editingQuotation?.created_at || new Date().toISOString(),
   });
 
   return {
-    quotations, quotationsFetched, bookings, eligibleBookings, selectedBooking, activeItems, ev,
-    showForm, editingId, editingQuotation, dirty, isSaving: createQuotation.isPending || updateQuotation.isPending,
-    selectedItems, setSelectedItems, addItem, applyPackage, patchItem, reorderItems,
+    quotations, quotationsFetched, isLoading, bookings, bookingsFetched, eligibleBookings, selectedBooking, activeItems, ev,
+    showForm, editingId, editingQuotation, snapshot, canSave, isSaving: createQuotation.isPending || updateQuotation.isPending,
+    selectedItems, setSelectedItems, addItem, applyPackage, copyItems, patchItem, reorderItems,
     notes, setNotes, perPlate, typePerPlate, autoPrice, setAutoPrice, range, perPlateMax, totalMax, plateLow, guestCount,
     gstChecked, setGstChecked, dcGstRate, additionalDiscounts, setAdditionalDiscounts, extraCharges, setExtraCharges,
     transportationCharges, setTransportationCharges, foodType, setFoodType, optionName, setOptionName,
-    isMultiDay, toggleMultiDay, eventDays, setEventDays, activeMealKey, setActiveMealKey, totals,
+    isMultiDay, toggleMultiDay, eventDays, setEventDays, totals,
     showPrices, hasItemPrices, priceFor, setItemPricesPref: (v: boolean) => setPrefs({ itemPrices: v }),
     toLine, resetForm, openCreate, openEdit, handleSave, draftQuotation, createQuotation, updateQuotation,
   };

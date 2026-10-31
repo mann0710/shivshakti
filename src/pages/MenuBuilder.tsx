@@ -1,496 +1,175 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import {
   useMenuCategories, useCreateCategory, useUpdateCategory, useDeleteCategory,
   useMenuSubcategories, useCreateSubcategory, useUpdateSubcategory, useDeleteSubcategory,
   useMenuItemsFull, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem,
-  MenuCategory, MenuSubcategory, MenuItem,
 } from '../hooks/useMenuBuilder';
 import { useHasPriceColumns } from '../hooks/useSchemaStatus';
-import MenuItemPrice from '../components/MenuItemPrice';
+import { buildTree, copyName, Dish, filterDishes, plural, withoutPrice } from '../lib/menuCatalog';
+import { inr } from '../lib/money';
+import { undoToast } from '../components/pos/undoToast';
+import MenuTree from '../components/settings/MenuTree';
+import DishTable, { DishActions, Group } from '../components/settings/DishTable';
+import NameDialog from '../components/settings/NameDialog';
+import '../styles/settings.css';
 
+type Dlg = { kind: 'newCat' } | { kind: 'newSub'; catId: string } | { kind: 'newDish' } | { kind: 'rename'; g: Group } | { kind: 'edit'; d: Dish } | { kind: 'move'; d: Dish };
+
+const fail = (e: any) => toast.error(e?.message || 'Could not save');
+
+// Categories on the left, the picked subcategory's dishes on the right; prices and "on quotes" change in place.
 const MenuBuilder: React.FC = () => {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const hasPrice = useHasPriceColumns();
-  const { data: categories = [] } = useMenuCategories();
-  const { data: subcategories = [] } = useMenuSubcategories();
-  const { data: items = [], refetch: refetchItems } = useMenuItemsFull();
+  const { data: cats = [] } = useMenuCategories();
+  const { data: subs = [] } = useMenuSubcategories();
+  const { data: dishes = [] } = useMenuItemsFull();
+  const createCat = useCreateCategory(); const updateCat = useUpdateCategory(); const deleteCat = useDeleteCategory();
+  const createSub = useCreateSubcategory(); const updateSub = useUpdateSubcategory(); const deleteSub = useDeleteSubcategory();
+  const createItem = useCreateMenuItem(); const updateItem = useUpdateMenuItem(); const deleteItem = useDeleteMenuItem();
 
-  const createCat = useCreateCategory();
-  const updateCat = useUpdateCategory();
-  const deleteCat = useDeleteCategory();
-  const createSub = useCreateSubcategory();
-  const updateSub = useUpdateSubcategory();
-  const deleteSub = useDeleteSubcategory();
-  const createItem = useCreateMenuItem();
-  const updateItem = useUpdateMenuItem();
-  const deleteItem = useDeleteMenuItem();
+  const [query, setQuery] = useState('');
+  const [showHidden, setShowHidden] = useState(false);
+  const [noPrice, setNoPrice] = useState(false);
+  const [openCat, setOpenCat] = useState<string | null>(null);
+  // undefined: the open category's first subcategory; null: the whole category.
+  const [subId, setSubId] = useState<string | null | undefined>(undefined);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [dlg, setDlg] = useState<Dlg | null>(null);
 
-  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
-  const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
+  const tree = useMemo(() => buildTree(cats, subs, dishes, showHidden), [cats, subs, dishes, showHidden]);
+  // A hidden or deleted pick falls back to the first category, or to the whole category.
+  const catNode = tree.find(t => t.cat.id === openCat) ?? tree[0];
+  const cat = catNode?.cat.id ?? null;
+  const subNode = subId === undefined ? catNode?.subs[0] : catNode?.subs.find(s => s.sub.id === subId);
+  const sub = subNode?.sub.id ?? null;
+  const active = dishes.filter(d => d.is_active).length;
+  const missing = hasPrice ? withoutPrice(dishes) : 0;
+  const searching = query.trim().length > 0;
+  const shown = useMemo(() => filterDishes(dishes, { catId: cat, subId: sub, query, showHidden, noPrice }), [dishes, cat, sub, query, showHidden, noPrice]);
 
-  // Per-column search state
-  const [catSearch, setCatSearch] = useState('');
-  const [subSearch, setSubSearch] = useState('');
-  const [itemSearch, setItemSearch] = useState('');
+  const reveal = (id: string, subcategory_id: string) => {
+    const c = subs.find(s => s.id === subcategory_id)?.category_id ?? null;
+    setOpenCat(c); setSubId(subcategory_id); setQuery(''); setNoPrice(false); setFresh(id);
+    setTimeout(() => document.getElementById(`dish-${id}`)?.scrollIntoView({ block: 'nearest' }), 300);
+  };
+  const toggle = (d: Dish, patch: Partial<Dish>, back: Partial<Dish>, message: string) =>
+    updateItem.mutateAsync({ id: d.id, ...patch }).then(() => undoToast(message, () => updateItem.mutate({ id: d.id, ...back }))).catch(fail);
 
-  // Add form state
-  const [newCatName, setNewCatName] = useState('');
-  const [newSubName, setNewSubName] = useState('');
-  const [newSubCatId, setNewSubCatId] = useState('');
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemPrice, setNewItemPrice] = useState('');
-  // Items add form has its own independent category+subcategory selection
-  const [addItemCatId, setAddItemCatId] = useState('');
-  const [addItemSubId, setAddItemSubId] = useState('');
-  const [lastAddedItemId, setLastAddedItemId] = useState<string | null>(null);
-
-  // Inline edit state
-  const [editingCatId, setEditingCatId] = useState<string | null>(null);
-  const [editCatName, setEditCatName] = useState('');
-  const [editingSubId, setEditingSubId] = useState<string | null>(null);
-  const [editSubName, setEditSubName] = useState('');
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editItemName, setEditItemName] = useState('');
-
-  // Reset sub selection in add form when category changes
-  useEffect(() => { setNewSubCatId(''); }, [selectedCatId]);
-  useEffect(() => { setAddItemSubId(''); }, [addItemCatId]);
-
-  // Scroll newly added item into view and clear highlight after 3s
-  useEffect(() => {
-    if (!lastAddedItemId) return;
-    const el = document.getElementById(`item-${lastAddedItemId}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    const t = setTimeout(() => setLastAddedItemId(null), 3000);
-    return () => clearTimeout(t);
-  }, [lastAddedItemId]);
-
-  // ── Per-column filtered lists ────────────────────────────────────────────
-  const cq = catSearch.trim().toLowerCase();
-  const sq = subSearch.trim().toLowerCase();
-  const iq = itemSearch.trim().toLowerCase();
-
-  const displayedCats = cq
-    ? categories.filter(c => c.name.toLowerCase().includes(cq))
-    : categories;
-
-  const baseSubs = selectedCatId
-    ? subcategories.filter(s => s.category_id === selectedCatId)
-    : subcategories;
-  const displayedSubs = sq
-    ? baseSubs.filter(s => s.name.toLowerCase().includes(sq) || s.category?.name.toLowerCase().includes(sq))
-    : baseSubs;
-
-  const baseItems = selectedSubId
-    ? items.filter(i => i.subcategory_id === selectedSubId)
-    : selectedCatId
-      ? items.filter(i => i.subcategory?.category_id === selectedCatId)
-      : items;
-  const displayedItems = iq
-    ? baseItems.filter(i =>
-        i.name.toLowerCase().includes(iq) ||
-        i.subcategory?.name.toLowerCase().includes(iq) ||
-        i.subcategory?.category?.name.toLowerCase().includes(iq)
-      )
-    : baseItems;
-
-  // Subcategories available in the item add form (filtered by chosen category)
-  const addFormSubs = addItemCatId
-    ? subcategories.filter(s => s.category_id === addItemCatId)
-    : subcategories;
-
-  // ── Category handlers ────────────────────────────────────────────────────
-  const handleAddCat = async () => {
-    if (!newCatName.trim()) { toast.error('Enter category name'); return; }
-    try { await createCat.mutateAsync(newCatName.trim()); toast.success('Category added!'); setNewCatName(''); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
+  const act: DishActions = {
+    price: (d, p) => toggle(d, { default_price: p }, { default_price: d.default_price ?? null }, `${d.name}: ${p ? `${inr(p)} a plate` : 'price cleared'}`),
+    shown: (d, on) => toggle(d, { is_active: on }, { is_active: !on }, on ? `${d.name} shown on quotes` : `${d.name} hidden from quotes`),
+    edit: d => setDlg({ kind: 'edit', d }),
+    move: d => setDlg({ kind: 'move', d }),
+    duplicate: d => {
+      const taken = dishes.filter(x => x.subcategory_id === d.subcategory_id).map(x => x.name);
+      createItem.mutateAsync({ name: copyName(d.name, taken), subcategory_id: d.subcategory_id, default_price: d.default_price ?? null })
+        .then((r: Dish) => { toast.success(`${r.name} added`); reveal(r.id, r.subcategory_id); }).catch(fail);
+    },
+    remove: async d => {
+      if (!(await confirm({ title: `Delete ${d.name}?`, message: 'Old quotations keep their copy. Hide it from quotes instead if you may use it again.', confirmLabel: 'Delete', danger: true }))) return;
+      deleteItem.mutateAsync(d.id).then(() => toast.success(`${d.name} deleted`)).catch(fail);
+    },
+    add: async (name, price) => {
+      if (!sub) return;
+      try { const r: Dish = await createItem.mutateAsync({ name, subcategory_id: sub, default_price: hasPrice ? price : null }); setFresh(r.id); }
+      catch (e) { fail(e); }
+    },
+    renameGroup: g => setDlg({ kind: 'rename', g }),
+    shownGroup: g => {
+      const run = (is_active: boolean) => (g.kind === 'cat' ? updateCat : updateSub).mutateAsync({ id: g.id, is_active });
+      run(!g.is_active).then(() => undoToast(g.is_active ? `${g.name} hidden from quotes` : `${g.name} shown on quotes`, () => { run(g.is_active).catch(fail); })).catch(fail);
+    },
+    removeGroup: async g => {
+      const what = g.kind === 'cat' ? 'category, its subcategories and their dishes' : 'subcategory and its dishes';
+      if (!(await confirm({ title: `Delete ${g.name}?`, message: `This deletes the ${what}. Old quotations keep their copy. This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
+      try {
+        await (g.kind === 'cat' ? deleteCat : deleteSub).mutateAsync(g.id);
+        toast.success(`${g.name} deleted`);
+        if (g.kind === 'cat') setOpenCat(null);
+        setSubId(undefined);
+      } catch (e) { fail(e); }
+    },
   };
 
-  const handleToggleCat = async (cat: MenuCategory) => {
-    try { await updateCat.mutateAsync({ id: cat.id, is_active: !cat.is_active }); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
+  const view = searching
+    ? { crumb: '', title: `Search "${query.trim()}"`, group: null, addTo: null }
+    : noPrice ? { crumb: '', title: 'Dishes without a price', group: null, addTo: null }
+    : subNode && catNode ? { crumb: catNode.cat.name, title: subNode.sub.name, group: { kind: 'sub' as const, ...subNode.sub }, addTo: subNode.sub.name }
+    : catNode ? { crumb: '', title: catNode.cat.name, group: { kind: 'cat' as const, ...catNode.cat }, addTo: null }
+    : null;
+
+  const onCat = (id: string) => {
+    setQuery(''); setNoPrice(false);
+    if (id === cat) { setSubId(null); return; }
+    setOpenCat(id); setSubId(undefined);
   };
 
-  const handleSaveCat = async (id: string) => {
-    if (!editCatName.trim()) { toast.error('Enter name'); return; }
-    try { await updateCat.mutateAsync({ id, name: editCatName.trim() }); toast.success('Updated!'); setEditingCatId(null); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const handleDeleteCat = async (id: string) => {
-    if (!(await confirm({ title: 'Delete category?', message: 'This also deletes all its subcategories and items.', confirmLabel: 'Delete', danger: true }))) return;
-    try { await deleteCat.mutateAsync(id); toast.success('Deleted'); if (selectedCatId === id) { setSelectedCatId(null); setSelectedSubId(null); } }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  // ── Subcategory handlers ─────────────────────────────────────────────────
-  const handleAddSub = async () => {
-    const catId = newSubCatId || selectedCatId;
-    if (!newSubName.trim() || !catId) { toast.error('Select a category and enter subcategory name'); return; }
-    try { await createSub.mutateAsync({ name: newSubName.trim(), category_id: catId }); toast.success('Subcategory added!'); setNewSubName(''); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const handleToggleSub = async (sub: MenuSubcategory) => {
-    try { await updateSub.mutateAsync({ id: sub.id, is_active: !sub.is_active }); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const handleSaveSub = async (id: string) => {
-    if (!editSubName.trim()) { toast.error('Enter name'); return; }
-    try { await updateSub.mutateAsync({ id, name: editSubName.trim() }); toast.success('Updated!'); setEditingSubId(null); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const handleDeleteSub = async (id: string) => {
-    if (!(await confirm({ title: 'Delete subcategory?', message: 'This also deletes all its items.', confirmLabel: 'Delete', danger: true }))) return;
-    try { await deleteSub.mutateAsync(id); toast.success('Deleted'); if (selectedSubId === id) setSelectedSubId(null); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  // ── Item handlers ────────────────────────────────────────────────────────
-  const handleAddItem = async () => {
-    if (!newItemName.trim()) { toast.error('Enter item name'); return; }
-    if (!addItemSubId) { toast.error('Select a subcategory'); return; }
-    try {
-      const result: any = await createItem.mutateAsync({
-        name: newItemName.trim(), subcategory_id: addItemSubId, default_price: parseFloat(newItemPrice) || null,
-      });
-      // Force-refetch so the new item appears immediately
-      await refetchItems();
-      setNewItemName('');
-      setNewItemPrice('');
-      // Navigate the filter to show exactly where the new item was added
-      setSelectedCatId(addItemCatId);
-      setSelectedSubId(addItemSubId);
-      setItemSearch('');
-      if (result?.id) setLastAddedItemId(result.id);
-      toast.success(`"${result?.name ?? 'Item'}" added under ${subcategories.find(s => s.id === addItemSubId)?.name ?? ''}`);
+  const dialogEl = (() => {
+    if (!dlg) return null;
+    const close = () => setDlg(null);
+    switch (dlg.kind) {
+      case 'newCat': return <NameDialog title="New category" sub="For example Sweet, Farsan or Chinese Cuisine." primary="Add category" onClose={close}
+        onSave={r => createCat.mutateAsync(r.name).then((c: { id: string }) => { setOpenCat(c.id); setSubId(undefined); toast.success(`${r.name} added`); })} />;
+      case 'newSub': return <NameDialog title="New subcategory" sub={`Inside ${cats.find(c => c.id === dlg.catId)?.name ?? 'this category'}.`} primary="Add subcategory" onClose={close}
+        onSave={r => createSub.mutateAsync({ name: r.name, category_id: dlg.catId }).then((s: { id: string }) => { setOpenCat(dlg.catId); setSubId(s.id); toast.success(`${r.name} added`); })} />;
+      case 'newDish': return <NameDialog title="New dish" sub="It shows in quotations straight away." label="Dish name" tree={tree} subId={sub ?? ''} withPrice={hasPrice} primary="Add dish" onClose={close}
+        onSave={r => createItem.mutateAsync({ name: r.name, subcategory_id: r.subId, default_price: r.price }).then((d: Dish) => { reveal(d.id, d.subcategory_id); toast.success(`${r.name} added`); })} />;
+      case 'rename': return <NameDialog title={`Rename ${dlg.g.name}`} sub="Old quotations keep the old name." name={dlg.g.name} onClose={close}
+        onSave={r => (dlg.g.kind === 'cat' ? updateCat : updateSub).mutateAsync({ id: dlg.g.id, name: r.name })} />;
+      case 'edit': return <NameDialog title={`Edit ${dlg.d.name}`} sub="Old quotations keep their copy." label="Dish name" name={dlg.d.name} tree={tree} subId={dlg.d.subcategory_id}
+        withPrice={hasPrice} price={dlg.d.default_price} onClose={close}
+        onSave={r => updateItem.mutateAsync({ id: dlg.d.id, name: r.name, subcategory_id: r.subId, ...(hasPrice ? { default_price: r.price } : {}) }).then(() => reveal(dlg.d.id, r.subId))} />;
+      case 'move': return <NameDialog title={`Move ${dlg.d.name}`} sub="Pick the subcategory it belongs in." hideName tree={tree} subId={dlg.d.subcategory_id} primary="Move" onClose={close}
+        onSave={r => updateItem.mutateAsync({ id: dlg.d.id, subcategory_id: r.subId }).then(() => reveal(dlg.d.id, r.subId))} />;
+      default: return null;
     }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const handleItemPrice = async (item: MenuItem, default_price: number | null) => {
-    try { await updateItem.mutateAsync({ id: item.id, default_price }); toast.success(`${item.name}: ${default_price ? `₹${default_price}` : 'price cleared'}`); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const handleToggleItem = async (item: MenuItem) => {
-    try { await updateItem.mutateAsync({ id: item.id, is_active: !item.is_active }); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const handleSaveItem = async (id: string) => {
-    if (!editItemName.trim()) { toast.error('Enter name'); return; }
-    try {
-      const currentItem = items.find(i => i.id === id);
-      await updateItem.mutateAsync({ id, name: editItemName.trim() });
-      await refetchItems();
-      setEditingItemId(null);
-      if (currentItem) {
-        setSelectedCatId(currentItem.subcategory?.category_id ?? null);
-        setSelectedSubId(currentItem.subcategory_id);
-        setItemSearch('');
-      }
-      setLastAddedItemId(id);
-      toast.success('Updated!');
-    }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const handleDeleteItem = async (id: string) => {
-    const name = items.find(i => i.id === id)?.name ?? 'this item';
-    if (!(await confirm({ title: `Delete ${name}?`, message: 'Old quotations keep their copy. Mark it Inactive instead if you may use it again.', confirmLabel: 'Delete', danger: true }))) return;
-    try { await deleteItem.mutateAsync(id); toast.success('Deleted'); }
-    catch (e: any) { toast.error(e.message || 'Failed'); }
-  };
-
-  const highlight = (text: string, query: string) => {
-    if (!query) return <>{text}</>;
-    const idx = text.toLowerCase().indexOf(query);
-    if (idx === -1) return <>{text}</>;
-    return (
-      <>
-        {text.slice(0, idx)}
-        <mark style={{ background: '#FFE082', padding: 0, borderRadius: 2 }}>{text.slice(idx, idx + query.length)}</mark>
-        {text.slice(idx + query.length)}
-      </>
-    );
-  };
+  })();
 
   return (
-    <div>
-      <div className="page-topbar">
-        <div style={{ fontSize: 16, fontWeight: 600 }}>Menu Builder</div>
-        <div style={{ fontSize: 11, color: '#888880' }}>Manage categories, subcategories & items</div>
-      </div>
-      <div className="page-content">
-        <div className="menu-builder-grid">
-
-          {/* ── CATEGORIES ───────────────────────────────────────────── */}
-          <div style={col}>
-            <div style={colHeader}>
-              <span style={colTitle}>Categories</span>
-              <span style={{ fontSize: 11, color: '#AAAAAA' }}>
-                {cq ? `${displayedCats.length} / ${categories.length}` : `${categories.length} total`}
-              </span>
-            </div>
-
-            {/* Category search */}
-            <div style={searchBar}>
-              <span style={searchIcon}>🔍</span>
-              <input
-                placeholder="Search categories…"
-                value={catSearch}
-                onChange={e => setCatSearch(e.target.value)}
-                style={searchInput}
-              />
-              {catSearch && <button onClick={() => setCatSearch('')} style={clearBtn}>×</button>}
-            </div>
-
-            {/* Add form */}
-            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC', display: 'flex', gap: 6 }}>
-              <input style={{ ...inp, flex: 1 }} placeholder="New category…" value={newCatName}
-                onChange={e => setNewCatName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddCat()} />
-              <button style={btnAdd} onClick={handleAddCat}>+</button>
-            </div>
-
-            <div style={{ overflowY: 'auto', maxHeight: 440 }}>
-              {displayedCats.length === 0 && (
-                <Empty text={cq ? `No categories match "${catSearch}"` : 'No categories yet'} />
-              )}
-              {displayedCats.map(cat => (
-                <div key={cat.id}
-                  onClick={() => { setSelectedCatId(selectedCatId === cat.id ? null : cat.id); setSelectedSubId(null); }}
-                  style={{ ...row, background: selectedCatId === cat.id ? '#FFFBF5' : 'transparent', borderLeft: selectedCatId === cat.id ? '3px solid #E8750A' : '3px solid transparent' }}>
-                  {editingCatId === cat.id ? (
-                    <div style={{ display: 'flex', gap: 6, flex: 1 }} onClick={e => e.stopPropagation()}>
-                      <input style={{ ...inp, flex: 1 }} value={editCatName} onChange={e => setEditCatName(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSaveCat(cat.id)} autoFocus />
-                      <button style={btnSm} onClick={() => handleSaveCat(cat.id)}>✓</button>
-                      <button style={btnSmGhost} onClick={() => setEditingCatId(null)}>✕</button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: cat.is_active ? '#1A1A18' : '#AAAAAA', textDecoration: cat.is_active ? 'none' : 'line-through' }}>
-                          {highlight(cat.name, cq)}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
-                          {subcategories.filter(s => s.category_id === cat.id).length} subcategories
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-                        <button onClick={() => handleToggleCat(cat)} style={{ ...pill, background: cat.is_active ? '#EAF3DE' : '#F5F5F3', color: cat.is_active ? '#3B6D11' : '#AAAAAA' }}>
-                          {cat.is_active ? 'Active' : 'Inactive'}
-                        </button>
-                        <button onClick={() => { setEditingCatId(cat.id); setEditCatName(cat.name); }} style={iconBtn}>✏</button>
-                        <button onClick={() => handleDeleteCat(cat.id)} style={{ ...iconBtn, color: '#A32D2D' }}>×</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── SUBCATEGORIES ────────────────────────────────────────── */}
-          <div style={col}>
-            <div style={colHeader}>
-              <span style={colTitle}>Subcategories</span>
-              <span style={{ fontSize: 11, color: '#AAAAAA' }}>
-                {sq
-                  ? `${displayedSubs.length} / ${baseSubs.length}`
-                  : selectedCatId ? `of "${categories.find(c => c.id === selectedCatId)?.name}"` : `${subcategories.length} total`}
-              </span>
-            </div>
-
-            {/* Subcategory search */}
-            <div style={searchBar}>
-              <span style={searchIcon}>🔍</span>
-              <input
-                placeholder="Search subcategories…"
-                value={subSearch}
-                onChange={e => setSubSearch(e.target.value)}
-                style={searchInput}
-              />
-              {subSearch && <button onClick={() => setSubSearch('')} style={clearBtn}>×</button>}
-            </div>
-
-            {/* Add form */}
-            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC' }}>
-              {!selectedCatId && (
-                <select style={{ ...inp, marginBottom: 6 }} value={newSubCatId} onChange={e => setNewSubCatId(e.target.value)}>
-                  <option value="">Select category…</option>
-                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              )}
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input style={{ ...inp, flex: 1 }} placeholder="New subcategory…" value={newSubName}
-                  onChange={e => setNewSubName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddSub()} />
-                <button style={btnAdd} onClick={handleAddSub}>+</button>
-              </div>
-            </div>
-
-            <div style={{ overflowY: 'auto', maxHeight: 440 }}>
-              {displayedSubs.length === 0 && (
-                <Empty text={sq ? `No subcategories match "${subSearch}"` : selectedCatId ? 'No subcategories in this category' : 'No subcategories yet'} />
-              )}
-              {displayedSubs.map(sub => (
-                <div key={sub.id}
-                  onClick={() => setSelectedSubId(selectedSubId === sub.id ? null : sub.id)}
-                  style={{ ...row, background: selectedSubId === sub.id ? '#F5F0FF' : 'transparent', borderLeft: selectedSubId === sub.id ? '3px solid #7F77DD' : '3px solid transparent' }}>
-                  {editingSubId === sub.id ? (
-                    <div style={{ display: 'flex', gap: 6, flex: 1 }} onClick={e => e.stopPropagation()}>
-                      <input style={{ ...inp, flex: 1 }} value={editSubName} onChange={e => setEditSubName(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSaveSub(sub.id)} autoFocus />
-                      <button style={btnSm} onClick={() => handleSaveSub(sub.id)}>✓</button>
-                      <button style={btnSmGhost} onClick={() => setEditingSubId(null)}>✕</button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: sub.is_active ? '#1A1A18' : '#AAAAAA', textDecoration: sub.is_active ? 'none' : 'line-through' }}>
-                          {highlight(sub.name, sq)}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
-                          <span style={{ color: '#E8750A' }}>{sub.category?.name}</span>
-                          {' · '}{items.filter(i => i.subcategory_id === sub.id).length} items
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-                        <button onClick={() => handleToggleSub(sub)} style={{ ...pill, background: sub.is_active ? '#EAF3DE' : '#F5F5F3', color: sub.is_active ? '#3B6D11' : '#AAAAAA' }}>
-                          {sub.is_active ? 'Active' : 'Inactive'}
-                        </button>
-                        <button onClick={() => { setEditingSubId(sub.id); setEditSubName(sub.name); }} style={iconBtn}>✏</button>
-                        <button onClick={() => handleDeleteSub(sub.id)} style={{ ...iconBtn, color: '#A32D2D' }}>×</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* ── ITEMS ────────────────────────────────────────────────── */}
-          <div style={col}>
-            <div style={colHeader}>
-              <span style={colTitle}>Items</span>
-              <span style={{ fontSize: 11, color: '#AAAAAA' }}>
-                {iq
-                  ? `${displayedItems.length} / ${baseItems.length}`
-                  : selectedSubId ? `of "${subcategories.find(s => s.id === selectedSubId)?.name}"`
-                  : selectedCatId ? `of "${categories.find(c => c.id === selectedCatId)?.name}"`
-                  : `${items.length} total`}
-              </span>
-            </div>
-
-            {/* Item search */}
-            <div style={searchBar}>
-              <span style={searchIcon}>🔍</span>
-              <input
-                placeholder="Search items…"
-                value={itemSearch}
-                onChange={e => setItemSearch(e.target.value)}
-                style={searchInput}
-              />
-              {itemSearch && <button onClick={() => setItemSearch('')} style={clearBtn}>×</button>}
-            </div>
-
-            {/* Add form — own category+subcategory dropdowns, independent of filter */}
-            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC' }}>
-              <select style={{ ...inp, marginBottom: 6 }} value={addItemCatId} onChange={e => setAddItemCatId(e.target.value)}>
-                <option value="">— Select category —</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <select style={{ ...inp, marginBottom: 6 }} value={addItemSubId} onChange={e => setAddItemSubId(e.target.value)}
-                disabled={!addItemCatId}>
-                <option value="">{addItemCatId ? '— Select subcategory —' : '— Pick category first —'}</option>
-                {addFormSubs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input style={{ ...inp, flex: 1 }} placeholder="New item name…" value={newItemName}
-                  onChange={e => setNewItemName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddItem()} />
-                {hasPrice && <input style={{ ...inp, width: 76 }} type="number" min="0" inputMode="decimal" placeholder="₹ price"
-                  value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddItem()} />}
-                <button style={btnAdd} onClick={handleAddItem}>+</button>
-              </div>
-            </div>
-
-            <div style={{ overflowY: 'auto', maxHeight: 440 }}>
-              {displayedItems.length === 0 && (
-                <Empty text={iq ? `No items match "${itemSearch}"` : selectedSubId ? 'No items in this subcategory' : 'No items yet'} />
-              )}
-              {displayedItems.map(item => (
-                <div key={item.id} id={`item-${item.id}`}
-                  style={{ ...row, borderLeft: item.id === lastAddedItemId ? '3px solid #E8750A' : '3px solid transparent',
-                    background: item.id === lastAddedItemId ? '#FFFBF5' : 'transparent', cursor: 'default' }}>
-                  {editingItemId === item.id ? (
-                    <div style={{ display: 'flex', gap: 6, flex: 1 }}>
-                      <input style={{ ...inp, flex: 1 }} value={editItemName} onChange={e => setEditItemName(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSaveItem(item.id)} autoFocus />
-                      <button style={btnSm} onClick={() => handleSaveItem(item.id)}>✓</button>
-                      <button style={btnSmGhost} onClick={() => setEditingItemId(null)}>✕</button>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: item.is_active ? '#1A1A18' : '#AAAAAA', textDecoration: item.is_active ? 'none' : 'line-through' }}>
-                          {highlight(item.name, iq)}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#AAAAAA', marginTop: 2 }}>
-                          <span style={{ color: '#E8750A' }}>{item.subcategory?.category?.name}</span>
-                          {' / '}{item.subcategory?.name}
-                        </div>
-                        {hasPrice && <div style={{ marginTop: 4 }}><MenuItemPrice value={item.default_price} onSave={p => handleItemPrice(item, p)} /></div>}
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <button onClick={() => handleToggleItem(item)} style={{ ...pill, background: item.is_active ? '#EAF3DE' : '#F5F5F3', color: item.is_active ? '#3B6D11' : '#AAAAAA' }}>
-                          {item.is_active ? 'Active' : 'Inactive'}
-                        </button>
-                        <button onClick={() => { setEditingItemId(item.id); setEditItemName(item.name); }} style={iconBtn}>✏</button>
-                        <button onClick={() => handleDeleteItem(item.id)} style={{ ...iconBtn, color: '#A32D2D' }}>×</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+    <div className="mb-page">
+      <div className="mb-head">
+        <div>
+          <h1>Menu Builder</h1>
+          <p>{plural(active, 'dish', 'dishes')} in {plural(tree.length, 'category', 'categories')} · picked from here when you make a quotation</p>
         </div>
-
-        <div style={{ marginTop: 14, padding: '10px 14px', background: '#F0F4FF', border: '0.5px solid #B8C8F4', borderRadius: 8, fontSize: 12, color: '#3353A4' }}>
-          💡 Each column has its own search. Click a <strong>category</strong> to filter subcategories & items by that category. Click a <strong>subcategory</strong> to filter items. Inactive items are hidden in Quotations. The <strong>₹ price</strong> is filled in when the item is added to a quotation.
+        <div className="mb-head-acts">
+          <button type="button" className="ui-btn" onClick={() => setDlg({ kind: 'newCat' })}>+ New category</button>
+          <button type="button" className="ui-btn primary" onClick={() => setDlg({ kind: 'newDish' })}>+ New dish</button>
         </div>
       </div>
+
+      <label className="mb-search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+        <span className="st-sr">Search dishes</span>
+        <input type="search" value={query} placeholder={`Search all ${plural(active, 'dish', 'dishes')}, subcategories and categories`} onChange={e => setQuery(e.target.value)} />
+      </label>
+
+      {missing > 0 && (
+        <div className="mb-banner">
+          <span>{missing === active
+            ? <><b>No dish has a price yet; today prices are typed into each quote.</b> Add a per-plate price and it fills in by itself when the dish is added to a quotation.</>
+            : <><b>{plural(missing, 'dish', 'dishes')} still {missing === 1 ? 'has' : 'have'} no price.</b> A per-plate price fills in by itself when the dish is added to a quotation.</>}</span>
+          <button type="button" className="ui-btn" onClick={() => { setNoPrice(!noPrice); setQuery(''); }}>{noPrice ? 'Back to categories' : 'Show dishes without a price'}</button>
+        </div>
+      )}
+
+      <div className="mb-layout">
+        <MenuTree tree={tree} openCat={cat} subId={sub} showHidden={showHidden} onCat={onCat}
+          onSub={(c, s) => { setOpenCat(c); setSubId(s); setQuery(''); setNoPrice(false); }}
+          onAddSub={c => setDlg({ kind: 'newSub', catId: c })} onShowHidden={setShowHidden} />
+        {view ? (
+          <DishTable {...view} dishes={shown} showPlace={searching || noPrice} hasPrice={hasPrice} fresh={fresh} act={act} />
+        ) : (
+          <div className="mb-panel"><div className="mb-empty">Add a category to start, for example Sweet or Farsan.</div></div>
+        )}
+      </div>
+      {dialogEl}
       {confirmDialog}
     </div>
   );
 };
-
-const Empty: React.FC<{ text: string }> = ({ text }) => (
-  <div style={{ padding: '24px 16px', textAlign: 'center', color: '#AAAAAA', fontSize: 12 }}>{text}</div>
-);
-
-const col: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' };
-const colHeader: React.CSSProperties = { padding: '12px 14px', borderBottom: '0.5px solid #E5E5E0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FAFAF8' };
-const colTitle: React.CSSProperties = { fontSize: 13, fontWeight: 600 };
-const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderBottom: '0.5px solid #F0F0EC', cursor: 'pointer', transition: 'background 0.1s' };
-const pill: React.CSSProperties = { fontSize: 10, padding: '2px 8px', borderRadius: 12, border: 'none', cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' };
-const iconBtn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', color: '#378ADD', fontSize: 13, padding: '2px 4px' };
-const btnAdd: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '7px 12px', borderRadius: 7, fontSize: 16, cursor: 'pointer', lineHeight: 1 };
-const btnSm: React.CSSProperties = { background: '#E8750A', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' };
-const btnSmGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', color: '#666660', padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer' };
-const inp: React.CSSProperties = { width: '100%', padding: '6px 9px', borderRadius: 6, border: '0.5px solid #D0D0CC', fontSize: 12, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
-const searchBar: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '0.5px solid #F0F0EC', background: '#FAFAF8' };
-const searchIcon: React.CSSProperties = { fontSize: 13, flexShrink: 0, color: '#888880' };
-const searchInput: React.CSSProperties = { flex: 1, border: '0.5px solid #D0D0CC', borderRadius: 6, padding: '5px 8px', fontSize: 12, background: '#fff', color: '#1A1A18', outline: 'none', minWidth: 0 };
-const clearBtn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', color: '#888880', fontSize: 16, lineHeight: 1, padding: '0 2px', flexShrink: 0 };
 
 export default MenuBuilder;

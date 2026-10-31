@@ -1,4 +1,4 @@
-import { bookingView, sortForTab, groupByMonth, boardStats, pipelineColumns, onDay, dateRangeText } from './bookingBoard';
+import { bookingView, sortForTab, groupByMonth, boardStats, pipelineColumns, onDay, dateRangeText, neverInvoiced, festivalDays, TABS } from './bookingBoard';
 
 const today = '2026-10-31';
 const bk = (id: string, name: string, date: string, status: string, o: object = {}) =>
@@ -51,12 +51,24 @@ describe('bookings board', () => {
     expect([s.upcoming, s.nextUp?.b.id, s.confirmedValue, s.waiting]).toEqual([5, 'kavit', 37000, 8]);
     expect(s.waitingNote).toBe('2 invoices · 1 quote · 2 decisions · 1 payment · 2 to close');
   });
-  it('builds pipeline columns from open work and recent payments', () => {
+  it('builds pipeline columns; a confirmed booking waiting on its sent quote stays quoted', () => {
     const cols = pipelineColumns(views, today);
     expect(cols.map(c => [c.stage, c.cards.map(v => v.b.id)])).toEqual([
-      ['inquiry', ['dirgha', 'rushi']], ['quoted', ['bhavin']], ['confirmed', ['jigar', 'kavit', 'amit', 'wed']],
+      ['inquiry', ['dirgha', 'rushi']], ['quoted', ['kavit', 'bhavin']], ['confirmed', ['jigar', 'amit', 'wed']],
       ['invoiced', ['exxat']], ['paid', ['grand']],
     ]);
+    expect(cols.map(c => c.note)).toEqual(['', '', '₹37,000', '₹5,000 due', 'Last 90 days']);
+  });
+  it('finds finished events that were never invoiced', () => {
+    expect(neverInvoiced(views).map(v => v.b.id)).toEqual(['jigar']);
+    expect(TABS.find(t => t.id === 'cancelled')?.label).toBe('Lost or cancelled');
+  });
+  it('marks each festival on its last day', () => {
+    const days = festivalDays([
+      { name: 'Dhanteras', end_date: '2026-11-06' }, { name: 'Diwali', end_date: '2026-11-08' },
+      { name: 'Bhai Dooj', end_date: '2026-11-08' }, { name: 'Uttarayan', end_date: null },
+    ]);
+    expect(Array.from(days.entries())).toEqual([['2026-11-06', ['Dhanteras']], ['2026-11-08', ['Diwali', 'Bhai Dooj']]]);
   });
   it('shows a multi-day event on each of its days', () => {
     expect(onDay(views, '2026-12-20').map(v => v.b.id)).toEqual(['wed']);

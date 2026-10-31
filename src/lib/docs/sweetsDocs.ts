@@ -1,45 +1,9 @@
+// Pre-booking A4 slip; the 80 mm counter bill lives in ../thermalSlips (posBillHtml).
 import type { ReceiptData } from '../receipt';
 import { DocContext, docContext } from './context';
 import { page, esc, money, HEAD_FONT } from './theme';
 import { header, signatures, sumRows, SumRow } from './parts';
 import { formatLineSize, formatSize, unitFromLine } from '../units';
-import { SHOP } from '../shop';
-
-// 80 mm thermal bill: black only, big total, payment status.
-export function billHtml(r: ReceiptData, ctx: DocContext = docContext()): string {
-  const packs = r.lines.reduce((s, l) => s + l.qty, 0);
-  const body = `<div class="bill">
-  <header><b class="wm">SHIV SHAKTI</b><span class="tag">SWEETS · CATERING</span>
-    ${ctx.settings.address ? `<span>${esc(ctx.settings.address)}</span>` : ''}<span class="num">${esc(SHOP.phone)}</span>
-    ${r.gst_number ? `<span class="num">GSTIN ${esc(r.gst_number)}</span>` : ''}</header>
-  <div class="row dash num"><span><b class="no">${esc(r.kind)} #${esc(r.number)}</b><br>${esc(r.customer_name)}${r.phone ? `<br>${esc(r.phone)}` : ''}</span><span class="rt">${esc(r.date)}${r.time ? `<br>${esc(r.time)}` : ''}</span></div>
-  ${r.occasion ? `<div class="occ">${esc(r.occasion)}</div>` : ''}
-  <div class="lines">${r.lines.map(l => `<div class="ln num"><b>${esc(l.item_name)}</b> · ${formatLineSize(l.weight, l.weight_unit)}<div class="row"><span>${l.qty} × ${money(l.price)}</span><b>${money(l.line_total)}</b></div></div>`).join('')}</div>
-  <div class="totals num">
-    <div class="row"><span>Subtotal · ${packs} pack${packs === 1 ? '' : 's'}</span><span>${money(r.subtotal)}</span></div>
-    ${r.discount > 0 ? `<div class="row"><span>Discount</span><span>− ${money(r.discount)}</span></div>` : ''}
-    <div class="row tot"><b>TOTAL</b><b class="t">${money(r.total)}</b></div>
-    <div class="row"><span>${esc(r.status)}</span></div>
-    ${r.balance && r.balance > 0 ? `<div class="row"><b>Balance due</b><b>${money(r.balance)}</b></div>` : ''}
-  </div>
-  ${r.notes ? `<div class="note">${esc(r.notes)}</div>` : ''}
-  <footer><b>${esc(ctx.settings.bill_footer)}</b><span>Pre-book festival sweets: ${esc(SHOP.phone)}</span></footer>
-</div>`;
-  return page(`${r.kind} ${r.number}`, ctx.settings.accent, body, `
-@page { size: auto; margin: 4mm; } @page :first { margin-top: 4mm; }
-body { width: 72mm; max-width: 72mm; margin: 0 auto; box-shadow: none; font-size: 12.5px; color: #000; }
-.bill { padding: 4px 2px; display: flex; flex-direction: column; gap: 10px; }
-.bill header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1px; font-size: 11px; }
-.wm { font-family: ${HEAD_FONT}; font-size: 22px; letter-spacing: 1px; } .tag { letter-spacing: 2px; }
-.row { display: flex; justify-content: space-between; gap: 8px; } .rt { text-align: right; }
-.dash { border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 7px 0; } .no { font-size: 14px; }
-.occ { text-align: center; font-weight: 600; }
-.lines { display: flex; flex-direction: column; gap: 7px; }
-.totals { border-top: 1px dashed #000; padding-top: 7px; display: flex; flex-direction: column; gap: 3px; }
-.tot { border-top: 2px solid #000; margin-top: 4px; padding-top: 6px; align-items: baseline; } .t { font-family: ${HEAD_FONT}; font-size: 24px; }
-.note { font-size: 11.5px; }
-.bill footer { border-top: 1px dashed #000; padding-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; text-align: center; }`);
-}
 
 const box = (on: boolean) => `<span class="tick">${on ? '✓' : ''}</span>`;
 

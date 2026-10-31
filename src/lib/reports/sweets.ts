@@ -4,6 +4,7 @@ import { formatSize, formatLineSize, unitFromLine, PriceUnit } from '../units';
 import { cleanPhone, inr } from '../money';
 import { handedOverOn, istDay } from '../preorders';
 import { WALK_IN } from '../posForm';
+import { billDue } from '../dues';
 import { Report, Row, sumBy, share, groupBy, bucketOf } from './model';
 import { ReportInput, billsIn, handedOverIn, soldLines, categoryOf, occasionName, occasionNote } from './input';
 
@@ -27,7 +28,7 @@ export function salesReport(inp: ReportInput): Report {
   const billSales = sumBy(bills, o => o.total_amount);
   const preSales = sumBy(given, p => p.total_amount);
   const total = billSales + preSales;
-  const unpaid = bills.filter(o => !o.is_paid);
+  const unpaid = bills.filter(o => billDue(o) > 0);
   const b = bucketOf(inp.range);
 
   const days = new Map<string, Row>();
@@ -52,7 +53,7 @@ export function salesReport(inp: ReportInput): Report {
       { label: 'Total sales', value: total, fmt: 'money', sub: `${bills.length + given.length} sales` },
       { label: 'Counter bills', value: billSales, fmt: 'money', sub: `${bills.length} bills · avg ${inr(bills.length ? Math.round(billSales / bills.length) : 0)}` },
       { label: 'Pre-bookings handed over', value: preSales, fmt: 'money', sub: `${given.length} orders` },
-      { label: 'Unpaid bills (this period)', value: sumBy(unpaid, o => o.total_amount), fmt: 'money', sub: `${unpaid.length} bills`, tone: unpaid.length ? 'bad' : 'good' },
+      { label: 'Unpaid bills (this period)', value: sumBy(unpaid, billDue), fmt: 'money', sub: `${unpaid.length} bills`, tone: unpaid.length ? 'bad' : 'good' },
     ],
     tables: [
       {

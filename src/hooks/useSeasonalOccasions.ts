@@ -5,6 +5,8 @@ export interface SeasonalOccasion {
   id: string;
   name: string;
   is_active: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
   created_at: string;
 }
 
@@ -30,7 +32,7 @@ export const useCreateSeasonalOccasion = () => {
         .select()
         .single();
       if (error) throw error;
-      return data;
+      return data as SeasonalOccasion;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['seasonal_occasions'] }),
   });
@@ -39,7 +41,7 @@ export const useCreateSeasonalOccasion = () => {
 export const useUpdateSeasonalOccasion = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (updates: { id: string; name?: string; is_active?: boolean }) => {
+    mutationFn: async (updates: { id: string; name?: string; is_active?: boolean; start_date?: string | null; end_date?: string | null }) => {
       const { id, ...rest } = updates;
       const { data, error } = await supabase
         .from('seasonal_occasions')
@@ -62,5 +64,26 @@ export const useDeleteSeasonalOccasion = () => {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['seasonal_occasions'] }),
+  });
+};
+
+// Starts or ends seasons; each occasion's sweets go on or come off the counter with it.
+export const useSetSeason = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ on = [], off = [] }: { on?: string[]; off?: string[] }) => {
+      const steps: [string[], boolean][] = [[off, false], [on, true]];
+      for (const [ids, is_active] of steps) {
+        if (!ids.length) continue;
+        const occ = await supabase.from('seasonal_occasions').update({ is_active }).in('id', ids);
+        if (occ.error) throw occ.error;
+        const items = await supabase.from('seasonal_items').update({ is_active }).in('occasion_id', ids);
+        if (items.error) throw items.error;
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seasonal_occasions'] });
+      qc.invalidateQueries({ queryKey: ['seasonal_items'] });
+    },
   });
 };

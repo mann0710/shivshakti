@@ -3,7 +3,7 @@ import type { SeasonalItem } from './itemCatalog';
 import { nameKey, baseName } from './itemCatalog';
 import { PriceUnit, formatSize, formatLineSize, unitFromLine, rateLabel } from './units';
 import { formatDay } from './sessionalReceipts';
-import { FULFILLMENT_LABEL, STATUS_LABEL, balanceOf, fulfillmentOf } from './preorders';
+import { FULFILLMENT_LABEL, STATUS_LABEL, balanceOf, fulfillmentOf, isPacked } from './preorders';
 import { esc, page, money } from './docs/theme';
 import { slimHeader } from './docs/parts';
 import { DocContext, docContext } from './docs/context';
@@ -52,7 +52,7 @@ export function sheetHtml(sheet: Sheet, title: string, ctx: DocContext = docCont
   const tick = (on: boolean) => `<span class="tick">${on ? '✓' : ''}</span>`;
   const head = sheet.columns.map(c => `<th>${esc(c.name)}<small>${esc(c.rate)}</small></th>`).join('');
   const body = sheet.rows.map(({ p, cells }, i) => `<tr class="${p.status === 'cancelled' ? 'x' : ''}">
-    <td class="c">${tick(p.status === 'ready' || p.status === 'delivered')}</td><td class="c">${tick(p.status === 'delivered')}</td>
+    <td class="c">${tick(isPacked(p))}</td><td class="c">${tick(p.status === 'delivered')}</td>
     <td class="muted">${i + 1}</td><td><b>${esc(p.customer_name)}</b><small class="num">${esc(p.phone || '')}</small>${p.address ? `<small>${esc(p.address)}</small>` : ''}</td>
     <td class="num">${esc(dueLabel(p))}<small>${STATUS_LABEL[p.status]}</small></td>
     ${sheet.columns.map(c => `<td class="q">${cells[c.key] ?? ''}</td>`).join('')}

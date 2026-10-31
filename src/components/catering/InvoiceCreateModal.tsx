@@ -1,153 +1,111 @@
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../ui/Modal';
-import { useBookings } from '../../hooks/useBookings';
+import { useBookings, useUpdateBooking } from '../../hooks/useBookings';
 import { useQuotations } from '../../hooks/useQuotations';
-import { useCreateInvoice } from '../../hooks/useInvoices';
+import { useCreateInvoice, useInvoices } from '../../hooks/useInvoices';
+import { Payment } from '../../types';
 import { formatDateIST, todayIST } from '../../lib/ist';
+import { inr } from '../../lib/money';
 import { pickQuotation } from '../../lib/quoteMath';
-import { LineItem } from '../../types';
-import { ORANGE, btnGhost, btnPrimary, infoLbl, infoVal, inp, lbl } from './InvoiceUi';
+import { invoiceTodo } from '../../lib/cateringTodo';
+import { awaitsAcceptance } from '../../lib/moneyView';
+import { amountOf, invoiceFromQuote, needsGuests, quoteValue } from '../../lib/invoiceEdit';
+import { Empty } from '../money/MoneyUi';
+import { grouped } from './PaymentFields';
 
 interface Props { bookingId?: string; onClose: () => void; onCreated: (invoiceId: string) => void }
 
-// Turns a confirmed booking (and its quotation, if any) into a draft invoice.
+// DlgMoney "New invoice": pick a confirmed event, confirm final guests and any advance.
 const InvoiceCreateModal: React.FC<Props> = ({ bookingId, onClose, onCreated }) => {
   const { data: bookings = [] } = useBookings();
   const { data: quotations = [] } = useQuotations();
+  const { data: invoices = [] } = useInvoices();
   const createInvoice = useCreateInvoice();
-  const [createBookingId, setCreateBookingId] = useState(bookingId ?? '');
-  const [createAdvance, setCreateAdvance] = useState('');
+  const updateBooking = useUpdateBooking();
+  const today = todayIST();
 
-  const confirmedBookings = bookings.filter(b => b.status === 'confirmed' || b.id === bookingId);
-  const selectedCreateBooking = bookings.find(b => b.id === createBookingId);
-  const quotationForBooking = useMemo(
-    () => pickQuotation(quotations, createBookingId),
-    [quotations, createBookingId]
-  );
+  const choices = useMemo(() => {
+    const t = invoiceTodo(bookings, quotations, invoices, today);
+    const ids = t.ready.map(r => r.booking.id).filter(id => !awaitsAcceptance(id, quotations));
+    return [...ids, ...(bookingId && !ids.includes(bookingId) ? [bookingId] : [])].map(id => bookings.find(b => b.id === id)!).filter(Boolean);
+  }, [bookings, quotations, invoices, today, bookingId]);
+  const waiting = useMemo(() => {
+    const sent = quotations.find(q => q.status === 'sent' && bookings.some(b => b.id === q.booking_id && b.event_date >= today && b.status !== 'cancelled'));
+    return sent && bookings.find(b => b.id === sent.booking_id);
+  }, [quotations, bookings, today]);
 
-  const handleCreate = async () => {
-    if (!createBookingId) { toast.error('Select a booking'); return; }
-    const booking = bookings.find(b => b.id === createBookingId);
-    if (!booking) return;
+  const [pickedId, setPickedId] = useState(bookingId ?? '');
+  const booking = choices.find(b => b.id === (pickedId || choices[0]?.id));
+  const quote = booking ? pickQuotation(quotations, booking.id) : undefined;
+  const [guests, setGuests] = useState<Record<string, string>>({});
+  const [advance, setAdvance] = useState<Record<string, string>>({});
+  const [tried, setTried] = useState(false);
+  const guestText = booking ? guests[booking.id] ?? (booking.guest_count > 0 ? String(booking.guest_count) : '') : '';
+  const advanceText = booking ? advance[booking.id] ?? String(booking.advance_received ?? 0) : '0';
+  const guestError = booking && needsGuests(quote, booking) && !(Number(guestText) > 0) ? 'Needed — the quote has no guest count' : '';
+  const busy = createInvoice.isPending || updateBooking.isPending;
 
-    let subtotal: number;
-    let lineItems: LineItem[];
-    let gst_rate = 0, gst_amount = 0, discount_amount = 0;
-    let discount_type: 'amount' | 'percentage' = 'amount';
-    let quotation_id: string | undefined;
-    let extra_charges: { description: string; amount: number }[] = [];
-    let transportation_charges: { description: string; amount: number }[] = [];
-
-    if (quotationForBooking) {
-      subtotal = quotationForBooking.subtotal;
-      gst_rate = quotationForBooking.gst_rate;
-      gst_amount = quotationForBooking.gst_amount;
-      discount_amount = quotationForBooking.discount_amount;
-      discount_type = quotationForBooking.discount_type;
-      quotation_id = quotationForBooking.id;
-      extra_charges = quotationForBooking.extra_charges || [];
-      transportation_charges = quotationForBooking.transportation_charges || [];
-      if (quotationForBooking.is_multi_day && quotationForBooking.event_days?.length) {
-        lineItems = [];
-        for (const day of quotationForBooking.event_days) {
-          for (const meal of day.meals) {
-            for (const item of meal.items) {
-              lineItems.push({
-                description: `Day ${day.day_number} · ${meal.meal_type} · ${item.item_name}`,
-                quantity: meal.guest_count,
-                unit_price: item.amount,
-                total: item.amount,
-              });
-            }
-          }
-        }
-      } else {
-        lineItems = quotationForBooking.items.map(item => ({
-          description: `${item.category_name} › ${item.subcategory_name} › ${item.item_name}`,
-          quantity: 1, unit_price: item.amount, total: item.amount,
-        }));
-      }
-    } else {
-      subtotal = booking.estimated_cost;
-      lineItems = [{
-        description: `${booking.menu?.name || 'Catering'} × ${booking.guest_count} guests`,
-        quantity: booking.guest_count,
-        unit_price: booking.menu?.price_per_plate || 0,
-        total: booking.estimated_cost,
-      }];
-    }
-
+  const create = async () => {
+    setTried(true);
+    if (!booking || guestError) return;
+    const finalGuests = Number(guestText) || 0;
     try {
+      if (finalGuests > 0 && finalGuests !== booking.guest_count) await updateBooking.mutateAsync({ id: booking.id, guest_count: finalGuests });
       const inv = await createInvoice.mutateAsync({
-        booking_id: createBookingId, quotation_id, subtotal,
-        discount_amount, discount_type, gst_rate, gst_amount, extra_charges, transportation_charges,
-        additional_discounts: quotationForBooking?.additional_discounts || [],
-        advance_paid: Math.max(0, parseFloat(createAdvance) || 0),
-        line_items: lineItems, status: 'draft', issue_date: todayIST(),
-        is_multi_day: quotationForBooking?.is_multi_day,
-        event_days: quotationForBooking?.event_days,
+        ...invoiceFromQuote(booking, quote, finalGuests),
+        advance_paid: amountOf(advanceText), status: 'draft', issue_date: today,
+        advance_mode: (booking.advance_mode as Payment['payment_mode']) || 'cash', advance_date: booking.advance_date ?? null,
       });
-      toast.success('Invoice created as Draft!');
+      toast.success(`${inv.invoice_number ?? 'Invoice'} created for ${booking.customer?.name ?? 'the event'}`);
       onCreated(inv.id);
-    } catch (e: any) { toast.error(e.message || 'Failed to create invoice'); }
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not create the invoice'); }
   };
 
   return (
-    <Modal title="Create invoice from confirmed booking" onClose={onClose} width={540}
+    <Modal title="New invoice" onClose={onClose} width={560} busy={busy}
       footer={<>
-        <button type="button" style={btnGhost} onClick={onClose}>Cancel</button>
-        <button type="button" style={{ ...btnPrimary, opacity: !createBookingId || createInvoice.isPending ? 0.6 : 1 }}
-          onClick={handleCreate} disabled={!createBookingId || createInvoice.isPending}>
-          {createInvoice.isPending ? 'Creating...' : 'Generate Invoice'}
-        </button>
+        <button type="button" className="ui-btn" onClick={onClose} disabled={busy}>Cancel</button>
+        <button type="button" className="ui-btn primary" onClick={create} disabled={busy || !booking}>{busy ? 'Creating…' : 'Create invoice'}</button>
       </>}>
-      {confirmedBookings.length === 0 && (
-        <div style={{ background: '#FFF8EE', border: '0.5px solid #FAC775', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 12, color: '#854F0B' }}>
-          ⚠️ No confirmed bookings found. Change a booking status to "Confirmed" first.
-        </div>
-      )}
-      <div style={{ marginBottom: 12 }}>
-        <label style={lbl}>Select booking *</label>
-        <select style={inp} value={createBookingId} onChange={e => setCreateBookingId(e.target.value)}>
-          <option value="">-- Select confirmed booking --</option>
-          {confirmedBookings.map(b => (
-            <option key={b.id} value={b.id}>{b.customer?.name} — {b.event_type} on {formatDateIST(b.event_date, 'dd-MM-yyyy')}</option>
-          ))}
-        </select>
-      </div>
-      {selectedCreateBooking && (
-        <div style={{ background: '#FAFAF8', border: '0.5px solid #E5E5E0', borderRadius: 10, padding: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: ORANGE, marginBottom: 10 }}>
-            {selectedCreateBooking.customer?.name} · {selectedCreateBooking.event_type}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, marginBottom: 10 }}>
-            <div><div style={infoLbl}>Customer Address</div><div style={infoVal}>{selectedCreateBooking.customer?.address || '—'}</div></div>
-            <div><div style={infoLbl}>Event Date</div><div style={infoVal}>{formatDateIST(selectedCreateBooking.event_date, 'EEEE, dd-MM-yyyy')}</div></div>
-            <div><div style={infoLbl}>Event Venue</div><div style={infoVal}>{selectedCreateBooking.venue || '—'}</div></div>
-            <div><div style={infoLbl}>Guests · Menu</div><div style={infoVal}>{selectedCreateBooking.guest_count} guests · {selectedCreateBooking.menu?.name || 'No menu'}{selectedCreateBooking.menu && ` (₹${selectedCreateBooking.menu.price_per_plate}/plate)`}</div></div>
-          </div>
-          <div style={{ background: '#EAF3DE', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 12, color: '#3B6D11' }}>{quotationForBooking ? 'Quotation Total' : 'Estimated Total'}</span>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#3B6D11' }}>₹{(quotationForBooking?.total_amount ?? selectedCreateBooking.estimated_cost).toLocaleString()}</span>
+      <div className="mx-dlg">
+        <p className="mx-dlg-sub">Pick a confirmed event. Prices and dishes come from its accepted quote.</p>
+        {choices.length === 0 ? (
+          <div className="mx-card"><Empty title="No confirmed events to invoice" text="Accept a quote or confirm a booking first." /></div>
+        ) : (
+          <div className="mx-field">
+            <span className="mx-heading">Confirmed, not invoiced yet · {choices.length}</span>
+            <div role="radiogroup" aria-label="Event to invoice" className="mx-cards">
+              {choices.map(b => {
+                const q = pickQuotation(quotations, b.id);
+                const on = b.id === booking?.id;
+                return (
+                  <button key={b.id} type="button" role="radio" aria-checked={on} className="mx-rcard" onClick={() => setPickedId(b.id)}>
+                    <i aria-hidden="true" />
+                    <span><b>{b.customer?.name ?? 'Customer'} · {b.event_type}</b>
+                      <small>{[formatDateIST(b.event_date, 'EEE d MMM'), q?.quotation_number, needsGuests(q, b) ? 'guest count missing' : ''].filter(Boolean).join(' · ')}</small></span>
+                    <b>{inr(quoteValue(q, b))}</b>
+                  </button>
+                );
+              })}
             </div>
-            {quotationForBooking && (
-              <div style={{ fontSize: 10, color: '#639922', marginTop: 3 }}>
-                From {quotationForBooking.quotation_number} ·{' '}
-                {quotationForBooking.is_multi_day
-                  ? `Multi-day (${quotationForBooking.event_days?.length ?? 0} days)`
-                  : `${quotationForBooking.items.length} items`}
-                {quotationForBooking.gst_rate > 0 && ` · GST @${quotationForBooking.gst_rate}% included`}
-              </div>
-            )}
           </div>
-          <div>
-            <label style={lbl}>Advance already paid (₹) — optional</label>
-            <input type="number" inputMode="decimal" style={{ ...inp, maxWidth: 200 }} value={createAdvance} onChange={e => setCreateAdvance(e.target.value)} placeholder="0" />
+        )}
+        {waiting && <p className="mx-hint">{waiting.customer?.name}'s {waiting.event_type} shows up here once the quote is accepted.</p>}
+        {booking && (
+          <div className="mx-grid2">
+            <label className={`mx-field${tried && guestError ? ' bad' : ''}`}>Final guests
+              <input inputMode="numeric" value={guestText} placeholder="How many came or will come" aria-invalid={!!(tried && guestError)}
+                onChange={e => setGuests(g => ({ ...g, [booking.id]: e.target.value.replace(/\D/g, '') }))} />
+              {tried && guestError ? <span className="mx-err">{guestError}</span> : <span className="mx-hint">{quote?.per_plate_amount ? `${inr(quote.per_plate_amount)} a plate` : 'For the invoice'}</span>}
+            </label>
+            <label className="mx-field">Advance already received
+              <input inputMode="decimal" value={`₹${grouped(advanceText)}`} onChange={e => setAdvance(a => ({ ...a, [booking.id]: e.target.value.replace(/[^\d.]/g, '') }))} />
+              <span className="mx-hint">{(booking.advance_received ?? 0) > 0 ? 'From recorded payments' : 'Leave ₹0 if none'}</span>
+            </label>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </Modal>
   );
 };

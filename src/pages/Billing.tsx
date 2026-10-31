@@ -1,393 +1,110 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  useInvoices, usePaymentHistory, useRecalculateTotals, useDeleteInvoice, useUpdateEventDays,
-} from '../hooks/useInvoices';
-import { useDataCenter } from '../hooks/useDataCenter';
+import { useInvoices } from '../hooks/useInvoices';
 import { useQuotations } from '../hooks/useQuotations';
-import StatusPill from '../components/StatusPill';
-import { formatDateIST } from '../lib/ist';
-import { mealSavings } from '../lib/quoteMath';
-import { inr } from '../lib/money';
-import { Invoice } from '../types';
+import { useBookings } from '../hooks/useBookings';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
-import InvoiceList from '../components/catering/InvoiceList';
+import { Invoice } from '../types';
+import { todayIST } from '../lib/ist';
+import { inr } from '../lib/money';
+import { invoiceTodo, Ready } from '../lib/cateringTodo';
+import { pickQuotation } from '../lib/quoteMath';
+import { awaitsAcceptance } from '../lib/moneyView';
+import InvoiceTodo from '../components/catering/InvoiceTodo';
+import InvoiceList, { invoiceMatches } from '../components/catering/InvoiceList';
+import InvoiceEditor from '../components/catering/InvoiceEditor';
 import InvoiceCreateModal from '../components/catering/InvoiceCreateModal';
-import InvoiceChargeList, { InvoiceChargeBox } from '../components/catering/InvoiceChargeList';
-import InvoiceSchedule from '../components/catering/InvoiceSchedule';
-import { useUpdateBooking } from '../hooks/useBookings';
-import InvoiceTotals from '../components/catering/InvoiceTotals';
-import InvoiceActions from '../components/catering/InvoiceActions';
-import PaymentHistory from '../components/catering/PaymentHistory';
+import InvoiceSettle, { useSettleOutside } from '../components/catering/InvoiceSettle';
 import PaymentFormModal from '../components/catering/PaymentFormModal';
-import { ORANGE, box, btnGhost, btnPrimary, card, revealOnPhone, statCard, statLbl } from '../components/catering/InvoiceUi';
+import { Empty, LoadError, Skeleton } from '../components/money/MoneyUi';
 
-const genBillingId = () => Math.random().toString(36).slice(2, 10);
-type Charge = { description: string; amount: number };
-
-// ─── Component ────────────────────────────────────────────────────────────────
 interface Props { onNavigate?: Navigate }
 
+// Invoices: who still owes, what is ready to invoice, past events never invoiced; one invoice opens full page.
 const Billing: React.FC<Props> = () => {
   const intent = useNavIntent('billing');
-  const { data: invoices = [], isLoading } = useInvoices();
-  const { data: dc } = useDataCenter();
-  const recalcTotals = useRecalculateTotals();
-  const deleteInvoice = useDeleteInvoice();
-  const updateEventDays = useUpdateEventDays();
-  const updateBooking = useUpdateBooking();
+  const { data: invoices = [], isLoading, error, refetch } = useInvoices();
   const { data: quotations = [] } = useQuotations();
+  const { data: bookings = [] } = useBookings();
+  const { settle, busy: settlingAll } = useSettleOutside();
   const { confirm, dialog } = useConfirm();
+  const [openId, setOpenId] = useState<string | null>(intent?.action === 'open' ? intent.id ?? null : null);
+  const [creating, setCreating] = useState<string | null>(intent?.action === 'new' ? intent.id ?? '' : null);
+  const [paying, setPaying] = useState<Invoice | null>(null);
+  const [settling, setSettling] = useState<Ready | null>(null);
+  const [q, setQ] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  const today = todayIST();
+  const todo = useMemo(() => {
+    const t = invoiceTodo(bookings, quotations, invoices, today);
+    return { ...t, ready: t.ready.filter(r => !awaitsAcceptance(r.booking.id, quotations)) };
+  }, [bookings, quotations, invoices, today]);
+  const owed = todo.owing.reduce((s, o) => s + o.invoice.balance_due, 0);
+  const open = invoices.find(i => i.id === openId);
+  const bookingOf = (id: string) => bookings.find(b => b.id === id);
 
-  const [selectedId, setSelectedId] = useState<string | null>(intent?.action === 'open' ? intent.id ?? null : null);
-  const [showCreateForm, setShowCreateForm] = useState(intent?.action === 'new');
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [showGST, setShowGST] = useState(true);
-  const previewRef = useRef<HTMLDivElement>(null);
-
-  const [additionalDiscounts, setAdditionalDiscounts] = useState<{ id: string; description: string; amount: number }[]>([]);
-  const [transportItems, setTransportItems] = useState<Charge[]>([]);
-  const [extraChargeItems, setExtraChargeItems] = useState<Charge[]>([]);
-  const [editableEventDays, setEditableEventDays] = useState<any[]>([]);
-  const [guestDraft, setGuestDraft] = useState<number | null>(null);
-  const [dirty, setDirty] = useState(false);
-
-  const selected = invoices.find(i => i.id === selectedId) || invoices[0];
-  // Keep the rate the invoice was issued at; only invoices without GST pick up today's rate.
-  const invoiceGstRate = selected?.gst_rate && selected.gst_rate > 0 ? selected.gst_rate : (dc?.gst_rate ?? 18);
-
-  // Follows edited guest counts so "Save Guest Counts" uses the new numbers.
-  const billMealSavings = useMemo(
-    () => (selected?.is_multi_day ? mealSavings(editableEventDays) : 0),
-    [selected?.is_multi_day, editableEventDays],
-  );
-
-  const selectedInvoiceQuotation = useMemo(
-    () => quotations.find(q => q.id === selected?.quotation_id),
-    [quotations, selected?.quotation_id]
-  );
-
-  // Single-day final guests, derived from the saved subtotal and per-plate rate.
-  const plateRate = selectedInvoiceQuotation?.per_plate_amount ?? 0;
-  const savedGuests = selected && plateRate > 0 ? Math.round(selected.subtotal / plateRate) : 0;
-  const guestsShown = guestDraft ?? savedGuests;
-
-  const outstanding = invoices.filter(i => i.balance_due > 0);
-  const advanceTotal = invoices.reduce((s, i) => s + (i.advance_paid || 0), 0);
-  const thisMonth = invoices.filter(i => {
-    const d = new Date(i.created_at); const now = new Date();
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-
-  const { data: paymentHistory = [] } = usePaymentHistory(selected?.id);
-
-  // Load the saved invoice into the editable sections (also used by Discard).
-  const loadEdits = () => {
-    if (!selected) return;
-    setDirty(false);
-    setGuestDraft(null);
-    setShowGST(selected.gst_rate > 0);
-    if ((selected.additional_discounts || []).length > 0) {
-      setAdditionalDiscounts(selected.additional_discounts!);
-    } else if ((selected.discount_amount || 0) > 0) {
-      // Backward compat: compute meal savings to find manual portion
-      const mealSav = selected.is_multi_day ? mealSavings(selected.event_days) : 0;
-      const additionalAmt = (selected.discount_amount || 0) - mealSav;
-      setAdditionalDiscounts(additionalAmt > 0
-        ? [{ id: genBillingId(), description: 'Discount', amount: additionalAmt }]
-        : []);
-    } else {
-      setAdditionalDiscounts([]);
-    }
-    setTransportItems(
-      selected.transportation_charges?.length
-        ? selected.transportation_charges
-        : selected.transportation_charge > 0
-          ? [{ description: 'Transportation', amount: selected.transportation_charge }]
-          : []
-    );
-    setExtraChargeItems(selected.extra_charges?.length ? [...selected.extra_charges] : []);
-    setEditableEventDays((selected.event_days || []) as any[]);
-  };
-  useEffect(loadEdits, [selected?.id]); // eslint-disable-line
-
-  const touch = <T,>(set: (v: T) => void) => (v: T) => { set(v); setDirty(true); };
-
-  const selectInvoice = async (inv: Invoice) => {
-    if (dirty && inv.id !== selected?.id && !(await confirm({ title: 'Discard unsaved changes?', message: 'Changes to this invoice have not been saved.', confirmLabel: 'Discard', danger: true }))) return;
-    setSelectedId(inv.id);
-    setShowPaymentForm(false);
-    revealOnPhone(previewRef);
-  };
-
-  const computeTotalDiscount = () =>
-    billMealSavings + additionalDiscounts.reduce((s, d) => s + (d.amount || 0), 0);
-
-  // Same payload for every "Apply" button and the GST toggle.
-  const recalc = (invoiceId: string, apply_gst: boolean) => recalcTotals.mutateAsync({
-    invoiceId,
-    discount_amount: computeTotalDiscount(),
-    discount_type: 'amount',
-    apply_gst, gst_rate: invoiceGstRate,
-    transportation_charges: transportItems,
-    additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
-    extra_charges: extraChargeItems.filter(e => e.description.trim() || e.amount > 0),
-  });
-
-  const applyTotals = async (done: string, failed: string, apply_gst = showGST) => {
-    if (!selected) return;
-    try {
-      await recalc(selected.id, apply_gst);
-      setDirty(false);
-      toast.success(done);
-    } catch (e: any) { toast.error(e?.message || failed); }
-  };
-
-  const handleGSTToggle = (checked: boolean) => {
-    if (!selected) return;
-    setShowGST(checked);
-    applyTotals(checked ? `GST @${invoiceGstRate}% added` : 'GST removed', 'Failed to update GST', checked);
-  };
-
-  const handleUpdateGuestCount = (dayIndex: number, mealIndex: number, newCount: number) => {
-    setDirty(true);
-    setEditableEventDays(prev => prev.map((day: any, di: number) => {
-      if (di !== dayIndex) return day;
-      const meals = (day.meals as any[]).map((meal: any, mi: number) => {
-        if (mi !== mealIndex) return meal;
-        const subtotal = newCount * (meal.per_plate_amount || 0);
-        return { ...meal, guest_count: newCount, subtotal };
-      });
-      const day_subtotal = meals.reduce((s: number, m: any) => s + (m.subtotal || 0), 0);
-      return { ...day, meals, day_subtotal };
-    }));
-  };
-
-  // One save for guest counts, charges and discounts.
-  const saveAll = async () => {
-    if (!selected) return;
-    try {
-      if (selected.is_multi_day) {
-        const subtotal = editableEventDays.reduce((sum: number, day: any) => sum + (day.day_subtotal || 0), 0);
-        await updateEventDays.mutateAsync({ invoiceId: selected.id, event_days: editableEventDays, subtotal });
-      } else if (guestDraft !== null && guestDraft > 0 && plateRate > 0) {
-        await updateEventDays.mutateAsync({ invoiceId: selected.id, subtotal: plateRate * guestDraft });
-        await updateBooking.mutateAsync({ id: selected.booking_id, guest_count: guestDraft });
-      }
-      await recalc(selected.id, showGST);
-      setDirty(false);
-      setGuestDraft(null);
-      toast.success('Invoice updated');
-    } catch (e: any) { toast.error(e?.message || 'Failed to save invoice'); }
-  };
-  const saving = recalcTotals.isPending || updateEventDays.isPending || updateBooking.isPending;
-
-  const handleDeleteInvoice = async (inv: Invoice) => {
-    const paid = inv.advance_paid > 0 ? ` Its recorded payments (${inr(inv.advance_paid)}) will be deleted too.` : '';
-    const ok = await confirm({
-      title: `Delete invoice ${inv.invoice_number}?`,
-      message: `The invoice for ${inv.booking?.customer?.name ?? 'this booking'} (${inr(inv.total_amount)}) will be removed permanently.${paid}`,
-      confirmLabel: 'Delete', danger: true,
-    });
+  const settleAll = async () => {
+    const n = todo.past.length;
+    const ok = await confirm({ title: `Mark ${n} past events as settled outside?`, confirmLabel: `Mark ${n} as settled`,
+      message: `Each gets a paid invoice for its quoted amount (${inr(todo.pastValue)} in all), dated on the event day, so Money adds up. You can open and change any of them later.` });
     if (!ok) return;
-    try {
-      await deleteInvoice.mutateAsync(inv.id);
-      if (selectedId === inv.id) setSelectedId(null);
-      toast.success('Invoice deleted');
-    } catch (err: any) { toast.error(err?.message || 'Failed to delete invoice'); }
+    const id = toast.loading(`Settling 0 of ${n}…`);
+    let done = 0;
+    for (const r of todo.past) {
+      const b = bookingOf(r.booking.id);
+      if (!b) continue;
+      try { await settle(b, pickQuotation(quotations, b.id)); done += 1; toast.loading(`Settling ${done} of ${n}…`, { id }); }
+      catch (e) { toast.error(`${b.customer?.name ?? 'An event'}: ${e instanceof Error ? e.message : 'could not save'}`, { id }); return; }
+    }
+    toast.success(`${done} past events marked as settled`, { id });
   };
+
+  if (open) return <InvoiceEditor key={open.id} invoice={open} onBack={() => setOpenId(null)} onDeleted={() => setOpenId(null)} />;
+
+  const matches = q.trim() ? invoices.filter(i => invoiceMatches(i, q)) : [];
+  const settleBooking = settling ? bookingOf(settling.booking.id) : undefined;
 
   return (
-    <div>
-      <div className="page-topbar">
-        <div style={{ fontSize: 16, fontWeight: 600 }}>Billing & Invoices</div>
-        <button type="button" style={btnPrimary} onClick={() => setShowCreateForm(true)}>+ Create Invoice</button>
-      </div>
-      <div className="page-content">
-
-        {/* Stats */}
-        <div className="g3" style={{ marginBottom: 20 }}>
-          <div style={statCard}>
-            <div style={statLbl}>Outstanding dues</div>
-            <div style={{ fontSize: 22, fontWeight: 600 }}>₹{outstanding.reduce((s, i) => s + i.balance_due, 0).toLocaleString()}</div>
-            <div style={{ fontSize: 11, color: '#E24B4A', marginTop: 3 }}>{outstanding.length} invoices unpaid</div>
-          </div>
-          <div style={statCard}>
-            <div style={statLbl}>Total collected</div>
-            <div style={{ fontSize: 22, fontWeight: 600 }}>₹{advanceTotal.toLocaleString()}</div>
-            <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>Advance + partial payments</div>
-          </div>
-          <div style={statCard}>
-            <div style={statLbl}>Invoices this month</div>
-            <div style={{ fontSize: 22, fontWeight: 600 }}>{thisMonth.length}</div>
-            <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 3 }}>{thisMonth.filter(i => i.status === 'paid').length} paid · {thisMonth.filter(i => i.status !== 'paid').length} pending</div>
-          </div>
+    <div className="mx-page">
+      <div className="mx-head iv-head">
+        <div className="mx-head-l">
+          <h1>Invoices</h1>
+          <span className="mx-sub">{inr(owed)} to collect · {todo.ready.length} event{todo.ready.length === 1 ? '' : 's'} ready to invoice</span>
         </div>
-
-        <div className="g2-billing">
-          <InvoiceList invoices={invoices} isLoading={isLoading} activeId={selected?.id} onSelect={selectInvoice} onDelete={handleDeleteInvoice} />
-
-          {/* ── Invoice Preview ─────────────────────────────────── */}
-          <div ref={previewRef}>
-            {selected ? (
-              <div style={card}>
-                {/* Header row */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>Invoice Preview</div>
-                    <div style={{ fontSize: 11, color: '#888880' }}>{selected.invoice_number} · {formatDateIST(selected.issue_date, 'dd-MM-yyyy')}</div>
-                  </div>
-                  <StatusPill status={selected.status} />
-                </div>
-
-                {/* GST checkbox */}
-                {dc?.gst_number && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666660', marginBottom: 12, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={showGST} onChange={e => handleGSTToggle(e.target.checked)} style={{ accentColor: ORANGE }} />
-                    Include GST @{invoiceGstRate}% ({dc.gst_number})
-                  </label>
-                )}
-
-                {/* ── Customer info ── */}
-                <div style={box}>
-                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 5 }}>{selected.booking?.customer?.name}</div>
-                  <div style={{ fontSize: 11, color: '#555552', lineHeight: 1.9 }}>
-                    <div><span style={infoKey}>Event</span>{selected.booking?.event_type}</div>
-                    <div><span style={infoKey}>Venue</span>{selected.booking?.venue || selected.booking?.customer?.address || '—'}</div>
-                  </div>
-                </div>
-
-                {/* ── Event content: multi-day schedule or flat menu items ── */}
-                {selected.is_multi_day && (selected.event_days || []).length > 0 ? (
-                  <InvoiceSchedule days={editableEventDays} onGuests={handleUpdateGuestCount} />
-                ) : (
-                  <>
-                    {/* ── Menu Items ── */}
-                    {(selected.line_items || []).length > 0 && (
-                      <div style={{ border: '0.5px solid #E5E5E0', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
-                        <div style={sectionHead}>MENU ITEMS</div>
-                        <div style={{ padding: '8px 12px' }}>
-                          {(selected.line_items || []).map((item, i) => (
-                            <div key={i} style={{ fontSize: 12, color: '#333', padding: '3px 0', borderBottom: i < (selected.line_items?.length ?? 0) - 1 ? '0.5px solid #F5F5F0' : 'none' }}>
-                              · {item.description}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* ── Per Plate Rate + Guests ── */}
-                    {(selectedInvoiceQuotation?.per_plate_amount ?? 0) > 0 && (
-                      <div style={{ background: '#F9F8F5', border: '0.5px solid #E5E5E0', borderRadius: 8, padding: '8px 12px', marginBottom: 12, fontSize: 12 }}>
-                        <div style={plateRow}>
-                          <span style={{ color: '#888880' }}>Per Plate Rate</span>
-                          <span style={{ fontWeight: 600 }}>₹{(selectedInvoiceQuotation?.per_plate_amount ?? 0).toLocaleString()}</span>
-                        </div>
-                        <div style={plateRow}>
-                          <span style={{ color: '#888880' }}>Final guest count</span>
-                          <input type="number" min={1} inputMode="numeric" aria-label="Final guest count" value={guestsShown || ''}
-                            onChange={e => { setGuestDraft(parseInt(e.target.value, 10) || 0); setDirty(true); }}
-                            style={{ width: 72, padding: '2px 6px', borderRadius: 5, border: '0.5px solid #D0D0CC', fontSize: 12, textAlign: 'right', fontWeight: 600 }} />
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* ── Extra Charges (editable) ── */}
-                <InvoiceChargeBox title="Extra Charges" color="#7B1FA2" items={extraChargeItems} onChange={touch(setExtraChargeItems)}
-                  make={() => ({ description: '', amount: 0 })} empty="No extra charges" />
-
-                {/* ── Discount ── */}
-                <div style={{ ...box, marginBottom: 10 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#444440' }}>Discount</div>
-
-                  {/* Meal savings breakdown — read-only */}
-                  {selected.is_multi_day && billMealSavings > 0 && (
-                    <div style={{ background: '#F2FBE9', border: '0.5px solid #B8DCA0', borderRadius: 6, padding: '7px 10px', marginBottom: 8 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#3B6D11', marginBottom: 4, letterSpacing: '0.04em' }}>MEAL OFFER SAVINGS (AUTO)</div>
-                      {(selected.event_days as any[] || []).map((day: any, di: number) =>
-                        (day.meals as any[] || []).map((m: any, mi: number) => {
-                          const offer = m.discount_amount || 0;
-                          if (offer <= 0 || m.per_plate_amount <= offer) return null;
-                          const saving = (m.per_plate_amount - offer) * m.guest_count;
-                          return (
-                            <div key={`${di}-${mi}`} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '1px 0', color: '#3B6D11' }}>
-                              <span>{m.meal_type.charAt(0).toUpperCase() + m.meal_type.slice(1)} — Day {day.day_number}{day.date ? ` · ${formatDateIST(day.date, 'dd-MM')}` : ''}</span>
-                              <span style={{ fontWeight: 600 }}>-₹{saving.toLocaleString('en-IN')}</span>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  )}
-
-                  {/* Additional manual discounts */}
-                  <div style={{ marginBottom: 6 }}>
-                    <InvoiceChargeList heading={<span style={{ fontSize: 10, fontWeight: 600, color: '#888880' }}>ADDITIONAL DISCOUNTS</span>}
-                      color="#3B6D11" items={additionalDiscounts} onChange={touch(setAdditionalDiscounts)} placeholder="Reason"
-                      make={() => ({ id: genBillingId(), description: '', amount: 0 })} empty="No additional discounts" />
-                  </div>
-
-                  {selected.discount_amount > 0 && (
-                    <div style={{ fontSize: 11, color: '#3B6D11', marginTop: 6 }}>
-                      Applied: -₹{selected.discount_amount.toLocaleString('en-IN')}
-                    </div>
-                  )}
-                </div>
-
-                {/* ── Transportation Charges ── */}
-                <InvoiceChargeBox title="Transportation Charges" color={ORANGE} items={transportItems} onChange={touch(setTransportItems)}
-                  make={() => ({ description: '', amount: 0 })} empty="No transportation charges"
-                  applied={(selected.transportation_charge || 0) > 0 ? `Applied: +₹${selected.transportation_charge.toLocaleString()}` : undefined} />
-
-                {dirty && (
-                  <div style={saveBar}>
-                    <span style={{ fontSize: 12, color: '#854F0B', flex: 1 }}>Unsaved changes</span>
-                    <button type="button" style={{ ...btnGhost, fontSize: 12 }} onClick={loadEdits} disabled={saving}>Discard</button>
-                    <button type="button" style={{ ...btnPrimary, fontSize: 12 }} onClick={saveAll} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
-                  </div>
-                )}
-
-                <InvoiceTotals invoice={selected} quotation={selectedInvoiceQuotation} showGST={showGST} gstNumber={dc?.gst_number} />
-
-                <PaymentHistory key={selected.id} payments={paymentHistory} balanceDue={selected.balance_due} />
-
-                <InvoiceActions invoice={selected} quotation={selectedInvoiceQuotation} payments={paymentHistory} />
-
-                {selected.balance_due > 0 && (
-                  <button type="button" style={{ ...btnGhost, width: '100%', fontSize: 12, color: ORANGE, borderColor: ORANGE }} onClick={() => setShowPaymentForm(true)}>
-                    + Record payment received
-                  </button>
-                )}
-              </div>
-            ) : (
-              <div style={{ ...card, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888880', fontSize: 13, minHeight: 120 }}>
-                Select an invoice to preview
-              </div>
-            )}
-          </div>
+        <div className="mx-head-r">
+          <label className="iv-search">
+            <span aria-hidden="true" className="mx-sub">⌕</span>
+            <input type="search" aria-label="Search invoices" placeholder="Name, phone or INV number" value={q} onChange={e => setQ(e.target.value)} />
+          </label>
+          <button type="button" className="ui-btn primary iv-new" onClick={() => setCreating('')}>+ New<span className="mx-long"> invoice</span></button>
         </div>
       </div>
 
-      {showCreateForm && (
-        <InvoiceCreateModal
-          bookingId={intent?.action === 'new' ? intent.id : undefined}
-          onClose={() => setShowCreateForm(false)}
-          onCreated={id => { setSelectedId(id); setShowCreateForm(false); revealOnPhone(previewRef); }}
-        />
+      {error && <LoadError onRetry={() => refetch()} />}
+      {isLoading ? <Skeleton rows={4} /> : q.trim() ? (
+        <InvoiceList title="Matches" invoices={matches} onOpen={i => setOpenId(i.id)}
+          empty={<Empty title={`Nothing matches "${q.trim()}"`} text="Search looks at names, phones and invoice numbers.">
+            <button type="button" className="ui-btn" onClick={() => setQ('')}>Clear search</button></Empty>} />
+      ) : (
+        <>
+          <InvoiceTodo {...todo} invoices={invoices} onOpen={i => setOpenId(i.id)} onPay={setPaying}
+            onCreate={id => setCreating(id)} onSettle={setSettling} onSettleAll={() => { if (!settlingAll) settleAll(); }} />
+          <InvoiceList title="All invoices" invoices={invoices} onOpen={i => setOpenId(i.id)} collapsed={!showAll} onToggle={() => setShowAll(v => !v)} />
+        </>
       )}
-      {showPaymentForm && selected && selected.balance_due > 0 && (
-        <PaymentFormModal invoice={selected} onClose={() => setShowPaymentForm(false)} />
+
+      {creating !== null && (
+        <InvoiceCreateModal bookingId={creating || undefined} onClose={() => setCreating(null)} onCreated={id => { setCreating(null); setOpenId(id); }} />
+      )}
+      {paying && <PaymentFormModal invoice={paying} onClose={() => setPaying(null)} />}
+      {settling && settleBooking && (
+        <InvoiceSettle item={settling} booking={settleBooking} quote={pickQuotation(quotations, settleBooking.id)} onClose={() => setSettling(null)}
+          onInvoice={id => { setSettling(null); setCreating(id); }} onDone={() => setSettling(null)} />
       )}
       {dialog}
     </div>
   );
 };
-
-const infoKey: React.CSSProperties = { color: '#AAAAAA', width: 46, display: 'inline-block' };
-const sectionHead: React.CSSProperties = { padding: '7px 12px', background: '#F9F8F5', fontSize: 11, fontWeight: 600, color: '#888880', borderBottom: '0.5px solid #E5E5E0' };
-const saveBar: React.CSSProperties = { position: 'sticky', bottom: 8, zIndex: 5, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', marginBottom: 12, background: '#FFF8EC', border: '0.5px solid #F2C27B', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' };
-const plateRow: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: '#444' };
 
 export default Billing;

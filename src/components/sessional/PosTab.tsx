@@ -4,9 +4,12 @@ import ProductGrid from '../pos/ProductGrid';
 import TicketPanel from '../pos/TicketPanel';
 import PackPicker from '../pos/PackPicker';
 import SaleDone from '../pos/SaleDone';
+import HeldBills from '../pos/HeldBills';
+import { undoToast } from '../pos/undoToast';
+import { useSessionRank } from '../pos/useSessionRank';
 import { useSeasonalItems, usePackDefaults, SeasonalItem } from '../../hooks/useSeasonalItems';
 import { useSeasonalOrders, useCreateSeasonalOrder, useUpdateSeasonalOrder, SeasonalOrder } from '../../hooks/useSeasonalOrders';
-import { useCreateSeasonalPreorder, useUpdateSeasonalPreorder, SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
+import { useSeasonalPreorders, useCreateSeasonalPreorder, useUpdateSeasonalPreorder, SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
 import { useSeasonalCustomers, useCreateSeasonalCustomer } from '../../hooks/useSeasonalCustomers';
 import { SeasonalOccasion } from '../../hooks/useSeasonalOccasions';
 import { useStoredState } from '../../hooks/useStoredState';
@@ -14,7 +17,10 @@ import { addLine, makeLine, packsByItem } from '../../lib/cart';
 import { itemPacks } from '../../lib/itemCatalog';
 import { Pack } from '../../lib/units';
 import { inr, isValidPhone, cleanPhone } from '../../lib/money';
-import { ReceiptData } from '../../lib/receipt';
+import { billPayments, preorderPayments } from '../../lib/payments';
+import { owedBy } from '../../lib/dues';
+import { HeldBill, holdBill, takeHeld, dropHeld } from '../../lib/heldBills';
+import { SweetReceipt } from '../../lib/thermalSlips';
 import { orderReceipt, preorderReceipt } from '../../lib/sessionalReceipts';
 import {
   PosForm, PosMode, emptyForm, formFromOrder, formFromPreorder, totalsOf, validate, toOrderPayload, toPreorderPayload, WALK_IN,
@@ -31,6 +37,7 @@ interface Props {
 }
 
 const DRAFT_KEY = 'sessional-pos-draft';
+const HELD_KEY = 'sessional-pos-held';
 const thisYear = new Date().getFullYear();
 
 const initialForm = (edit?: EditTarget | null): PosForm =>
@@ -39,7 +46,8 @@ const initialForm = (edit?: EditTarget | null): PosForm =>
 // Grid on the left, bill on the right; one screen for counter bills, pre-bookings and edits.
 const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
   const { data: allItems = [], isLoading } = useSeasonalItems();
-  const { data: orders = [] } = useSeasonalOrders(thisYear);
+  const { data: orders = [], isFetched: ordersFetched } = useSeasonalOrders(thisYear);
+  const { data: preorders = [] } = useSeasonalPreorders(thisYear);
   const { data: customers = [] } = useSeasonalCustomers();
   const defaults = usePackDefaults();
   const createOrder = useCreateSeasonalOrder();
@@ -48,9 +56,12 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
   const updatePre = useUpdateSeasonalPreorder();
   const createCustomer = useCreateSeasonalCustomer();
 
+  // The bill on the counter survives a refresh; held bills sit beside it.
   const [form, setForm] = useStoredState<PosForm>(edit ? null : DRAFT_KEY, () => initialForm(edit));
-  const [picking, setPicking] = useState<SeasonalItem | null>(null);
-  const [done, setDone] = useState<{ receipt: ReceiptData; change: number } | null>(null);
+  const [held, setHeld] = useStoredState<{ list: HeldBill[] }>(HELD_KEY, () => ({ list: [] }));
+  const [picking, setPicking] = useState<{ item: SeasonalItem; loose: boolean } | null>(null);
+  const [showHeld, setShowHeld] = useState(false);
+  const [done, setDone] = useState<{ receipt: SweetReceipt; change: number } | null>(null);
   const [formKey, setFormKey] = useState(0);
   const set = useCallback((patch: Partial<PosForm>) => setForm(f => ({ ...f, ...patch })), [setForm]);
 
@@ -59,8 +70,10 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
     () => allItems.filter(i => i.is_active && (!form.occasion_id || !i.occasion_id || i.occasion_id === form.occasion_id)),
     [allItems, form.occasion_id],
   );
-  const popularity = useMemo(() => packsByItem(orders.flatMap(o => o.items)), [orders]);
+  const popularity = useSessionRank(orders, ordersFetched);
   const inCart = useMemo(() => packsByItem(form.lines), [form.lines]);
+  const editId = edit ? (edit.kind === 'bill' ? edit.order.id : edit.preorder.id) : undefined;
+  const owed = useMemo(() => owedBy(form.phone, orders, preorders, editId), [form.phone, orders, preorders, editId]);
   const totals = totalsOf(form);
   const busy = createOrder.isPending || updateOrder.isPending || createPre.isPending || updatePre.isPending;
 
@@ -68,10 +81,31 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
     setDone(null);
     setForm(f => ({ ...f, lines: addLine(f.lines, makeLine(item, pack.size, pack.price, qty)) }));
   }, [setForm]);
+  const openPicker = useCallback((item: SeasonalItem) => setPicking({ item, loose: false }), []);
+  const openLoose = useCallback((item: SeasonalItem) => setPicking({ item, loose: true }), []);
 
-  const reset = (mode: PosMode = form.mode) => {
-    setForm(emptyForm(mode, form.occasion_id));
-    setFormKey(k => k + 1);
+  const replaceForm = (next: PosForm) => { setForm(next); setFormKey(k => k + 1); };
+  const reset = (mode: PosMode = form.mode) => replaceForm(emptyForm(mode, form.occasion_id));
+
+  const clear = () => { const prev = form; reset(); undoToast('Bill cleared', () => replaceForm(prev)); };
+  const hold = () => {
+    if (!form.lines.length) return;
+    setHeld(h => ({ list: holdBill(h.list, form) }));
+    reset();
+    toast.success('Bill held');
+  };
+  const restore = (id: string) => {
+    const out = takeHeld(held.list, id, form);
+    if (!out.form) return;
+    setHeld({ list: out.list });
+    replaceForm(out.form);
+    setDone(null);
+    setShowHeld(false);
+  };
+  const drop = (id: string) => {
+    const prev = held.list;
+    setHeld({ list: dropHeld(prev, id) });
+    undoToast('Held bill removed', () => setHeld({ list: prev }));
   };
 
   // New customers with a valid phone are saved automatically for next time.
@@ -87,11 +121,11 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
     if (problem) { toast.error(problem); return; }
     try {
       if (edit?.kind === 'bill') {
-        await updateOrder.mutateAsync({ id: edit.order.id, ...toOrderPayload(form, totals, edit.order.year) });
-        toast.success('Bill updated');
+        await updateOrder.mutateAsync({ id: edit.order.id, ...toOrderPayload(form, totals, edit.order.year, billPayments(edit.order)) });
+        toast.success(totals.refund > 0 ? `Bill updated · give back ${inr(totals.refund)}` : 'Bill updated');
         onEditDone('bill');
       } else if (edit?.kind === 'preorder') {
-        const { status, ...rest } = toPreorderPayload(form, totals, edit.preorder.year);
+        const { status, ...rest } = toPreorderPayload(form, totals, edit.preorder.year, preorderPayments(edit.preorder));
         await updatePre.mutateAsync({ id: edit.preorder.id, ...rest });
         toast.success('Pre-booking updated');
         onEditDone('preorder');
@@ -125,17 +159,17 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
   return (
     <div className="pos-page">
       <div className="pos-layout">
-        {isLoading ? <div className="pos-panel" style={{ color: '#888880' }}>Loading items…</div> : (
+        {isLoading || !ordersFetched ? <div className="pos-panel" style={{ color: '#888880' }}>Loading items…</div> : (
           <ProductGrid items={items} defaults={defaults} popularity={popularity} inCart={inCart}
-            onAdd={addPack} onOpen={setPicking} toolbar={occasionSelect} />
+            onAdd={addPack} onOpen={openPicker} onLoose={openLoose} toolbar={occasionSelect} />
         )}
         {done && !form.lines.length ? (
           <section className="pos-panel pos-ticket" id="pos-ticket">
             <SaleDone receipt={done.receipt} change={done.change} onNext={() => setDone(null)} />
           </section>
         ) : (
-          <TicketPanel form={form} totals={totals} customers={customers} busy={busy} set={set} onMode={onMode}
-            onCharge={charge} onClear={() => reset()} formKey={formKey}
+          <TicketPanel form={form} totals={totals} customers={customers} owed={owed} busy={busy} held={held.list.length} set={set} onMode={onMode}
+            onCharge={charge} onClear={clear} onHold={hold} onShowHeld={() => setShowHeld(true)} formKey={formKey}
             editingLabel={edit ? (edit.kind === 'bill' ? `bill of ${edit.order.customer_name}` : `pre-booking of ${edit.preorder.customer_name}`) : undefined}
             onCancelEdit={() => onEditDone(edit?.kind ?? 'bill')} />
         )}
@@ -144,10 +178,10 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
       {count > 0 && (
         <div className="pos-paybar">
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: '#888880' }}>{count} item{count === 1 ? '' : 's'}</div>
+            <div style={{ fontSize: 11, color: '#5A5A55' }}>{count} item{count === 1 ? '' : 's'}</div>
             <div style={{ fontSize: 17, fontWeight: 700 }}>{inr(totals.total)}</div>
           </div>
-          <button type="button" className="pos-charge" style={{ width: 'auto', height: 44, padding: '0 22px', fontSize: 15 }}
+          <button type="button" className="pos-charge" style={{ width: 'auto', height: 48, padding: '0 22px', fontSize: 15 }}
             onClick={() => document.getElementById('pos-ticket')?.scrollIntoView({ behavior: 'smooth' })}>
             View bill →
           </button>
@@ -155,9 +189,10 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
       )}
 
       {picking && (
-        <PackPicker item={picking} packs={itemPacks(picking, defaults)} onClose={() => setPicking(null)}
-          onAdd={(size, price, qty) => addPack(picking, { size, price, label: '', manual: false }, qty)} />
+        <PackPicker item={picking.item} loose={picking.loose} packs={itemPacks(picking.item, defaults)} onClose={() => setPicking(null)}
+          onAdd={(size, price, qty) => addPack(picking.item, { size, price, label: '', manual: false }, qty)} />
       )}
+      {showHeld && <HeldBills list={held.list} onRestore={restore} onDrop={drop} onClose={() => setShowHeld(false)} />}
     </div>
   );
 };

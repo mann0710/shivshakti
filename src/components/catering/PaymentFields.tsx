@@ -1,47 +1,54 @@
 import React from 'react';
 import { todayIST } from '../../lib/ist';
-import { inp, lbl } from './InvoiceUi';
+import { quickAmounts, amountOf } from '../../lib/invoiceEdit';
+import { Picks } from '../money/MoneyUi';
 
-export interface PayDraft { amount: string; payment_type: 'advance' | 'partial'; payment_mode: string; notes: string; payment_date: string }
+export type PayModeName = 'cash' | 'upi' | 'bank_transfer' | 'cheque';
+export interface PayDraft { amount: string; payment_mode: PayModeName; notes: string; payment_date: string }
 
-export const blankPay = (): PayDraft => ({ amount: '', payment_type: 'advance', payment_mode: 'upi', notes: '', payment_date: todayIST() });
-export const modeLabel = (m: string) => m.replace('_', ' ').toUpperCase();
-const MODES = ['upi', 'cash', 'bank_transfer', 'cheque'];
+export const blankPay = (amount = 0): PayDraft => ({ amount: amount > 0 ? String(amount) : '', payment_mode: 'cash', notes: '', payment_date: todayIST() });
+export const PAY_MODES: [PayModeName, string][] = [['cash', 'Cash'], ['upi', 'UPI'], ['bank_transfer', 'Bank'], ['cheque', 'Cheque']];
+export const modeLabel = (m: string) => PAY_MODES.find(x => x[0] === m)?.[1] ?? m;
 
-interface Props { value: PayDraft; onChange: (v: PayDraft) => void; maxAmount?: number }
+// "66675.5" -> "66,675.5" while typing.
+export const grouped = (text: string) => {
+  const [whole, dec] = text.split('.');
+  return `${Number(whole || 0).toLocaleString('en-IN')}${dec !== undefined ? `.${dec}` : ''}`;
+};
 
-// Type, amount, mode, date and notes for recording or editing a payment.
-const PaymentFields: React.FC<Props> = ({ value, onChange, maxAmount }) => {
+interface Props { value: PayDraft; onChange: (v: PayDraft) => void; balance: number; error?: string }
+
+// Amount with quick picks, how it was paid, date and note (DlgMoney "Payment from …").
+const PaymentFields: React.FC<Props> = ({ value, onChange, balance, error }) => {
   const set = <K extends keyof PayDraft>(key: K, v: PayDraft[K]) => onChange({ ...value, [key]: v });
+  const quick = quickAmounts(balance);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-      <div>
-        <label style={lbl}>Payment type</label>
-        <select style={inp} value={value.payment_type} onChange={e => set('payment_type', e.target.value as PayDraft['payment_type'])}>
-          <option value="advance">Advance</option>
-          <option value="partial">Partial</option>
-        </select>
+    <>
+      <label className={`mx-field${error ? ' bad' : ''}`}>Amount
+        <input className="big" inputMode="decimal" autoFocus value={value.amount ? `₹${grouped(value.amount)}` : ''} placeholder="₹"
+          onChange={e => set('amount', e.target.value.replace(/[^\d.]/g, ''))} aria-invalid={!!error} />
+        {error && <span className="mx-err">{error}</span>}
+      </label>
+      {quick.length > 0 && (
+        <div role="group" aria-label="Quick amounts" className="mx-field">
+          <span>Quick amounts</span>
+          <span className="mx-picks">
+            {quick.map(q => (
+              <button key={q.label} type="button" className="mx-pick" aria-pressed={amountOf(value.amount) === q.value} onClick={() => set('amount', String(q.value))}>{q.label}</button>
+            ))}
+          </span>
+        </div>
+      )}
+      <Picks label="Paid by" options={PAY_MODES} value={value.payment_mode} onPick={m => set('payment_mode', m)} />
+      <div className="mx-grid2">
+        <label className="mx-field">Date
+          <input type="date" value={value.payment_date} max={todayIST()} onChange={e => set('payment_date', e.target.value)} />
+        </label>
+        <label className="mx-field">Note
+          <input value={value.notes} placeholder="Optional" onChange={e => set('notes', e.target.value)} />
+        </label>
       </div>
-      <div>
-        <label style={lbl}>Amount (₹)</label>
-        <input type="number" inputMode="decimal" min="0" style={inp} value={value.amount} onChange={e => set('amount', e.target.value)}
-          placeholder={maxAmount ? `Max ₹${maxAmount}` : undefined} />
-      </div>
-      <div>
-        <label style={lbl}>Payment mode</label>
-        <select style={inp} value={value.payment_mode} onChange={e => set('payment_mode', e.target.value)}>
-          {MODES.map(m => <option key={m} value={m}>{modeLabel(m)}</option>)}
-        </select>
-      </div>
-      <div>
-        <label style={lbl}>Payment date</label>
-        <input type="date" style={inp} value={value.payment_date} onChange={e => set('payment_date', e.target.value)} />
-      </div>
-      <div style={{ gridColumn: '1 / -1' }}>
-        <label style={lbl}>Notes</label>
-        <input style={inp} value={value.notes} onChange={e => set('notes', e.target.value)} placeholder="Optional note" />
-      </div>
-    </div>
+    </>
   );
 };
 

@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import Modal from './Modal';
 import { btnGhost, btnPrimary, DANGER } from './styles';
 
-interface Ask { title: string; message: React.ReactNode; confirmLabel?: string; danger?: boolean; resolve: (ok: boolean) => void }
+interface Ask { title: string; message: React.ReactNode; confirmLabel?: string; cancelLabel?: string; danger?: boolean; resolve: (ok: boolean) => void }
 
 // Promise-based confirm that replaces window.confirm: `if (!(await confirm({...}))) return;`
 export function useConfirm() {
@@ -21,7 +21,7 @@ export function useConfirm() {
       onClose={() => close(false)}
       width={400}
       footer={<>
-        <button style={btnGhost} onClick={() => close(false)}>Cancel</button>
+        <button style={btnGhost} onClick={() => close(false)}>{ask.cancelLabel ?? (ask.danger ? 'Keep' : 'Cancel')}</button>
         <button style={{ ...btnPrimary, background: ask.danger ? DANGER : btnPrimary.background }} onClick={() => close(true)} autoFocus>
           {ask.confirmLabel ?? 'Confirm'}
         </button>

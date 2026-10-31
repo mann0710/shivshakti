@@ -1,10 +1,12 @@
 import toast from 'react-hot-toast';
 import { Quotation } from '../hooks/useQuotations';
-import { quotationDoc } from './docs/quotationDoc';
-import { shareDoc, ShareResult } from './docs/output';
+import { quotationDoc, Doc } from './docs/quotationDoc';
+import { shareDoc, pdfBlob, ShareResult } from './docs/output';
+import { ensureLogo } from './docs/context';
 import { formatDateIST } from './ist';
 import { SHOP } from './shop';
-import { optionTitle, totalText } from './quoteOptions';
+import { optionTitle, totalText, quoteDays, quoteGuests } from './quoteOptions';
+import { openChoiceLabels } from './quoteChoices';
 
 // Every distinct occasion date for multi-day quotations, else the booking date.
 export const quotationDates = (q: Quotation): string => {
@@ -13,35 +15,63 @@ export const quotationDates = (q: Quotation): string => {
   return dates.map(d => formatDateIST(d, 'dd-MM-yyyy')).join(', ');
 };
 
-const guestsOf = (q: Quotation): number =>
-  q.guest_count || q.booking?.guest_count
-  || Math.max(0, ...(q.event_days || []).flatMap(d => (d.meals || []).map(m => m.guest_count || 0)));
-
-// With several options the message lists each option's total.
-export const quotationMessage = (q: Quotation, options: Quotation[] = []): string => {
-  const guests = guestsOf(q);
-  const dates = quotationDates(q);
-  const lines: unknown[] = [
-    q.customer?.name ? `Namaste ${q.customer.name},` : 'Namaste,',
-    q.booking?.event_type ? `Event: ${q.booking.event_type}` : null,
-    dates ? `Date: ${dates}` : null,
-    guests > 0 ? `Guests: ${guests}` : null,
-    ...(options.length > 1 ? options.map(o => `${optionTitle(o)}: ${totalText(o)}`) : [`${optionTitle(q) ? `${optionTitle(q)} · ` : ''}Total: ${totalText(q)}`]),
-    '',
-    options.length > 1 ? `Quotation ${options[0].quotation_number} with ${options.length} options attached — please choose one. ${SHOP.name}` : `Quotation ${q.quotation_number} attached — ${SHOP.name}`,
-  ];
-  return lines.filter(l => typeof l === 'string').join('\n');
+// "Wed 25 Nov", or "13 Sep to 15 Sep" for several days.
+const whenText = (q: Quotation) => {
+  const days = quoteDays(q);
+  if (!days.length) return '';
+  return days.length === 1 ? formatDateIST(days[0], 'EEE d MMM') : `${formatDateIST(days[0], 'd MMM')} to ${formatDateIST(days[days.length - 1], 'd MMM')}`;
 };
 
-// Real PDF from the PDF service; with a saved number it opens that customer's WhatsApp chat (PDF saved to attach).
-export async function shareQuotation(q: Quotation, withPrices = true, options?: Quotation[]): Promise<ShareResult | null> {
+// Friendly WhatsApp text; with several options it lists each option's total.
+export const quotationMessage = (q: Quotation, options: Quotation[] = []): string => {
+  const first = String(q.customer?.name || '').trim().split(/\s+/)[0];
+  const hello = first ? `Namaste ${first} ji` : 'Namaste';
+  const event = q.booking?.event_type ? `your ${q.booking.event_type}` : 'your event';
+  const when = whenText(q);
+  const guests = quoteGuests(q);
+  const sign = `— ${SHOP.name}`;
+  if (options.length > 1) {
+    return [`${hello}, here are ${options.length} menu options for ${event}${when ? ` on ${when}` : ''}:`,
+      ...options.map(o => `${optionTitle(o)}: ${totalText(o)}`),
+      `Please tell us which option you prefer. ${sign}`].join('\n');
+  }
+  const picks = openChoiceLabels(q).map(l => l.toLowerCase());
+  const which = optionTitle(q) ? ` (${optionTitle(q)})` : '';
+  return `${hello}, here is the quotation${which} for ${event}${when ? ` on ${when}` : ''}: ${totalText(q)}${guests > 0 ? ` for ${guests} guests` : ''}.`
+    + `${picks.length ? ` Please tell us which ${picks.join(' and ')} you prefer.` : ''} ${sign}`;
+};
+
+// "98•••• 4821" — enough to recognise the saved number.
+export const maskPhone = (phone?: string | null) => {
+  const d = String(phone || '').replace(/\D/g, '').slice(-10);
+  return d.length === 10 ? `${d.slice(0, 2)}•••• ${d.slice(6)}` : String(phone || '');
+};
+
+export const quotePdf = (q: Quotation, withPrices = true, options?: Quotation[]) => () => quotationDoc(q, { withPrices, options });
+
+// Phones: the share sheet with the PDF attached; null when the phone can't share files.
+async function shareSheet(make: () => Doc, text: string): Promise<ShareResult | null> {
+  await ensureLogo();
+  const doc = make();
+  const blob = await pdfBlob(doc);
+  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+  const file = blob && new File([blob], doc.fileName, { type: 'application/pdf' });
+  if (!file || !nav.canShare?.({ files: [file] })) return null;
+  try { await nav.share({ files: [file], text, title: doc.fileName }); return 'shared'; } catch (e: any) { return e?.name === 'AbortError' ? 'cancelled' : null; }
+}
+
+// Real PDF from the PDF service; computers open the saved number's WhatsApp chat (PDF saved to attach).
+export async function shareQuotation(q: Quotation, withPrices = true, options?: Quotation[], text?: string, phone = false): Promise<ShareResult | null> {
+  const make = quotePdf(q, withPrices, options);
+  const message = text ?? quotationMessage(q, options);
   try {
-    const res = await shareDoc(() => quotationDoc(q, { withPrices, options }), quotationMessage(q, options), q.customer?.phone);
+    const sheet = phone ? await shareSheet(make, message) : null;
+    const res = sheet ?? await shareDoc(make, message, q.customer?.phone);
     if (res === 'shared') toast.success('Quotation shared');
     else if (res === 'cancelled') toast('Share cancelled');
     return res;
   } catch (e: any) {
-    toast.error(e?.message || 'Could not share quotation');
+    toast.error(e?.message || 'Couldn\'t send to WhatsApp');
     return null;
   }
 }

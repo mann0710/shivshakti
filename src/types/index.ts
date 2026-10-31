@@ -35,6 +35,11 @@ export interface Booking {
   special_instructions?: string;
   status: 'inquiry' | 'followup' | 'confirmed' | 'completed' | 'cancelled' | 'pending';
   estimated_cost: number;
+  food_type?: string | null;
+  // Advance taken when the quote was accepted, before an invoice exists.
+  advance_received?: number;
+  advance_mode?: string | null;
+  advance_date?: string | null;
   created_at: string;
 }
 

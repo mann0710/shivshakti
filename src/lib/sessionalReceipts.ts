@@ -1,30 +1,61 @@
 import type { SeasonalOrder } from '../hooks/useSeasonalOrders';
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
 import { ReceiptData, billNumber, printHtml, whatsAppText, openWhatsApp } from './receipt';
-import { billHtml, preorderSlipHtml } from './docs/sweetsDocs';
+import { preorderSlipHtml } from './docs/sweetsDocs';
+import { docContext } from './docs/context';
 import { inr } from './money';
-import { STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf, advanceAtBooking, balanceOf, modeLabel } from './preorders';
+import { roundMoney } from './units';
+import { STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf, advanceAtBooking, balanceOf, modeLabel, isPacked } from './preorders';
+import { Payment, billPayments, paidBy, paidOf, modeOf, MODE_LABEL } from './payments';
+import { billDue } from './dues';
+import { SweetReceipt, PayLines, posBillHtml } from './thermalSlips';
+import { SHOP } from './shop';
 
 const day = (iso: string) =>
   new Date(iso.includes('T') ? iso : `${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
-export const orderReceipt = (o: SeasonalOrder, occasion?: string, gst?: string): ReceiptData => ({
-  kind: 'Bill',
-  number: billNumber(o.bill_no, o.id),
-  date: day(o.created_at),
-  time: new Date(o.created_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }),
-  customer_name: o.customer_name,
-  phone: o.phone,
-  occasion,
-  lines: o.items,
-  subtotal: o.subtotal,
-  discount: o.discount_amount,
-  total: o.total_amount,
-  status: o.is_paid ? `Paid · ${(o.payment_mode ?? 'cash').toUpperCase()}` : 'Unpaid — please pay at the counter',
-  balance: o.is_paid ? 0 : o.total_amount,
-  notes: o.notes,
-  gst_number: gst,
-});
+const sumOf = (list: Payment[], pick: (p: Payment) => number) => roundMoney(list.reduce((s, p) => s + pick(p), 0));
+
+// Cash handed over (with the change returned), UPI, and anything refunded.
+export function payLines(list: Payment[]): PayLines {
+  const cash = list.filter(p => p.mode === 'cash' && p.amount > 0);
+  return {
+    cash: sumOf(cash, p => p.tendered ?? p.amount),
+    upi: paidBy(list.filter(p => p.amount > 0), 'upi'),
+    returned: sumOf(cash, p => (p.tendered ? p.tendered - p.amount : 0)),
+    refunded: Math.abs(paidOf(list.filter(p => p.amount < 0))),
+  };
+}
+
+function billStatus(o: SeasonalOrder, list: Payment[]): string {
+  if (o.cancelled_at) return 'Cancelled';
+  const mode = modeOf(list);
+  if (!billDue(o)) return `Paid · ${mode ? MODE_LABEL[mode] : 'Cash'}`;
+  return paidOf(list) > 0 ? `Part paid ${inr(paidOf(list))}` : 'Unpaid — please pay at the counter';
+}
+
+export function orderReceipt(o: SeasonalOrder, occasion?: string, gst?: string): SweetReceipt {
+  const list = billPayments(o);
+  return {
+    kind: 'Bill',
+    number: billNumber(o.bill_no, o.id),
+    date: day(o.created_at),
+    time: new Date(o.created_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }),
+    customer_name: o.customer_name,
+    phone: o.phone,
+    occasion,
+    lines: o.items,
+    subtotal: o.subtotal,
+    discount: o.discount_amount,
+    total: o.total_amount,
+    status: billStatus(o, list),
+    balance: billDue(o),
+    notes: o.notes,
+    gst_number: gst,
+    pay: payLines(list),
+    ...(o.cancelled_at ? { cancelled: o.cancel_reason ?? '' } : {}),
+  };
+}
 
 export const preorderReceipt = (p: SeasonalPreorder, occasion?: string, gst?: string): ReceiptData => ({
   kind: 'Pre-Booking',
@@ -51,7 +82,7 @@ export const preorderReceipt = (p: SeasonalPreorder, occasion?: string, gst?: st
     collected: p.balance_paid ?? 0,
     collected_mode: modeLabel(p.balance_mode),
     handed_over: p.delivered_at ? day(p.delivered_at) : undefined,
-    packed: p.status === 'ready' || p.status === 'delivered',
+    packed: isPacked(p),
     given: p.status === 'delivered',
   },
 });
@@ -65,4 +96,17 @@ export const shareReceipt = (r: ReceiptData) => {
 };
 
 // Bills print as 80 mm receipts; pre-bookings as a full A4 slip.
-export const printReceipt = (r: ReceiptData) => printHtml(r.booking ? preorderSlipHtml(r) : billHtml(r));
+export const printReceipt = (r: SweetReceipt) => printHtml(r.booking ? preorderSlipHtml(r) : posBillHtml(r));
+
+// Polite WhatsApp nudge with the amount due (and the UPI ID when one is saved).
+export function reminderText(name: string, due: number, what: string): string {
+  const upi = docContext().settings.upi_id.trim();
+  return [
+    `Namaste ${name},`,
+    `A gentle reminder from ${SHOP.name}: *${inr(due)}* is due for ${what}.`,
+    upi ? `You can pay by UPI to ${upi} or at the counter.` : 'You can pay at the counter.',
+    `Thank you! ${SHOP.name}${SHOP.phone ? ` · ${SHOP.phone}` : ''}`,
+  ].join('\n');
+}
+
+export const sendReminder = (phone: string, name: string, due: number, what: string) => openWhatsApp(phone, reminderText(name, due, what));

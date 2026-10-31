@@ -3,21 +3,23 @@ import { SeasonalItem, itemPacks } from '../../lib/itemCatalog';
 import { Pack, PackDefaults } from '../../lib/units';
 import ProductTile from './ProductTile';
 import { empty } from '../ui/styles';
+import './pos.css';
 
 interface Props {
   items: SeasonalItem[];          // active items for the chosen occasion
   defaults: PackDefaults;
-  popularity: Map<string, number>;
+  popularity: Map<string, number>; // fixed for the session, so tiles never move while serving
   inCart: Map<string, number>;
   onAdd: (item: SeasonalItem, pack: Pack) => void;
   onOpen: (item: SeasonalItem) => void;
+  onLoose: (item: SeasonalItem) => void;
   toolbar?: React.ReactNode;
 }
 
 const ALL = '__all';
 
 // Search + category chips + touch-friendly tiles, most-sold first.
-const ProductGrid: React.FC<Props> = ({ items, defaults, popularity, inCart, onAdd, onOpen, toolbar }) => {
+const ProductGrid: React.FC<Props> = ({ items, defaults, popularity, inCart, onAdd, onOpen, onLoose, toolbar }) => {
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState(ALL);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +80,7 @@ const ProductGrid: React.FC<Props> = ({ items, defaults, popularity, inCart, onA
       ) : (
         <div className="pos-tiles">
           {shown.map(i => (
-            <ProductTile key={i.id} item={i} packs={packsOf(i)} inCart={inCart.get(i.id) ?? 0} onAdd={onAdd} onOpen={onOpen} />
+            <ProductTile key={i.id} item={i} packs={packsOf(i)} inCart={inCart.get(i.id) ?? 0} onAdd={onAdd} onOpen={onOpen} onLoose={onLoose} />
           ))}
         </div>
       )}

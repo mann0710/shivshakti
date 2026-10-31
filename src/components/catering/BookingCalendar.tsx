@@ -50,7 +50,7 @@ export function promptCalendar(b: Booking, teamEmails: string[]) {
       <span>✅ {b.customer?.name ?? 'Booking'} confirmed</span>
       <a href={calendarUrl(b, teamEmails)} target="_blank" rel="noopener noreferrer"
         onClick={() => toast.dismiss(t.id)}
-        style={{ background: '#E8750A', color: '#fff', padding: '5px 10px', borderRadius: 7, textDecoration: 'none', fontWeight: 500, fontSize: 12 }}>
+        style={{ background: 'var(--primary)', color: '#fff', padding: '5px 10px', borderRadius: 7, textDecoration: 'none', fontWeight: 500, fontSize: 12 }}>
         📅 Add to Google Calendar
       </a>
     </span>

@@ -12,8 +12,8 @@ export const StageChip: React.FC<{ v: BookingView }> = ({ v }) => {
 
 export const NextButton: React.FC<{ v: BookingView; onRun: (v: BookingView) => void; primary?: boolean; style?: React.CSSProperties }> = ({ v, onRun, primary, style }) => (v.next ? (
   <button type="button" onClick={() => onRun(v)}
-    style={{ minHeight: 40, padding: '8px 12px', borderRadius: 9, font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-      ...(primary ? { border: 'none', background: '#E8750A', color: '#fff' } : { border: '1px solid #E8A867', background: '#fff', color: '#8A4B00' }), ...style }}>
+    style={{ minHeight: 44, padding: '8px 12px', borderRadius: 9, font: 'inherit', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+      ...(primary ? { border: 'none', background: 'var(--primary)', color: '#fff' } : { border: '1px solid #E8A867', background: '#fff', color: '#8A4B00' }), ...style }}>
     {v.next.label}
   </button>
 ) : null);
