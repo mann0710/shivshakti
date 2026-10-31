@@ -7,7 +7,7 @@ import { formatDateIST } from './ist';
 
 // Home: "Needs you" with two actions per row, the four tiles, next events and sweets this week.
 
-export type NeedKind = 'invoice' | 'preorders' | 'quote' | 'bill' | 'tidy';
+export type NeedKind = 'invoice' | 'preorders' | 'pickup' | 'quote' | 'bill' | 'tidy';
 export interface HomeNeed extends NeedItem { kind: NeedKind; ref: string; first: string; firstShort: string; second: string; secondShort: string }
 export interface OpenChoice { label: string; options: string[] }
 
@@ -17,12 +17,14 @@ export const openChoicesOf = (q: Pick<Quotation, 'is_multi_day' | 'event_days' |
   return lists.flatMap(l => choiceGroups(l).filter(g => !pickedOf(g).length).map(g => ({ label: g.meta.label, options: g.items.map(i => i.item_name) })));
 };
 
+const isTidy = (i: NeedItem) => i.key.startsWith('tidy');
 const kindOf = (i: NeedItem): NeedKind =>
-  i.key === 'tidy' ? 'tidy' : i.key.startsWith('pre-') ? 'preorders' : i.key.startsWith('bill-') ? 'bill' : i.page === 'billing' ? 'invoice' : 'quote';
+  isTidy(i) ? 'tidy' : i.key.startsWith('pre-') ? 'preorders' : i.key.startsWith('pick-') ? 'pickup' : i.key.startsWith('bill-') ? 'bill' : i.page === 'billing' ? 'invoice' : 'quote';
 
 const ACTIONS: Record<Exclude<NeedKind, 'quote'>, [string, string, string, string]> = {
   invoice: ['Record payment', 'Record payment', 'WhatsApp reminder', 'WhatsApp'],
   preorders: ['Ask for advance', 'Ask for advance', 'Open', 'Open'],
+  pickup: ['Send pickup reminder', 'Remind', 'Open', 'Open'],
   bill: ['Record payment', 'Record payment', 'WhatsApp', 'WhatsApp'],
   tidy: ['Tidy up', 'Tidy up', 'Later', 'Later'],
 };
@@ -35,9 +37,9 @@ export function homeNeeds(base: NeedItem[], ctx: {
   hideTidy?: boolean;
 }): HomeNeed[] {
   const short = (t: string) => t.replace(/\bSept\b/g, 'Sep');
-  return base.filter(i => !(ctx.hideTidy && i.key === 'tidy')).map(x => ({ ...x, title: short(x.title), line: short(x.line) })).map((i): HomeNeed => {
+  return base.filter(i => !(ctx.hideTidy && isTidy(i))).map(x => ({ ...x, title: short(x.title), line: short(x.line) })).map((i): HomeNeed => {
     const kind = kindOf(i);
-    const ref = kind === 'preorders' ? i.key.slice(4) : kind === 'bill' ? i.key.slice(5) : i.key;
+    const ref = kind === 'preorders' ? i.key.slice(4) : kind === 'bill' || kind === 'pickup' ? i.key.slice(5) : i.key;
     if (kind === 'bill') {
       const b = ctx.bills[Number(ref)];
       const [first, firstShort, second, secondShort] = ACTIONS.bill;

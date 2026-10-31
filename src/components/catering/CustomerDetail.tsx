@@ -115,7 +115,7 @@ const CustomerDetail: React.FC<Props> = ({ p, onBack, onEdit, onDelete, onCombin
           <React.Fragment key={m.month}>
             <span className="pp-month">{m.month}</span>
             {m.items.map(h => (
-              <button key={h.id} type="button" className="pp-hrow" onClick={() => onOpen(h)} title={h.side === 'catering' ? 'Open in Bookings' : 'Open the sweets counter'}>
+              <button key={h.id} type="button" className="pp-hrow" onClick={() => onOpen(h)} title={h.kind === 'booking' ? 'Open in Bookings' : h.kind === 'bill' ? 'Open in sweets bills' : 'Open the pre-booking'}>
                 <span className="pp-hdate">{dayLabel(h.date, today)}</span>
                 <span className={`pp-hdot ${h.side}`} aria-hidden="true" />
                 <span className="pp-hmain"><b>{h.title}</b><span>{h.line}</span></span>

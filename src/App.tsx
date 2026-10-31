@@ -16,12 +16,15 @@ import SeasonalBilling from './pages/SeasonalBilling';
 import SeasonalOccasions from './pages/SeasonalOccasions';
 import SeasonalDashboard from './pages/SeasonalDashboard';
 import SeasonalCustomers from './pages/SeasonalCustomers';
-import { Page, isPage, navPage } from './components/navItems';
+import { Page, Role, canOpen, homeFor, isPage, navPage } from './components/navItems';
 import MobileNav from './components/MobileNav';
 import { setNavIntent, NavIntent } from './hooks/useNavIntent';
+import { leaveThen } from './hooks/useLeaveGuard';
 import { useAuth } from './hooks/useAuth';
 import { useDocContextSync } from './hooks/useDocSettings';
 import LoginScreen from './components/LoginScreen';
+import SetPasswordDialog from './components/settings/SetPasswordDialog';
+import { fromAuthLink } from './lib/supabase';
 
 const queryClient = new QueryClient();
 
@@ -47,7 +50,8 @@ function App() {
 
   // Each page is a history entry, so the phone Back button returns to the previous screen.
   useEffect(() => {
-    window.history.replaceState({ page: currentPage }, '', `#${currentPage}`);
+    // An email sign-in link keeps its address until the auth client has read it.
+    if (!fromAuthLink) window.history.replaceState({ page: currentPage }, '', `#${currentPage}`);
     const onPop = (e: PopStateEvent) => {
       const page = e.state?.page ?? hashPage();
       if (isPage(page)) { setCurrentPage(page); remember(page); setShowMobileMenu(false); }
@@ -56,16 +60,20 @@ function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const navigate = (page: Page, intent?: NavIntent) => {
+  const navigate = (page: Page, intent?: NavIntent) => leaveThen(() => {
     setNavIntent(page, intent);
     if (page !== currentPage) window.history.pushState({ page }, '', `#${page}`);
     setCurrentPage(page);
     remember(page);
     setShowMobileMenu(false);
-  };
+  });
+
+  // Counter and kitchen logins only reach their own screens.
+  const role: Role = auth.role;
+  const page: Page = canOpen(role, currentPage) ? currentPage : homeFor(role);
 
   const renderPage = () => {
-    switch (currentPage) {
+    switch (page) {
       case 'dashboard':   return <Dashboard onNavigate={navigate} />;
       case 'bookings':    return <Bookings key="bookings" onNavigate={navigate} />;
       case 'customers':   return <Customers onNavigate={navigate} />;
@@ -101,15 +109,16 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <DocContextSync />
-      <div className={`app-layout${currentPage === 'seasonal_billing' ? ' pos-full' : ''}`}>
-        <Sidebar currentPage={navPage(currentPage)} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
+      <div className={`app-layout${page === 'seasonal_billing' ? ' pos-full' : ''}`}>
+        <Sidebar currentPage={navPage(page)} role={role} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
         <main className="app-main">
           {renderPage()}
         </main>
       </div>
 
-      <MobileNav current={navPage(currentPage)} open={showMobileMenu} email={auth.email}
+      <MobileNav current={navPage(page)} role={role} open={showMobileMenu} email={auth.email}
         onToggle={setShowMobileMenu} onNavigate={navigate} onSignOut={signOut} />
+      {auth.needsPassword && <SetPasswordDialog email={auth.email} onClose={auth.passwordSet} />}
       {toaster}
     </QueryClientProvider>
   );

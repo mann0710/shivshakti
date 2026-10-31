@@ -9,7 +9,7 @@ import { useStoredState } from './useStoredState';
 import { useMenuItemsFull } from './useMenuBuilder';
 import { useItemPrices } from './useItemPrices';
 import { useDataCenter } from './useDataCenter';
-import { useQuotations, useCreateQuotation, useUpdateQuotation, Quotation, QuotationLineItem, EventDay } from './useQuotations';
+import { useQuotations, useCreateQuotation, useUpdateQuotation, Quotation, QuotationLineItem, EventDay, ChoiceMeta } from './useQuotations';
 import { getDayNumber, quoteTotals } from '../lib/quoteMath';
 import { plateRange, atMaxPrices, basePlate, ownRange, typedPrice } from '../lib/quoteChoices';
 import { genId, lineOf, mergeLines, moveLine, PickerItem, Charge, Discount } from '../lib/quoteLines';
@@ -106,8 +106,8 @@ export const useQuoteForm = () => {
   const toLine = (it: PickerItem): QuotationLineItem => lineOf(it, priceFor(it.id));
   const addItem = (it: PickerItem) => setSelectedItems(prev => (prev.some(p => p.item_id === it.id) ? prev : [...prev, toLine(it)]));
   // Package dishes join (or replace) the menu; the package price becomes the fixed per-plate rate.
-  const applyPackage = (found: PickerItem[], price: number, replace: boolean) => {
-    setSelectedItems(prev => mergeLines(prev, found.map(toLine), replace));
+  const applyPackage = (found: (PickerItem & { choice?: ChoiceMeta })[], price: number, replace: boolean) => {
+    setSelectedItems(prev => mergeLines(prev, found.map(it => (it.choice ? { ...toLine(it), choice: it.choice } : toLine(it))), replace));
     setAutoPrice(false);
     setPerPlate(price > 0 ? String(price) : '');
   };

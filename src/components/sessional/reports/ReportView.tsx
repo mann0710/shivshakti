@@ -11,11 +11,11 @@ const ReportView: React.FC<{ report: Report }> = ({ report }) => (
     <div className="g4" style={{ marginBottom: 14 }}>
       {report.stats.map(s => (
         <div key={s.label} style={{ background: '#fff', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: '12px 14px', minWidth: 0 }}>
-          <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{s.label}</div>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 4 }}>{s.label}</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: s.tone ? TONE[s.tone] : '#1A1A18', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {fmtCell(s.value, s.fmt) || '—'}
           </div>
-          {s.sub && <div style={{ fontSize: 11, color: '#AAAAAA', marginTop: 2 }}>{s.sub}</div>}
+          {s.sub && <div style={{ fontSize: 12, color: '#6B6B66', marginTop: 2 }}>{s.sub}</div>}
         </div>
       ))}
     </div>

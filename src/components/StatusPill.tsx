@@ -24,7 +24,7 @@ const StatusPill: React.FC<{ status: string; label?: string }> = ({ status, labe
   const style = colors[status] || { bg: '#F1EFE8', color: '#5F5E5A' };
   return (
     <span style={{
-      fontSize: 10, padding: '2px 9px', borderRadius: 20,
+      fontSize: 12, padding: '2px 9px', borderRadius: 20,
       fontWeight: 600, whiteSpace: 'nowrap',
       background: style.bg, color: style.color,
       textTransform: 'capitalize'

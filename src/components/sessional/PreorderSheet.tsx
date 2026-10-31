@@ -58,11 +58,11 @@ const PreorderSheet: React.FC<Props> = ({ preorders, items, onPacked, onHandover
                   </td>
                   <td className="stick s2">
                     <button type="button" className="sheet-name" onClick={() => onOpen(p)}>{p.customer_name}</button>
-                    <div style={{ color: MUTED, fontSize: 11 }}>{p.phone}</div>
+                    <div style={{ color: MUTED, fontSize: 12 }}>{p.phone}</div>
                   </td>
                   <td style={{ whiteSpace: 'nowrap', color: late ? DANGER : undefined }}>
                     {late && '⚠ '}{dueLabel(p)}
-                    <div><span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10, background: tone?.bg, color: tone?.color, fontWeight: 600 }}>{STATUS_LABEL[p.status]}</span></div>
+                    <div><span style={{ fontSize: 12, padding: '1px 6px', borderRadius: 10, background: tone?.bg, color: tone?.color, fontWeight: 600 }}>{STATUS_LABEL[p.status]}</span></div>
                   </td>
                   {sheet.columns.map(c => <td key={c.key} className="q">{cells[c.key] ?? ''}</td>)}
                   <td className="r">{inr(p.total_amount)}</td>

@@ -5,6 +5,7 @@ import { BookingView, STAGE_STYLE } from '../../lib/bookingBoard';
 import { STAGE_LABELS, Stage } from '../../lib/eventStage';
 import { SweetRow } from '../../lib/homeNeeds';
 import { inr } from '../../lib/money';
+import { posLink } from '../../lib/posIntent';
 import { CardHead, Chip, DateTile, Empty } from './MoneyUi';
 
 export interface EventRow { view: BookingView; stage: Stage; note: string }
@@ -44,8 +45,8 @@ export const SweetsWeek: React.FC<{ rows: SweetRow[]; onNavigate: Navigate }> = 
 );
 
 const NEW: [string, string, Parameters<Navigate>][] = [
-  ['Sweets bill', 'Opens the counter', ['seasonal_billing']],
-  ['Pre-booking', 'Sweets for a later day', ['seasonal_billing']],
+  ['Sweets bill', 'Opens the counter', ['seasonal_billing', posLink.bill()]],
+  ['Pre-booking', 'Sweets for a later day', ['seasonal_billing', posLink.preorder()]],
   ['Booking', 'A catering inquiry', ['bookings', { action: 'new' }]],
   ['Quotation', 'For a booking or a new event', ['quotations', { action: 'new' }]],
 ];

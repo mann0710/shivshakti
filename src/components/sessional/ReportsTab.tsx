@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { REPORTS, ReportId, Preset, Range, presetRange, rangeLabel } from '../../lib/reports';
 import { printReport, downloadCsv } from '../../lib/reports/export';
 import { useReportData } from '../../hooks/useReportData';
@@ -9,8 +9,10 @@ import ReportView from './reports/ReportView';
 import { btnPrimary, btnGhost, empty, segBtn, segWrap, DANGER } from '../ui/styles';
 
 // Sweets + catering reports for any period, each printable / PDF and CSV.
-const ReportsTab: React.FC<{ occasions: SeasonalOccasion[] }> = ({ occasions }) => {
+const ReportsTab: React.FC<{ occasions: SeasonalOccasion[]; report?: ReportId }> = ({ occasions, report: asked }) => {
   const [prefs, setPrefs] = useStoredState<{ id: ReportId; preset: Preset }>('shivshakti.reportPrefs', () => ({ id: 'sales', preset: 'month' }));
+  // A link that names a report opens on it.
+  useEffect(() => { if (asked) setPrefs(p => ({ ...p, id: asked })); }, [asked, setPrefs]);
   const [range, setRange] = useState<Range>(() => presetRange(prefs.preset === 'custom' ? 'month' : prefs.preset));
   const [occasionId, setOccasionId] = useState('');
   const def = REPORTS.find(r => r.id === prefs.id) ?? REPORTS[0];
@@ -34,7 +36,7 @@ const ReportsTab: React.FC<{ occasions: SeasonalOccasion[] }> = ({ occasions }) 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{report?.title ?? def.label}</div>
-          <div style={{ fontSize: 12, color: '#888880' }}>{def.ranged ? rangeLabel(range) : 'As of today'}</div>
+          <div style={{ fontSize: 12, color: '#6B6B66' }}>{def.ranged ? rangeLabel(range) : 'As of today'}</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" style={btnGhost} disabled={!report} onClick={() => report && downloadCsv(report, range)}>⬇ CSV / Excel</button>

@@ -4,6 +4,7 @@ import { page, esc, money, HEAD_FONT } from './docs/theme';
 import { formatLineSize } from './units';
 import { SHOP } from './shop';
 import { WALK_IN } from './posForm';
+import { gstInside } from './gst';
 import { DayClosePayload, NOTES, dayLabel, whenLabel, differenceOf, differenceLabel } from './dayClose';
 
 // 80 mm thermal slips: the counter bill and the day close summary. Black only; empty shop fields are left out.
@@ -15,7 +16,7 @@ const CSS = `
 body { width: 72mm; max-width: 72mm; margin: 0 auto; box-shadow: none; font-size: 12.5px; color: #000; }
 .bill { padding: 4px 2px; display: flex; flex-direction: column; gap: 10px; }
 .bill header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1px; font-size: 11px; }
-.wm { font-family: ${HEAD_FONT}; font-size: 22px; letter-spacing: 1px; } .tag { letter-spacing: 2px; }
+.wm { font-family: ${HEAD_FONT}; font-size: 19px; letter-spacing: 1px; line-height: 1.15; }
 .row { display: flex; justify-content: space-between; gap: 8px; } .rt { text-align: right; }
 .dash { border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 7px 0; } .no { font-size: 14px; }
 .occ, .void { text-align: center; font-weight: 600; } .void { border: 2px solid #000; padding: 4px; letter-spacing: 1px; }
@@ -31,7 +32,7 @@ const row = (label: string, value = '', cls = '') => `<div class="row${cls ? ` $
 const bold = (label: string, value: string) => `<div class="row"><b>${esc(label)}</b><b>${value}</b></div>`;
 
 const head = (ctx: DocContext, gst?: string) =>
-  `<header><b class="wm">SHIV SHAKTI</b><span class="tag">SWEETS · CATERING</span>${opt(ctx.settings.address)}${opt(SHOP.phone, 'num')}${gst ? opt(`GSTIN ${gst}`, 'num') : ''}</header>`;
+  `<header><b class="wm">${esc(ctx.settings.sweets_name.toUpperCase())}</b>${opt(ctx.settings.address)}${opt(SHOP.phone, 'num')}${gst ? opt(`GSTIN ${gst}`, 'num') : ''}${opt(ctx.settings.fssai_number && `FSSAI ${ctx.settings.fssai_number}`, 'num')}</header>`;
 
 const foot = (...lines: (string | undefined)[]) => {
   const shown = lines.filter(l => l?.trim()) as string[];
@@ -39,6 +40,14 @@ const foot = (...lines: (string | undefined)[]) => {
 };
 
 const slip = (title: string, ctx: DocContext, inner: string) => page(title, ctx.settings.accent, `<div class="bill">${inner}</div>`, CSS);
+
+// Registered shops show the GST already inside sweets prices.
+const gstRow = (r: SweetReceipt, ctx: DocContext) => {
+  const rate = ctx.settings.sweets_gst_rate;
+  if (!r.gst_number || !(rate > 0)) return '';
+  const { taxable, gst } = gstInside(r.total, rate);
+  return row(`Taxable value`, money(taxable), 'small') + row(`Incl. GST ${rate}% (CGST ${rate / 2}% + SGST ${rate / 2}%)`, money(gst), 'small');
+};
 
 function payRows(r: SweetReceipt): string {
   const p = r.pay;
@@ -64,6 +73,7 @@ export function posBillHtml(r: SweetReceipt, ctx: DocContext = docContext()): st
     ${row(`Subtotal · ${packs} pack${packs === 1 ? '' : 's'}`, money(r.subtotal))}
     ${r.discount > 0 ? row('Discount', `− ${money(r.discount)}`) : ''}
     <div class="row tot"><b>TOTAL</b><b class="t">${money(r.total)}</b></div>
+    ${gstRow(r, ctx)}
     ${payRows(r)}
   </div>
   ${r.notes ? `<div class="note">${esc(r.notes)}</div>` : ''}

@@ -1,0 +1,92 @@
+/* ─── Menu Builder: View / Edit as sheet ─── */
+.ms-seg { display: inline-flex; background: #fff; border: 1px solid #E0E0DA; border-radius: 10px; padding: 3px; flex-shrink: 0; }
+.mb-panel-head > .ms-seg { flex: 0 0 auto; min-width: 0; }
+.ms-seg button { border: none; background: transparent; color: #4A4A45; font-size: 13px; padding: 0 14px; min-height: 38px; border-radius: 7px; cursor: pointer; }
+.ms-seg button[aria-pressed="true"] { background: #1A1A18; color: #fff; font-weight: 600; }
+.ms-seg button:focus-visible, .ms-toolbar button:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--accent); }
+
+/* Food style chips */
+.ms-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.ms-chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 10px; white-space: nowrap; border: 1px solid transparent; }
+.ms-chip.jain { background: #EAF3DE; color: #2F5A0E; }
+.ms-chip.swami { background: #FFF1E3; color: #8A4B00; }
+.ms-chip.onion { background: #FCEBEB; color: #A32D2D; }
+
+/* Sheet */
+.ms-wrap { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ms-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.ms-grid { min-width: 640px; }
+.ms-row { display: grid; grid-template-columns: var(--ms-cols); border-top: 1px solid #ECECE6; background: #fff; }
+.ms-row.th { background: #FAFAF7; font-size: 12px; font-weight: 600; color: #6B6B66; border-top: none; }
+.ms-row.th > span { padding: 10px 12px; display: flex; align-items: center; }
+.ms-row.picked { background: #FFFCF5; }
+.ms-row > span + span { border-left: 1px solid #ECECE6; }
+.ms-pick { display: flex; align-items: center; justify-content: center; }
+.ms-row.th > .ms-pick { padding: 10px 0; justify-content: center; }
+.ms-pick input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+.ms-cell { display: flex; flex-direction: column; justify-content: center; min-height: 44px; min-width: 0; }
+.ms-cell:focus-within { box-shadow: inset 0 0 0 2px var(--accent); }
+.ms-cell.edited { background: #FFF8D6; }
+.ms-cell.bad { background: #FDECEC; box-shadow: inset 0 0 0 1px #E3A5A5; }
+.ms-cell.bad:focus-within { box-shadow: inset 0 0 0 2px #C0392B; }
+.ms-cell input, .ms-cell > button { width: 100%; min-width: 0; border: none; background: transparent; color: var(--ink); font-size: 14px; text-align: left; padding: 9px 12px; min-height: 40px; }
+.ms-cell input::placeholder { color: #9A9A93; }
+.ms-cell > button { font-size: 13px; color: #4A4A45; cursor: pointer; }
+.ms-cell > button.ms-on { color: #2F5A0E; font-weight: 500; }
+.ms-cell > button.ms-off { color: #6B6B66; }
+.ms-in { display: flex; align-items: center; padding-left: 12px; }
+.ms-in i { font-style: normal; color: #6B6B66; font-size: 14px; }
+.ms-in input { padding-left: 2px; }
+.ms-add { display: inline-block; border: 1px dashed #D9C2A5; color: #8A4B00; font-size: 12px; padding: 2px 8px; border-radius: 10px; }
+.ms-note { display: block; font-size: 12px; color: #8A4B00; padding: 0 12px 6px; margin-top: -6px; line-height: 1.3; overflow-wrap: anywhere; }
+.ms-note.err { color: #A32D2D; font-weight: 600; }
+.ms-hint { font-size: 12.5px; color: #6B6B66; }
+
+/* Picked rows: dark action bar */
+.ms-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #1A1A18; color: #fff; border-radius: 12px; padding: 6px 12px; margin: 12px 16px; }
+.ms-toolbar > b { font-size: 14px; font-weight: 600; margin-right: 6px; }
+.ms-toolbar button { border: 1px solid #4A4A45; background: #2A2A27; color: #fff; font-size: 13px; padding: 0 12px; min-height: 44px; border-radius: 8px; cursor: pointer; }
+.ms-toolbar button:hover { background: #33332F; }
+.ms-toolbar button.clear { margin-left: auto; border: none; background: none; color: #D9D9D2; }
+
+/* Unsaved changes bar: stays in view while the sheet scrolls */
+.ms-bar { position: sticky; bottom: 12px; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: #FFF6EA; border: 1px solid #F3D3AD; border-radius: 14px; padding: 12px 16px; font-size: 14px; color: #6B3A00; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08); }
+.ms-bar em { font-style: normal; color: #A32D2D; font-weight: 600; }
+.ms-bar > div { display: flex; gap: 10px; }
+.ms-bar .ui-btn { min-height: 44px; }
+
+/* Food style pop-up */
+.ms-away { position: fixed; inset: 0; z-index: 300; }
+.ms-picker { position: fixed; z-index: 301; display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; background: #fff; border: 1px solid #E5E5E0; border-radius: 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16); }
+.ms-picker .ms-chip, .ms-tri .ms-chip { min-height: 44px; padding: 0 12px; font-size: 13px; cursor: pointer; }
+.ms-picker .ms-chip[aria-pressed="false"], .ms-tri .ms-chip[aria-pressed="false"] { background: #fff; color: #4A4A45; border-color: #E0E0DA; }
+.ms-picker .ms-chip[aria-pressed="true"]::before { content: '✓'; margin-right: 6px; }
+.ms-picker .ui-btn { margin-left: auto; min-height: 44px; }
+
+/* Bulk action dialogs */
+.ms-ask { display: flex; flex-direction: column; gap: 12px; }
+.ms-ask .ms-seg { align-self: flex-start; }
+.ms-ask .ms-note { margin: 0; padding: 0; font-size: 12.5px; }
+.ms-ask-hint { font-size: 12.5px; color: #6B6B66; line-height: 1.45; }
+.ms-tri { display: flex; flex-direction: column; gap: 8px; }
+.ms-tri .ms-chip { justify-content: space-between; border-radius: 10px; font-size: 14px; }
+.ms-tri .ms-chip small { font-size: 12px; font-weight: 500; opacity: 0.85; }
+.ms-tri .ms-chip[aria-pressed="mixed"] { background: #fff; color: #4A4A45; border: 1px dashed #D9C2A5; }
+
+/* Review */
+.ms-review { list-style: none; display: flex; flex-direction: column; }
+.ms-review li { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-top: 1px solid #F0EFEA; font-size: 13.5px; }
+.ms-review li > b { font-size: 14px; color: var(--ink); }
+.ms-change { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; color: #4A4A45; }
+.ms-change > span:first-child { color: #6B6B66; }
+.ms-change s { color: #8A8A84; }
+.ms-review-state { flex: 1; min-width: 0; font-size: 13px; color: #4A4A45; }
+.ms-review-state .err { color: #A32D2D; }
+
+@media (max-width: 768px) {
+  .ms-toolbar { margin: 10px 12px; }
+  .ms-toolbar button.clear { margin-left: 0; }
+  .ms-bar { bottom: 70px; padding: 10px 12px; }
+  .ms-bar > div { flex: 1; justify-content: flex-end; }
+  .ms-change { grid-template-columns: 1fr; gap: 0; }
+}

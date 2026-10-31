@@ -1,10 +1,11 @@
 /* Customers (one list for catering and sweets), the shared ⋯ menu and sign-in. */
 
-.pp-page { padding: 26px 32px 40px; max-width: 1220px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.pp-page { padding: 26px 32px 40px; max-width: var(--page-max); margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 .pp-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .pp-head h1 { font-size: 24px; font-weight: 700; color: var(--ink); }
+.pp-head > div { min-width: 0; flex: 1 1 auto; }
 .pp-head p { font-size: 13px; color: var(--muted); margin-top: 2px; }
-.pp-head .ui-btn { min-height: 44px; padding: 0 18px; }
+.pp-head .ui-btn { min-height: 44px; padding: 0 18px; white-space: nowrap; flex: none; }
 .pp-layout { display: grid; grid-template-columns: minmax(300px, 390px) minmax(0, 1fr); gap: 18px; align-items: start; }
 .pp-list, .pp-detail { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .pp-detail { gap: 14px; position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
@@ -40,7 +41,7 @@
 .pp-row.on .pp-av, .pp-av.big { background: #FFE9D2; color: #8A4B00; }
 .pp-av.big { width: 56px; height: 56px; font-size: 20px; }
 .pp-tags { display: flex; gap: 4px; flex-wrap: wrap; }
-.pp-tag { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
+.pp-tag { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
 .pp-tag.catering { background: #E6F1FB; color: #185FA5; }
 .pp-tag.sweets { background: #FBE8F0; color: #9C2E5C; }
 
@@ -59,7 +60,7 @@
 
 .pp-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .pp-tile { background: #F9F8F5; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.pp-tile small { font-size: 11.5px; font-weight: 600; letter-spacing: 0.4px; color: #6B6B66; text-transform: uppercase; }
+.pp-tile small { font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: #6B6B66; text-transform: uppercase; }
 .pp-tile b { font-size: 18px; font-weight: 700; }
 .pp-tile span { font-size: 12px; color: #6B6B66; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp-tile.red { background: #FCEBEB; }
@@ -82,7 +83,7 @@
 .pp-hmain span { font-size: 13px; color: #4A4A45; }
 .pp-hside { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .pp-hside b { font-size: 14px; font-weight: 600; }
-.pp-stat { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+.pp-stat { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
 .pp-stat.green { background: #E1F5EE; color: #0F6E56; }
 .pp-stat.blue { background: #E6F1FB; color: #185FA5; }
 .pp-stat.amber { background: #FAEEDA; color: #7A4A0A; }

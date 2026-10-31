@@ -10,6 +10,7 @@ import { Payment, billPayments, paidBy, paidOf, modeOf, MODE_LABEL } from './pay
 import { billDue } from './dues';
 import { SweetReceipt, PayLines, posBillHtml } from './thermalSlips';
 import { SHOP } from './shop';
+import { formatDateIST } from './ist';
 
 const day = (iso: string) =>
   new Date(iso.includes('T') ? iso : `${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -110,3 +111,10 @@ export function reminderText(name: string, due: number, what: string): string {
 }
 
 export const sendReminder = (phone: string, name: string, due: number, what: string) => openWhatsApp(phone, reminderText(name, due, what));
+
+// Asks for an advance to confirm a pre-booking (no money taken yet).
+export function advanceText(name: string, day: string, total: number): string {
+  const upi = docContext().settings.upi_id.trim();
+  return [`Namaste ${name},`, `Your sweets pre-booking for ${formatDateIST(day, 'd MMM')} comes to ${inr(total)}.`,
+    `Please send an advance to confirm it${upi ? ` (UPI: ${upi})` : ''}.`, `Thank you! ${SHOP.name}`].join('\n');
+}

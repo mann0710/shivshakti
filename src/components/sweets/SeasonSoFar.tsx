@@ -4,11 +4,12 @@ import { SoFar } from '../../lib/sweetsToday';
 import { seasonTitle } from '../../lib/occasions';
 import { formatSize } from '../../lib/units';
 import { inr } from '../../lib/money';
+import type { ReportId } from '../../lib/reports';
 import '../../styles/sweets.css';
 
-const REPORTS = ['Sales by day', 'Sweets sold', 'Cash and UPI', 'Unpaid bills', 'Season vs last season'];
+const REPORTS: [string, ReportId][] = [['Sales by day', 'sales'], ['Sweets sold', 'items'], ['Cash and UPI', 'payments'], ['Unpaid bills', 'dues'], ['Pre-bookings', 'preorders']];
 
-interface Props { season?: SeasonalOccasion; data?: SoFar; onOccasions: () => void; onReports: () => void }
+interface Props { season?: SeasonalOccasion; data?: SoFar; onOccasions: () => void; onReports: (id: ReportId) => void }
 
 // The running season's totals from its dates, next to the report links.
 const SeasonSoFar: React.FC<Props> = ({ season, data, onOccasions, onReports }) => {
@@ -44,7 +45,7 @@ const SeasonSoFar: React.FC<Props> = ({ season, data, onOccasions, onReports }) 
       </section>
       <section className="sw-card sw-pad sw-reports" aria-label="Reports" style={{ gap: 0 }}>
         <h2 className="sw-h2" style={{ marginBottom: 8 }}>Reports</h2>
-        {REPORTS.map(r => <button key={r} type="button" onClick={onReports}><span>{r}</span><span aria-hidden="true">→</span></button>)}
+        {REPORTS.map(([label, id]) => <button key={id} type="button" onClick={() => onReports(id)}><span>{label}</span><span aria-hidden="true">→</span></button>)}
       </section>
     </div>
   );

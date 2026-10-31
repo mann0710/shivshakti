@@ -4,6 +4,7 @@ import { esc, page, HEAD_FONT } from '../docs/theme';
 import { slimHeader, sectionHead } from '../docs/parts';
 import { DocContext, docContext } from '../docs/context';
 import { SHOP } from '../shop';
+import { XSheet, downloadXlsx } from '../xlsx';
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 export const reportFileName = (r: Report, range: Range, ext: string) => `${slug(r.title)}_${range.from}_to_${range.to}.${ext}`;
@@ -36,6 +37,15 @@ export function downloadCsv(r: Report, range: Range) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+
+// A summary sheet, then one sheet per table with raw numbers so Excel can total them.
+export function reportSheets(r: Report, range: Range): XSheet[] {
+  const summary = [[`${SHOP.name} - ${r.title}`], [`Period: ${range.from} to ${range.to}`], [r.note], [], ...r.stats.map(s => [s.label, s.value, s.sub ?? ''])];
+  const sheet = (t: Table) => [t.cols.map(c => c.label), ...t.rows.map(row => t.cols.map(c => row[c.key])), ...(t.total ? [t.cols.map(c => t.total![c.key])] : [])];
+  return [{ name: 'Summary', rows: summary }, ...r.tables.map(t => ({ name: t.title, rows: sheet(t) }))];
+}
+
+export const downloadReportXlsx = (r: Report, range: Range) => downloadXlsx(reportSheets(r, range), reportFileName(r, range, 'xlsx'));
 
 const cell = (v: Cell, fmt?: Fmt) => esc(fmtCell(v, fmt));
 const htmlTable = (t: Table) => {

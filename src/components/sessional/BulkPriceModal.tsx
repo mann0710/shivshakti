@@ -67,14 +67,14 @@ const BulkPriceModal: React.FC<Props> = ({ items, onClose }) => {
             {items.map(i => (
               <tr key={i.id} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
                 <td style={td}>{i.name}</td>
-                <td style={{ ...td, color: '#888880' }}>{label(i, before(i))}</td>
+                <td style={{ ...td, color: '#6B6B66' }}>{label(i, before(i))}</td>
                 <td style={{ ...td, fontWeight: 600 }}>{label(i, adjustRate(before(i), change.mode, change.value, change.roundTo))}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div style={{ fontSize: 11, color: '#888880', marginTop: 8 }}>Pack prices follow automatically. Manual pack prices move by the same rule.</div>
+      <div style={{ fontSize: 12, color: '#6B6B66', marginTop: 8 }}>Pack prices follow automatically. Manual pack prices move by the same rule.</div>
     </Modal>
   );
 };

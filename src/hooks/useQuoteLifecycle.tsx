@@ -11,17 +11,20 @@ export const useQuoteLifecycle = (onNavigate?: Navigate) => {
   const updateStatus = useUpdateQuotationStatus();
   const updateBooking = useUpdateBooking();
 
-  const bookingTo = async (q: Quotation, status: 'followup' | 'confirmed') => {
+  // True when the booking's status changed; `reopen` also brings a cancelled booking back to follow-up.
+  const bookingTo = async (q: Quotation, status: 'followup' | 'confirmed', reopen = false) => {
     const b = q.booking;
-    if (!b || !q.booking_id) return;
-    if (status === 'followup' ? b.status !== 'inquiry' : !OPEN.has(b.status)) return;
+    if (!b || !q.booking_id) return false;
+    const moves = status === 'confirmed' ? OPEN.has(b.status) : b.status === 'inquiry' || (reopen && b.status === 'cancelled');
+    if (!moves) return false;
     await updateBooking.mutateAsync({ id: q.booking_id, status });
+    return true;
   };
 
-  // "QTN-0023 accepted · Kavit's booking confirmed  [Create invoice]"
-  const acceptedToast = (q: Quotation) => {
+  // "QTN-0023 accepted · Kavit's booking confirmed  [Create invoice]"; the booking part only when it moved.
+  const acceptedToast = (q: Quotation, confirmed: boolean) => {
     const who = String(q.customer?.name || '').trim().split(/\s+/)[0];
-    const text = `${q.quotation_number} accepted${who ? ` · ${who}'s booking confirmed` : ''}`;
+    const text = `${q.quotation_number} accepted${confirmed && who ? ` · ${who}'s booking confirmed` : ''}`;
     if (!onNavigate || !q.booking_id) { toast.success(text); return; }
     toast(t => (
       <span className="q-toast">
@@ -31,16 +34,18 @@ export const useQuoteLifecycle = (onNavigate?: Navigate) => {
     ), { duration: 8000 });
   };
 
-  // Accepted confirms the booking; Sent moves an inquiry to follow-up.
-  const setStatus = async (q: Quotation, status: string) => {
+  // Accepted confirms the booking; Sent moves an inquiry to follow-up; reopening a declined quote revives its booking.
+  const setStatus = async (list: Quotation[], status: string) => {
+    const q = list[0];
+    if (!q) return;
+    const nums = list.map(o => o.quotation_number).join(', ');
+    const reopen = status === 'sent' && q.status === 'rejected';
     try {
-      await updateStatus.mutateAsync({ id: q.id, status });
-      if (status === 'accepted') {
-        await bookingTo(q, 'confirmed');
-        acceptedToast(q);
-      } else {
-        if (status === 'sent') await bookingTo(q, 'followup');
-        toast.success(status === 'rejected' ? `${q.quotation_number} marked lost` : status === 'sent' ? `${q.quotation_number} marked sent` : 'Status updated');
+      for (const o of list) await updateStatus.mutateAsync({ id: o.id, status });
+      if (status === 'accepted') acceptedToast(q, await bookingTo(q, 'confirmed'));
+      else {
+        if (status === 'sent') await bookingTo(q, 'followup', reopen);
+        toast.success(status === 'rejected' ? `${nums} marked lost` : status === 'sent' ? `${nums} ${reopen ? 'reopened' : 'marked sent'}` : 'Status updated');
       }
     } catch (e: any) { toast.error(e?.message || 'Failed to update'); }
   };

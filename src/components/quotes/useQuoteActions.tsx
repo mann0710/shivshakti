@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import type { QuoteForm } from '../../hooks/useQuoteForm';
 import type { Navigate } from '../../hooks/useNavIntent';
@@ -9,11 +9,12 @@ import { siblingsOf, nextLabel, quoteCopy } from '../../lib/quoteOptions';
 import { quotePdf } from '../../lib/quotationShare';
 import { downloadDoc } from '../../lib/docs/output';
 import type { QuoteActions } from './QuoteMenu';
+import SavePackageDialog from './SavePackageDialog';
 
 interface Flow {
   accept: (q: Quotation, picks?: Set<string>) => void;
   share: (q: Quotation, withPrices?: boolean, options?: Quotation[], startAll?: boolean) => void;
-  setStatus: (q: Quotation, status: string) => void;
+  setStatus: (list: Quotation[], status: string) => void;
 }
 
 interface Args { f: QuoteForm; flow: Flow; pdfPrices: boolean; openEdit: (q: Quotation) => void; onNavigate?: Navigate }
@@ -23,18 +24,24 @@ export function useQuoteActions({ f, flow, pdfPrices, openEdit, onNavigate }: Ar
   const deleteQuotation = useDeleteQuotation();
   const createMenu = useCreateMenu();
   const { confirm, dialog } = useConfirm();
+  const [saving, setSaving] = useState<Quotation | null>(null);
   const fail = (e: any, text: string) => toast.error(e?.message || text);
 
-  const remove = async (q: Quotation) => {
-    const ok = await confirm({ title: 'Delete quote?', message: `${q.quotation_number}${q.customer?.name ? ` for ${q.customer.name}` : ''} will be deleted. This can't be undone.`, confirmLabel: 'Delete', danger: true });
+  // One confirm for a quote, or for every option of a grouped enquiry.
+  const remove = async (list: Quotation[]) => {
+    const q = list[0];
+    if (!q) return;
+    const nums = list.map(x => x.quotation_number).join(', ');
+    const ok = await confirm({ title: list.length > 1 ? `Delete ${list.length} options?` : 'Delete quote?', message: `${nums}${q.customer?.name ? ` for ${q.customer.name}` : ''} will be deleted. You can restore it from Settings › Data › Recycle bin for 30 days.`, confirmLabel: 'Delete', danger: true });
     if (!ok) return;
     try {
-      await deleteQuotation.mutateAsync(q.id);
+      for (const x of list) await deleteQuotation.mutateAsync(x.id);
       // The last option left becomes a plain quotation.
-      const rest = siblingsOf(q, f.quotations).filter(s => s.id !== q.id);
+      const gone = new Set(list.map(x => x.id));
+      const rest = siblingsOf(q, f.quotations).filter(s => !gone.has(s.id));
       if (q.option_group && rest.length === 1) await f.updateQuotation.mutateAsync({ id: rest[0].id, option_group: null, option_label: null, option_name: null });
-      if (f.editingId === q.id) f.resetForm();
-      toast.success(`${q.quotation_number} deleted`);
+      if (f.editingId && gone.has(f.editingId)) f.resetForm();
+      toast.success(`${nums} deleted`);
     } catch (e) { fail(e, 'Could not delete'); }
   };
 
@@ -65,10 +72,10 @@ export function useQuoteActions({ f, flow, pdfPrices, openEdit, onNavigate }: Ar
   };
 
   // The quote's dishes and plate price become a package for next time.
-  const savePackage = async (q: Quotation) => {
-    const name = [q.customer?.name, q.booking?.event_type, q.option_name].filter(Boolean).join(' · ') || q.quotation_number;
+  const savePackage = async (q: Quotation, name: string, price: number, items: string[]) => {
     try {
-      await createMenu.mutateAsync({ name, description: `From ${q.quotation_number}`, price_per_plate: q.per_plate_amount, category: 'Package', items: (q.items ?? []).map(i => i.item_name), is_active: true });
+      await createMenu.mutateAsync({ name, description: `From ${q.quotation_number}`, price_per_plate: price, category: 'Package', items, is_active: true });
+      setSaving(null);
       toast.success(`Saved as package "${name}"`);
     } catch (e) { fail(e, 'Could not save the package'); }
   };
@@ -80,10 +87,13 @@ export function useQuoteActions({ f, flow, pdfPrices, openEdit, onNavigate }: Ar
     accept: flow.accept,
     duplicate,
     addOption,
-    savePackage,
+    savePackage: setSaving,
     setStatus: flow.setStatus,
     remove,
     invoice: q => (q.booking_id && onNavigate ? onNavigate('billing', { action: 'new', id: q.booking_id }) : toast.error('This quote has no booking to invoice')),
   };
-  return { actions, dialog };
+  const packageDialog = saving && (
+    <SavePackageDialog q={saving} busy={createMenu.isPending} onClose={() => setSaving(null)} onSave={(name, price, items) => savePackage(saving, name, price, items)} />
+  );
+  return { actions, dialog: <>{dialog}{packageDialog}</> };
 }

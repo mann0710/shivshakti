@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import ProductGrid from '../pos/ProductGrid';
 import TicketPanel from '../pos/TicketPanel';
@@ -25,6 +25,7 @@ import { orderReceipt, preorderReceipt } from '../../lib/sessionalReceipts';
 import {
   PosForm, PosMode, emptyForm, formFromOrder, formFromPreorder, totalsOf, validate, toOrderPayload, toPreorderPayload, WALK_IN,
 } from '../../lib/posForm';
+import type { PosStart } from '../../lib/posIntent';
 import { inp } from '../ui/styles';
 
 export type EditTarget = { kind: 'bill'; order: SeasonalOrder } | { kind: 'preorder'; preorder: SeasonalPreorder };
@@ -34,6 +35,7 @@ interface Props {
   edit?: EditTarget | null;
   gst?: string;
   onEditDone: (kind: 'bill' | 'preorder') => void;
+  start?: PosStart;
 }
 
 const DRAFT_KEY = 'sessional-pos-draft';
@@ -43,8 +45,12 @@ const thisYear = new Date().getFullYear();
 const initialForm = (edit?: EditTarget | null): PosForm =>
   !edit ? emptyForm() : edit.kind === 'bill' ? formFromOrder(edit.order) : formFromPreorder(edit.preorder);
 
+// Switching to a pre-booking gives it a delivery date.
+const withMode = (f: PosForm, mode: PosMode): PosForm =>
+  ({ ...f, mode, delivery_date: mode === 'preorder' && !f.delivery_date ? emptyForm('preorder').delivery_date : f.delivery_date });
+
 // Grid on the left, bill on the right; one screen for counter bills, pre-bookings and edits.
-const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
+const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone, start }) => {
   const { data: allItems = [], isLoading } = useSeasonalItems();
   const { data: orders = [], isFetched: ordersFetched } = useSeasonalOrders(thisYear);
   const { data: preorders = [] } = useSeasonalPreorders(thisYear);
@@ -86,6 +92,17 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
 
   const replaceForm = (next: PosForm) => { setForm(next); setFormKey(k => k + 1); };
   const reset = (mode: PosMode = form.mode) => replaceForm(emptyForm(mode, form.occasion_id));
+
+  // A link from another screen picks bill or pre-booking and the customer; someone else's open bill is held first.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || edit || !start?.mode) return;
+    started.current = true;
+    const other = !!start.who && form.lines.length > 0 && cleanPhone(form.phone) !== cleanPhone(start.who.phone);
+    if (other) { setHeld(h => ({ list: holdBill(h.list, form) })); toast('The open bill was held'); }
+    const base = other ? emptyForm(start.mode, form.occasion_id) : form;
+    replaceForm({ ...withMode(base, start.mode), ...(start.who ? { customer_name: start.who.name, phone: start.who.phone } : {}) });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clear = () => { const prev = form; reset(); undoToast('Bill cleared', () => replaceForm(prev)); };
   const hold = () => {
@@ -145,7 +162,7 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
     }
   };
 
-  const onMode = (mode: PosMode) => set({ mode, delivery_date: mode === 'preorder' && !form.delivery_date ? emptyForm('preorder').delivery_date : form.delivery_date });
+  const onMode = (mode: PosMode) => setForm(f => withMode(f, mode));
   const count = form.lines.reduce((s, l) => s + l.qty, 0);
 
   const occasionSelect = (
@@ -159,13 +176,13 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
   return (
     <div className="pos-page">
       <div className="pos-layout">
-        {isLoading || !ordersFetched ? <div className="pos-panel" style={{ color: '#888880' }}>Loading items…</div> : (
+        {isLoading || !ordersFetched ? <div className="pos-panel" style={{ color: '#6B6B66' }}>Loading items…</div> : (
           <ProductGrid items={items} defaults={defaults} popularity={popularity} inCart={inCart}
             onAdd={addPack} onOpen={openPicker} onLoose={openLoose} toolbar={occasionSelect} />
         )}
         {done && !form.lines.length ? (
           <section className="pos-panel pos-ticket" id="pos-ticket">
-            <SaleDone receipt={done.receipt} change={done.change} onNext={() => setDone(null)} />
+            <SaleDone receipt={done.receipt} change={done.change} next={form.mode === 'preorder' ? 'New pre-booking' : 'New bill'} onNext={() => setDone(null)} />
           </section>
         ) : (
           <TicketPanel form={form} totals={totals} customers={customers} owed={owed} busy={busy} held={held.list.length} set={set} onMode={onMode}
@@ -178,7 +195,7 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone }) => {
       {count > 0 && (
         <div className="pos-paybar">
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: '#5A5A55' }}>{count} item{count === 1 ? '' : 's'}</div>
+            <div style={{ fontSize: 12, color: '#5A5A55' }}>{count} item{count === 1 ? '' : 's'}</div>
             <div style={{ fontSize: 17, fontWeight: 700 }}>{inr(totals.total)}</div>
           </div>
           <button type="button" className="pos-charge" style={{ width: 'auto', height: 48, padding: '0 22px', fontSize: 15 }}

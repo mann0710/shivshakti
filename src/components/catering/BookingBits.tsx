@@ -30,8 +30,8 @@ export const missingGuests = (v: BookingView) => !(v.b.guest_count > 0) && (v.ta
 
 export const DateBlock: React.FC<{ iso: string; small?: boolean }> = ({ iso, small }) => (
   <div className="bk-date" aria-hidden="true" style={{ width: small ? 48 : 56, padding: '6px 0', borderRadius: 10, background: '#F7F5F0', display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-    <span style={{ fontSize: 11, fontWeight: 600, color: '#8A4B00', letterSpacing: 0.6 }}>{formatDateIST(iso, 'MMM').toUpperCase()}</span>
+    <span style={{ fontSize: 12, fontWeight: 600, color: '#8A4B00', letterSpacing: 0.6 }}>{formatDateIST(iso, 'MMM').toUpperCase()}</span>
     <span style={{ fontSize: small ? 19 : 22, fontWeight: 700, lineHeight: 1.1 }}>{formatDateIST(iso, 'd')}</span>
-    <span style={{ fontSize: 11, color: '#6B6B66' }}>{formatDateIST(iso, 'EEE')}</span>
+    <span style={{ fontSize: 12, color: '#6B6B66' }}>{formatDateIST(iso, 'EEE')}</span>
   </div>
 );

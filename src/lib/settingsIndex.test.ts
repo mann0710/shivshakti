@@ -1,6 +1,6 @@
 import { GROUPS, SETTING_ROWS, groupNotes, searchSettings, gstLabel, isOldSlab, StatusInput } from './settingsIndex';
 
-const base: StatusInput = { gstNumber: '24ABCDE1234F1Z5', gstRate: 18, upiId: 'shop@upi', address: 'Navrangpura', fssai: true, docsReady: true, eventTypes: 13, teamMembers: 1, undated: [], updates: 0 };
+const base: StatusInput = { gstNumber: '24ABCDE1234F1Z5', gstRate: 18, upiId: 'shop@upi', address: 'Navrangpura', fssai: true, docsReady: true, eventTypes: 13, teamMembers: 1, logins: 2, undated: [], updates: 0, reminders: 4, backupStale: false };
 
 describe('settings search', () => {
   it('finds UPI in money and documents', () => {
@@ -51,6 +51,13 @@ describe('group notes', () => {
     const n = groupNotes({ ...base, undated: ['Rakhi', 'Holi'], updates: 2, teamMembers: 0 });
     expect(n.sweets.note).toBe('Rakhi has no dates yet (+1)');
     expect(n.data).toEqual({ note: '2 database updates to run', warn: true });
-    expect(n.team.note).toBe('0 team members for events');
+    expect(n.team.note).toBe('2 logins · 0 team members for events');
+  });
+
+  it('nudges for a weekly backup and counts reminders', () => {
+    const n = groupNotes({ ...base, backupStale: true, reminders: 1, logins: 0 });
+    expect(n.data).toEqual({ note: 'No backup this week', warn: true });
+    expect(n.reminders.note).toBe('1 of 4 on · one tap sends on WhatsApp');
+    expect(n.team.note).toBe('1 team member for events');
   });
 });

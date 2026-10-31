@@ -17,12 +17,13 @@ import InvoiceTotals from './InvoiceTotals';
 import PaymentHistory from './PaymentHistory';
 import PaymentFormModal from './PaymentFormModal';
 
-interface Props { invoice: Invoice; onBack: () => void; onDeleted: () => void }
+// backLabel replaces "Invoices" when Back returns to another screen.
+interface Props { invoice: Invoice; onBack: () => void; onDeleted: () => void; backLabel?: string }
 
 const SAVE_TEXT = { saved: 'all changes saved', saving: 'saving…', error: 'not saved' };
 
 // One invoice: meals with final counts, extras, payments and the summary; changes save by themselves.
-const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted }) => {
+const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted, backLabel }) => {
   const { data: quotations = [] } = useQuotations();
   const { data: dc } = useDataCenter();
   const { data: payments = [] } = usePaymentHistory(invoice.id);
@@ -59,7 +60,7 @@ const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted }) => {
   return (
     <div>
       <header className="iv-top">
-        <button type="button" className="mx-link iv-back" onClick={back} aria-label="Back to Invoices">← <span className="desk">Invoices</span></button>
+        <button type="button" className="mx-link iv-back" onClick={back} aria-label={backLabel ?? 'Back to Invoices'}>← <span className="desk">{backLabel ?? 'Invoices'}</span></button>
         <span className="sep" />
         <span className="mx-two-line" style={{ flex: '1 1 260px' }}>
           <b style={{ fontSize: 16 }}>{invoice.invoice_number} · {name}</b>
@@ -83,7 +84,7 @@ const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted }) => {
           <InvoiceSchedule rows={rows} onEdit={editRow} />
           <InvoiceChargeList extras={draft.extras} transport={draft.transport} onExtras={extras => change({ extras })} onTransport={transport => change({ transport })}
             discount={draft.discount} onDiscount={discount => change({ discount })} gstRate={draft.gst} gstRates={gstRates} gstNote={gstNote} onGst={gst => change({ gst })} />
-          <PaymentHistory rows={plan} onRecord={record} onEdit={setPaying} />
+          <PaymentHistory rows={plan} onRecord={owed ? record : undefined} onEdit={setPaying} />
         </div>
 
         <aside aria-label="Summary" className="iv-side">

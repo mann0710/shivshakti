@@ -2,10 +2,10 @@ import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useBookings, useUpdateBooking, useDeleteBooking } from '../hooks/useBookings';
 import { useTeamMembers } from '../hooks/useDataCenter';
-import { useQuotations } from '../hooks/useQuotations';
+import { Quotation, useQuotations } from '../hooks/useQuotations';
 import { useInvoices } from '../hooks/useInvoices';
 import { useBookingValue } from '../hooks/useBookingValue';
-import { useAcceptFlow } from '../hooks/useAcceptFlow';
+import { useAcceptFlow, useQuotePdfPref } from '../hooks/useAcceptFlow';
 import { useStoredState } from '../hooks/useStoredState';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
@@ -15,6 +15,8 @@ import { formatDateIST, todayIST } from '../lib/ist';
 import { inr } from '../lib/money';
 import { downloadDoc } from '../lib/docs/output';
 import { siblingsOf } from '../lib/quoteOptions';
+import { dishCount } from '../lib/quoteChoices';
+import { quoteItems } from '../lib/quoteSummary';
 import { eventMenuDoc } from '../lib/docs/invoiceDoc';
 import { bookingView, BookingView, boardStats, groupByMonth, sortForTab, dateRangeText, festivalDays, neverInvoiced, Tab, TABS } from '../lib/bookingBoard';
 import BookingFormModal from '../components/catering/BookingFormModal';
@@ -50,6 +52,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const updateBooking = useUpdateBooking();
   const deleteBooking = useDeleteBooking();
   const accept = useAcceptFlow(onNavigate);
+  const [pdf] = useQuotePdfPref();
   const { confirm, dialog } = useConfirm();
   const intent = useNavIntent('bookings');
   const [pref, setPref] = useStoredState<{ view: View }>('shivshakti.bookingView', () => ({ view: 'list' }));
@@ -73,7 +76,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const inTab = (t: Tab) => shown.filter(v => v.tab === t);
   const groups = groupByMonth(sortForTab(inTab(tab), tab));
   const stats = boardStats(views);
-  const attention = views.filter(v => v.tab === 'attention').length;
+  const attention = inTab('attention').length;
   const festivals = useMemo(() => festivalDays(occasions), [occasions]);
   const eventView = views.find(v => v.b.id === eventId);
 
@@ -95,7 +98,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
     const linked = quotes.filter(q => q.booking_id === b.id);
     const ok = await confirm({
       title: linked.length ? 'Delete booking and its quotations?' : 'Delete booking?',
-      message: <>{what} will be removed.{linked.length > 0 && <> Its {linked.length === 1 ? 'quotation' : `${linked.length} quotations`} <b>{linked.map(q => q.quotation_number).join(', ')}</b> will be deleted too.</>} This cannot be undone.</>,
+      message: <>{what} will be removed.{linked.length > 0 && <> Its {linked.length === 1 ? 'quotation' : `${linked.length} quotations`} <b>{linked.map(q => q.quotation_number).join(', ')}</b> will be deleted too.</>} You can restore it from Settings › Data › Recycle bin for 30 days.</>,
       confirmLabel: linked.length ? 'Delete all' : 'Delete', danger: true,
     });
     if (!ok) return;
@@ -108,12 +111,21 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const closeAsLost = async (b: Booking) => {
     if (await confirm({ title: 'Close as lost or cancelled?', message: <><b>{b.customer?.name}</b> · {b.event_type} on {dateRangeText(b)} moves to Lost or cancelled. You can change it back from ⋯ → Change status.</>, confirmLabel: 'Close as lost' })) setStatus(b, 'cancelled');
   };
+  const newQuote = (b: Booking) => go('quotations', { action: 'new', id: b.id });
+  const sendQuote = (x: Quotation) => accept.share(x, pdf.prices, siblingsOf(x, quotes));
+  // "Send quote" sends the booking's draft once it has dishes, else opens it to finish.
+  const sendDraft = (b: Booking) => {
+    const draft = quotes.find(x => x.booking_id === b.id && x.status === 'draft');
+    if (!draft) return newQuote(b);
+    if (dishCount(quoteItems(draft)) > 0) sendQuote(draft);
+    else go('quotations', { action: 'open', id: draft.id });
+  };
 
   // The one button on each booking.
   const run = async (v: BookingView) => {
     const b = v.b;
     switch (v.next?.kind) {
-      case 'quote': return go('quotations', { action: 'new', id: b.id });
+      case 'quote': return sendDraft(b);
       case 'pick': case 'accept': return v.quote ? accept.accept(v.quote) : setEventId(b.id);
       case 'invoice': return go('billing', { action: 'new', id: b.id });
       case 'payment': return v.invoice && setPaying(v.invoice);
@@ -125,11 +137,11 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
     run,
     open: b => setEventId(b.id),
     edit: b => setFormFor(b),
-    quote: b => go('quotations', { action: 'new', id: b.id }),
+    quote: newQuote,
     invoice: b => go('billing', { action: 'new', id: b.id }),
     pay: v => v.invoice && setPaying(v.invoice),
     accept: q => accept.accept(q),
-    send: q => accept.share(q, true, siblingsOf(q, quotes)),
+    send: sendQuote,
     menuPdf: v => downloadDoc(() => eventMenuDoc(v.b, v.quote)),
     status: (b, s) => (s === 'cancelled' ? closeAsLost(b) : setStatus(b, s)),
     remove,
@@ -148,19 +160,18 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   );
 
   return (
-    <div>
-      <div className="page-topbar" style={{ gap: 10 }}>
+    <div className="page">
+      <div className="page-head">
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Bookings</div>
-          <div style={{ fontSize: 12.5, color: '#6B6B66' }}>{formatDateIST(today, 'EEEE, d MMM yyyy')}</div>
+          <h1>Bookings</h1>
+          <div className="sub">{formatDateIST(today, 'EEEE, d MMM yyyy')}</div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="page-head-r">
           {switcher('bk-switch-wide')}
           <button type="button" onClick={() => setFormFor('new')} style={btnPrimary}>+ New<span className="only-desktop-inline"> booking</span></button>
         </div>
       </div>
 
-      <div className="page-content" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {switcher('bk-switch-narrow')}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottom: view === 'list' ? '1px solid #E0E0DA' : 'none' }}>
           {view === 'list' ? (
@@ -203,7 +214,6 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
           : view === 'pipeline' ? <BookingPipeline views={shown} actions={actions} today={today} unbilled={neverInvoiced(views).length} onInvoices={() => go('billing')} />
           : <BookingAgenda groups={groups} actions={actions}
               empty={q ? 'No bookings match your search' : tab === 'attention' ? 'Nothing needs attention' : `No ${TABS.find(t => t.id === tab)!.label.toLowerCase()} bookings`} />}
-      </div>
 
       {eventView && onNavigate && <EventDetail view={eventView} actions={actions} onClose={() => setEventId(null)} onNavigate={onNavigate} />}
       {formFor && (

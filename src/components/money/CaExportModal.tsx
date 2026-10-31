@@ -5,7 +5,8 @@ import { MoneyData, fyStart } from '../../lib/moneyView';
 import { Spend } from '../../lib/spends';
 import { CA_PARTS, CaPart, caReport } from '../../lib/caExport';
 import { Range, presetRange } from '../../lib/reports/model';
-import { downloadCsv } from '../../lib/reports/export';
+import { downloadReportXlsx } from '../../lib/reports/export';
+import { docContext } from '../../lib/docs/context';
 import { todayIST } from '../../lib/ist';
 import { DialogFoot, Picks } from './MoneyUi';
 
@@ -22,15 +23,17 @@ const CaExportModal: React.FC<{ data: MoneyData; spends: Spend[] | null; onClose
   const bad = period === 'custom' && !(custom.from && custom.to && custom.from <= custom.to);
   const toggle = (p: CaPart) => setParts(list => (list.includes(p) ? list.filter(x => x !== p) : CA_PARTS.map(x => x[0]).filter(x => x === p || list.includes(x))));
   const download = () => {
-    downloadCsv(caReport(data, spends ?? [], range, today, parts), range);
-    toast.success('Saved in Downloads. It opens in Excel.');
+    // Sweets GST counts only for a GST-registered shop, as on the counter bill.
+    const ctx = docContext();
+    downloadReportXlsx(caReport(data, spends ?? [], range, today, parts, ctx.gstNumber ? ctx.settings.sweets_gst_rate : 0), range);
+    toast.success('Saved in Downloads: one Excel file, a sheet for each part.');
     onClose();
   };
   return (
     <Modal title="Download for your CA" onClose={onClose} width={440}
       footer={<DialogFoot onCancel={onClose} onOk={download} ok="Download Excel" disabled={!parts.length || bad} />}>
       <div className="mx-dlg">
-        <p className="mx-dlg-sub">One file for Excel with a part for each section. Cancelled bookings and bills are left out.</p>
+        <p className="mx-dlg-sub">One Excel file with a sheet for each part. Cancelled bookings and bills are left out.</p>
         <Picks label="Period" options={PERIODS} value={period} onPick={setPeriod} />
         {period === 'custom' && (
           <div className="mx-grid2">

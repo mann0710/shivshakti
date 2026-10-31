@@ -37,6 +37,18 @@ describe('bookings board', () => {
     expect(of('rushi').next?.label).toBe('Make quotation');
     expect(of('rushi').valueText).toBe('No quote yet');
   });
+  it('only picks or accepts a sent quote, never an unsent draft', () => {
+    const ctx = (qs: any[]) => ({ quotes: qs, invoices: [], today, value: 0 });
+    const neha = bk('neha', 'Neha Shah', '2026-12-10', 'inquiry');
+    const draft = { id: 'd1', booking_id: 'neha', status: 'draft', created_at: '2026-10-29', total_amount: 1000, items: quotes[0].items };
+    expect(bookingView(neha, ctx([draft])).next?.label).toBe('Send quote');
+    const optA = { ...draft, id: 'd2', option_group: 'g', option_label: 'A', items: [] };
+    expect(bookingView(neha, ctx([optA, { ...optA, id: 'd3', option_label: 'B' }])).next?.label).toBe('Send quote');
+    const ravi = bk('ravi', 'Ravi Patel', '2026-12-12', 'followup');
+    const sent = { id: 's1', booking_id: 'ravi', status: 'sent', created_at: '2026-10-01', total_amount: 5000, items: [] };
+    const v = bookingView(ravi, ctx([{ ...sent, id: 's2', status: 'draft', created_at: '2026-10-20' }, sent]));
+    expect([v.next?.label, v.quote?.id]).toEqual(['Mark accepted', 's1']);
+  });
   it('puts past events that are still open under Needs attention', () => {
     expect([of('dirgha').tab, of('dirgha').next?.label]).toEqual(['attention', 'Close as lost']);
     expect([of('jigar').tab, of('jigar').next?.label]).toEqual(['attention', 'Mark completed']);

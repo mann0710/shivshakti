@@ -7,8 +7,15 @@ import MoneyGroup from '../components/settings/MoneyGroup';
 import DocSettingsCard from '../components/DocSettingsCard';
 import CateringGroup from '../components/settings/CateringGroup';
 import SweetsGroup, { useUndatedOccasions } from '../components/settings/SweetsGroup';
-import { DataGroup, RemindersGroup, TeamGroup, useDbUpdates } from '../components/settings/OtherGroups';
+import RemindersGroup from '../components/settings/RemindersGroup';
+import TeamGroup from '../components/settings/TeamGroup';
+import DataGroup, { useDbUpdates } from '../components/settings/DataGroup';
+import { useStaffLogins } from '../hooks/useStaff';
+import { useHasTeamBin } from '../hooks/useSchemaStatus';
+import { backupStale } from '../lib/backup';
+import ImportScreen from '../components/data/ImportScreen';
 import '../styles/settings.css';
+import '../styles/settings-data.css';
 
 // Settings in eight groups; each change saves by itself with Undo.
 const DataCenter: React.FC = () => {
@@ -17,6 +24,8 @@ const DataCenter: React.FC = () => {
   const { data: team = [] } = useTeamMembers();
   const undated = useUndatedOccasions();
   const db = useDbUpdates();
+  const { data: logins = [] } = useStaffLogins(useHasTeamBin());
+  const [importing, setImporting] = useState(false);
   const [group, setGroup] = useState<GroupId>('business');
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -24,8 +33,8 @@ const DataCenter: React.FC = () => {
 
   const notes = groupNotes({
     gstNumber: api.dc?.gst_number || '', gstRate: Number(api.dc?.gst_rate ?? 18), upiId: api.docs.upi_id, address: api.docs.address,
-    fssai: !!api.dc?.fssai_certificate_url, docsReady: api.docsReady, eventTypes: eventTypes.length, teamMembers: team.length,
-    undated, updates: db.pending.length,
+    fssai: !!api.dc?.fssai_certificate_url, docsReady: api.docsReady, eventTypes: eventTypes.length, teamMembers: team.length, logins: logins.length,
+    undated, updates: db.pending.length, reminders: Object.values(api.docs.reminders).filter(r => r.on).length, backupStale: backupStale(api.docs.last_backup_at),
   });
   const hits = useMemo(() => searchSettings(query), [query]);
   const searching = query.trim().length > 0;
@@ -41,12 +50,14 @@ const DataCenter: React.FC = () => {
       case 'documents': return <DocSettingsCard api={api} />;
       case 'catering': return <CateringGroup />;
       case 'sweets': return <SweetsGroup />;
-      case 'reminders': return <RemindersGroup />;
+      case 'reminders': return <RemindersGroup api={api} />;
       case 'team': return <TeamGroup />;
-      case 'data': return <DataGroup />;
+      case 'data': return <DataGroup api={api} onImport={() => setImporting(true)} />;
       default: return <div className="st-panel st-empty">No setting matches "{query}". Try "UPI" or "GST".</div>;
     }
   };
+
+  if (importing) return <ImportScreen kind="dishes" crumb="Settings" onClose={() => setImporting(false)} />;
 
   return (
     <div className="st-page" data-view={phoneOpen ? 'group' : 'list'} ref={top}>

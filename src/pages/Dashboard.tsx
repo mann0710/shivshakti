@@ -13,6 +13,7 @@ import { billNumber } from '../lib/receipt';
 import { awaitsAcceptance, comingIn, debtsOf, receiptsIn, sumOf, MODE_NAME } from '../lib/moneyView';
 import { Stage } from '../lib/eventStage';
 import { eventNote, nextDays, sweetsWeek, niceDay } from '../lib/homeNeeds';
+import { posLink } from '../lib/posIntent';
 import { useMoneyData } from '../components/money/useMoneyData';
 import { Tile, LoadError, Skeleton, useNow, istClock } from '../components/money/MoneyUi';
 import { NextEvents, SweetsWeek, NewSheet } from '../components/money/HomeCards';
@@ -70,7 +71,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
           </span>
         </div>
         <div className="mx-head-r hm-actions-desk">
-          <button type="button" className="ui-btn" onClick={() => onNavigate('seasonal_billing')}>Sweets bill</button>
+          <button type="button" className="ui-btn" onClick={() => onNavigate('seasonal_billing', posLink.bill())}>Sweets bill</button>
           <button type="button" className="ui-btn" onClick={() => onNavigate('quotations', { action: 'new' })}>New quotation</button>
           <button type="button" className="ui-btn primary" onClick={() => onNavigate('bookings', { action: 'new' })}>+ New booking</button>
         </div>
@@ -87,7 +88,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
           <NeedsYou items={needs} data={data} quotes={quotes} today={today} onNavigate={onNavigate} onLater={() => setLater({ tidy: today })} />
           <div className="mx-tiles hm-tiles-desk">
             <Tile label="To collect" value={inr(owed)} tone="red" note={`Catering ${inr(by('invoice'))} · sweets ${inr(by('sweets'))}`} onClick={() => onNavigate('finance')} />
-            <Tile label={`Received in ${formatDateIST(today, 'MMMM')}`} value={inr(home.month)} onClick={() => onNavigate('finance')}
+            <Tile label={`Received in ${formatDateIST(today, 'MMMM')}`} value={inr(home.month)} onClick={() => onNavigate('finance', { action: 'open', id: 'month' })}
               note={home.last ? `Last: ${inr(home.last.amount)} ${MODE_NAME[home.last.mode].toLowerCase()} on ${niceDay(home.last.day)}` : 'Nothing received yet'} />
             <Tile label="Next 30 days" value={`${home.next.count} event${home.next.count === 1 ? '' : 's'}`} onClick={() => onNavigate('bookings')}
               note={home.next.count ? `${home.next.guests} guests · ${home.next.daysText}` : 'No events booked'} />

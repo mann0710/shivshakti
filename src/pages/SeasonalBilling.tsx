@@ -12,21 +12,28 @@ import MigrationBanner from '../components/sessional/MigrationBanner';
 import { isOpenPreorder } from '../lib/preorders';
 import { unpaidCount } from '../lib/dues';
 import type { Page } from '../components/navItems';
-import { useNavIntent } from '../hooks/useNavIntent';
-
-type Tab = 'pos' | 'orders' | 'preorders' | 'close' | 'reports';
+import { useNavIntent, canGoBack } from '../hooks/useNavIntent';
+import { posStart, PosTabId as Tab } from '../lib/posIntent';
 
 const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
-// Phones: leave the POS for Home (the app handles the hash change like a Back press).
-const leavePos = (onNavigate?: (page: Page) => void) => (onNavigate ? onNavigate('dashboard') : window.location.assign('#dashboard'));
+// Back to the screen that opened the POS, else Sweets today.
+const leavePos = (onNavigate?: (page: Page) => void) => {
+  if (canGoBack()) window.history.back();
+  else if (onNavigate) onNavigate('seasonal_dashboard');
+  else window.location.assign('#seasonal_dashboard');
+};
 
 // Sweet-shop billing: counter, bills, pre-bookings, day close and reports.
 const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNavigate }) => {
-  // Links from Sweets today can open Reports or Pre-bookings directly.
+  // Links from other screens pick the tab, mode, customer or report.
   const intent = useNavIntent('seasonal_billing');
-  const [tab, setTab] = useState<Tab>(() => (intent?.id === 'reports' ? 'reports' : intent?.id === 'preorders' ? 'preorders' : 'pos'));
+  const [start] = useState(() => posStart(intent));
+  const [tab, setTab] = useState<Tab>(start.tab);
+  // Bills and Pre-bookings stay mounted once opened, so filters and search survive an edit.
+  const [seen, setSeen] = useState<Tab[]>([start.tab]);
+  const open = (t: Tab) => { setTab(t); setSeen(s => (s.includes(t) ? s : [...s, t])); };
   const [year, setYear] = useState(currentYear);
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const { data: occasions = [] } = useSeasonalOccasions(false);
@@ -37,8 +44,8 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
   const unpaid = unpaidCount(orders, preorders);
   const openPre = preorders.filter(isOpenPreorder).length;
 
-  const startEdit = (target: EditTarget) => { setEdit(target); setTab('pos'); };
-  const endEdit = (kind: 'bill' | 'preorder') => { setEdit(null); setTab(kind === 'bill' ? 'orders' : 'preorders'); };
+  const startEdit = (target: EditTarget) => { setEdit(target); open('pos'); };
+  const endEdit = (kind: 'bill' | 'preorder') => { setEdit(null); open(kind === 'bill' ? 'orders' : 'preorders'); };
 
   // [key, label, short label for phones, badge]
   const tabs: [Tab, string, string, number][] = [
@@ -70,7 +77,7 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
       <div className="ui-tabs" role="tablist">
         {tabs.map(([key, label, short, count]) => (
           <button key={key} role="tab" aria-selected={tab === key} aria-label={count ? `${label}, ${count}` : label}
-            className={`ui-tab${tab === key ? ' on' : ''}`} onClick={() => setTab(key)}>
+            className={`ui-tab${tab === key ? ' on' : ''}`} onClick={() => open(key)}>
             <span className="pos-tab-long">{label}</span><span className="pos-tab-short">{short}</span>
             {count > 0 && <span className="count">{count}</span>}
           </button>
@@ -81,16 +88,22 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
         <MigrationBanner />
         {tab === 'pos' && (
           <PosTab key={edit ? (edit.kind === 'bill' ? edit.order.id : edit.preorder.id) : 'new'}
-            occasions={occasions} edit={edit} gst={dc?.gst_number} onEditDone={endEdit} />
+            occasions={occasions} edit={edit} gst={dc?.gst_number} onEditDone={endEdit} start={start.tab === 'pos' ? start : undefined} />
         )}
-        {tab === 'orders' && (
-          <OrdersTab orders={orders} preorders={preorders} occasions={occasions} gst={dc?.gst_number} onEdit={order => startEdit({ kind: 'bill', order })} />
+        {seen.includes('orders') && (
+          <div hidden={tab !== 'orders'}>
+            <OrdersTab orders={orders} preorders={preorders} occasions={occasions} gst={dc?.gst_number} onEdit={order => startEdit({ kind: 'bill', order })}
+              search={start.tab === 'orders' ? start.who?.phone || start.who?.name : undefined} />
+          </div>
         )}
-        {tab === 'preorders' && (
-          <PreordersTab preorders={preorders} occasions={occasions} gst={dc?.gst_number} onEdit={preorder => startEdit({ kind: 'preorder', preorder })} />
+        {seen.includes('preorders') && (
+          <div hidden={tab !== 'preorders'}>
+            <PreordersTab preorders={preorders} occasions={occasions} gst={dc?.gst_number} onEdit={preorder => startEdit({ kind: 'preorder', preorder })}
+              search={start.tab === 'preorders' ? start.who?.phone || start.who?.name : undefined} openId={start.openId} />
+          </div>
         )}
         {tab === 'close' && <DayCloseTab />}
-        {tab === 'reports' && <ReportsTab occasions={occasions} />}
+        {tab === 'reports' && <ReportsTab occasions={occasions} report={start.report} />}
       </div>
     </div>
   );

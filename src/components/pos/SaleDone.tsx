@@ -7,11 +7,12 @@ import { SUCCESS, NAVY } from '../ui/styles';
 interface Props {
   receipt: SweetReceipt;
   change: number;
+  next: string;
   onNext: () => void;
 }
 
 // Shown after a bill is saved: change to give, print, share and start the next customer.
-const SaleDone: React.FC<Props> = ({ receipt, change, onNext }) => {
+const SaleDone: React.FC<Props> = ({ receipt, change, next, onNext }) => {
   const p = receipt.pay;
   const paid = [p?.cash ? `Cash ${inr(p.cash)}` : '', p?.upi ? `UPI ${inr(p.upi)}` : ''].filter(Boolean).join(' · ');
   return (
@@ -24,7 +25,7 @@ const SaleDone: React.FC<Props> = ({ receipt, change, onNext }) => {
         <button type="button" className="ui-btn" onClick={() => printReceipt(receipt)}>Print</button>
         {receipt.phone && <button type="button" className="ui-btn" onClick={() => shareReceipt(receipt)}>WhatsApp</button>}
       </div>
-      <button type="button" className="pos-charge" style={{ marginTop: 8 }} onClick={onNext} autoFocus>New bill</button>
+      <button type="button" className="pos-charge" style={{ marginTop: 8 }} onClick={onNext} autoFocus>{next}</button>
     </div>
   );
 };

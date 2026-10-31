@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Navigate } from '../hooks/useNavIntent';
+import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import { todayIST, formatDateIST } from '../lib/ist';
 import { inr } from '../lib/money';
 import { Range } from '../lib/reports/model';
-import { Period, periodRange, seasonRange, receiptsIn, receivedSummary, debtsOf, comingIn, monthBars, fyStart, sumOf } from '../lib/moneyView';
+import { PERIODS, Period, periodRange, seasonRange, receiptsIn, receivedSummary, debtsOf, comingIn, monthBars, fyStart, sumOf } from '../lib/moneyView';
 import { spendsIn } from '../lib/spends';
 import { useMoneyData, useSpends } from '../components/money/useMoneyData';
 import { useCollect } from '../components/money/useCollect';
@@ -30,7 +30,9 @@ const Finance: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate }) => {
   const now = useNow();
   const today = todayIST();
   const [tab, setTab] = useState<Tab>('overview');
-  const [period, setPeriod] = useState<Period>('year');
+  // Links can open a preset period, e.g. Home's "Received in <month>" opens This month.
+  const intent = useNavIntent('finance');
+  const [period, setPeriod] = useState<Period>(() => PERIODS.find(([p]) => intent?.action === 'open' && p === intent.id)?.[0] ?? 'year');
   const [custom, setCustom] = useState<Range>({ from: `${today.slice(0, 7)}-01`, to: today });
   const [dlg, setDlg] = useState<'spend' | 'paste' | 'ca' | null>(null);
   const collect = useCollect(data);
@@ -69,7 +71,7 @@ const Finance: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate }) => {
         {tab !== 'reports' && (
           <div className="mx-head-r">
             <PeriodPicker value={period} onChange={setPeriod} custom={custom} onCustom={setCustom} seasonName={season?.name} />
-            <button type="button" className="ui-btn mn-desk-only" onClick={() => setDlg('ca')} disabled={loading}>Download for CA</button>
+            <button type="button" className="ui-btn" onClick={() => setDlg('ca')} disabled={loading}>Download for CA</button>
           </div>
         )}
       </div>

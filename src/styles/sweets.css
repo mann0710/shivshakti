@@ -1,6 +1,6 @@
 /* Sweets back office: Sweets today, Sweet items and Occasions. */
 .sw-page { --sw-ok: #2F5A0E; --sw-ok-fill: #4F8A1E; --sw-ok-line: #8DC63F; --sw-warm: #FFF3E0; --sw-warm-line: #F3D3A6; --sw-soft: #F7F5F0;
-  max-width: 1180px; margin: 0 auto; padding: 26px 32px 40px; display: flex; flex-direction: column; gap: 16px; color: var(--ink); }
+  max-width: var(--page-max); margin: 0 auto; padding: 26px 32px 40px; display: flex; flex-direction: column; gap: 16px; color: var(--ink); }
 .sw-page .ui-btn { min-height: 44px; }
 .sw-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .sw-head.end { align-items: flex-end; }
@@ -60,7 +60,7 @@
 .sw-amt > span { font-size: 12px; color: var(--muted); }
 .sw-amt > span.bad { color: var(--danger); }
 .sw-due-acts { display: flex; gap: 8px; padding-left: 86px; }
-.sw-amt > .sw-chip-bad { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 9px; background: #FCEBEB; color: var(--danger); }
+.sw-amt > .sw-chip-bad { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 9px; background: #FCEBEB; color: var(--danger); }
 .sw-make-row { display: grid; gap: 10px; align-items: baseline; padding: 9px 18px; border-top: 1px solid #F3F2EE; font-size: 14px; }
 .sw-make-row.head { background: #FAFAF7; font-size: 12px; font-weight: 600; color: var(--muted); padding: 8px 18px; }
 .sw-make-row > :not(:first-child) { text-align: right; }
@@ -116,7 +116,7 @@
 .sw-occ-top h2 { font-size: 20px; font-weight: 700; }
 .sw-state { font-size: 13px; font-weight: 600; color: var(--muted); }
 .sw-state.on { color: var(--sw-ok); }
-.sw-occ .sw-stat span { font-size: 11.5px; font-weight: 600; }
+.sw-occ .sw-stat span { font-size: 12px; font-weight: 600; }
 .sw-occ .sw-stat b { font-size: 18px; }
 .sw-occ-names { font-size: 13px; color: #4A4A45; }
 .sw-occ-acts { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -165,10 +165,12 @@
   .sw-desk { display: none !important; }
   .sw-page.has-cta { padding-bottom: 96px; }
   .sw-cta { display: flex; position: fixed; left: 0; right: 0; bottom: 58px; z-index: 150; padding: 10px 16px 12px; background: #fff; border-top: 1px solid var(--line); }
+  .sw-cta { gap: 10px; }
   .sw-cta .ui-btn { flex: 1; min-height: 52px; font-size: 16px; font-weight: 700; border-radius: 12px; }
+  .sw-cta .ui-btn:not(.primary) { flex: 0 0 auto; padding: 0 16px; font-size: 15px; }
   .sw-tiles { gap: 8px; }
   .sw-tile { padding: 10px 12px; }
-  .sw-tile .k { font-size: 11px; letter-spacing: 0.3px; }
+  .sw-tile .k { font-size: 12px; letter-spacing: 0.3px; }
   .sw-tile .v { font-size: 18px; }
   .sw-tile .n { display: none; }
   .sw-card h2 { font-size: 12px; font-weight: 600; letter-spacing: 0.4px; color: var(--muted); text-transform: uppercase; }

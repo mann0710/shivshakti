@@ -5,6 +5,7 @@ import { Spend, spendsIn, SCOPES, SPEND_MODES } from './spends';
 import { billNumber } from './receipt';
 import { handedOverOn, istDay } from './preorders';
 import { isCancelled } from './dues';
+import { gstInside } from './gst';
 
 // "Download for your CA": one file with the sales register, payments, dues and spends of a period.
 
@@ -13,16 +14,17 @@ export const CA_PARTS: [CaPart, string][] = [
   ['sales', 'Sales register (invoices and sweets bills)'], ['payments', 'Payments received'], ['dues', 'Still to collect'], ['spends', 'Spends'],
 ];
 
-function salesTable(d: MoneyData, r: Range): Table {
+// Sweets prices include GST at `sweetsGst`% when the shop charges it.
+function salesTable(d: MoneyData, r: Range, sweetsGst: number): Table {
   const inv = d.invoices.filter(i => i.booking?.status !== 'cancelled' && inRange(i.issue_date, r)).map(i => ({
     day: i.issue_date, no: i.invoice_number, name: i.booking?.customer?.name ?? '', phone: i.booking?.customer?.phone ?? '', gstin: i.booking?.customer?.gstin ?? '',
     type: 'Catering', taxable: i.total_amount - i.gst_amount, gst: i.gst_amount, total: i.total_amount,
   }));
   const bills = d.orders.filter(o => !isCancelled(o) && inRange(istDay(o.created_at), r)).map(o => ({
-    day: istDay(o.created_at), no: `Bill #${billNumber(o.bill_no, o.id)}`, name: o.customer_name, phone: o.phone, gstin: '', type: 'Sweets', taxable: o.total_amount, gst: 0, total: o.total_amount,
+    day: istDay(o.created_at), no: `Bill #${billNumber(o.bill_no, o.id)}`, name: o.customer_name, phone: o.phone, gstin: '', type: 'Sweets', ...gstInside(o.total_amount, sweetsGst), total: o.total_amount,
   }));
   const pre = d.preorders.filter(p => p.status === 'delivered' && inRange(handedOverOn(p), r)).map(p => ({
-    day: handedOverOn(p)!, no: 'Pre-booking', name: p.customer_name, phone: p.phone, gstin: '', type: 'Sweets', taxable: p.total_amount, gst: 0, total: p.total_amount,
+    day: handedOverOn(p)!, no: 'Pre-booking', name: p.customer_name, phone: p.phone, gstin: '', type: 'Sweets', ...gstInside(p.total_amount, sweetsGst), total: p.total_amount,
   }));
   const rows = [...inv, ...bills, ...pre].sort((a, b) => a.day.localeCompare(b.day)).map(x => ({ ...x, day: showDay(x.day) }));
   return {
@@ -65,9 +67,9 @@ function spendsTable(spends: Spend[], d: MoneyData, r: Range): Table {
   };
 }
 
-export function caReport(d: MoneyData, spends: Spend[], r: Range, today: string, parts: CaPart[]): Report {
+export function caReport(d: MoneyData, spends: Spend[], r: Range, today: string, parts: CaPart[], sweetsGst = 0): Report {
   const tables: Record<CaPart, () => Table> = {
-    sales: () => salesTable(d, r), payments: () => paymentsTable(d, r), dues: () => duesTable(d, today), spends: () => spendsTable(spends, d, r),
+    sales: () => salesTable(d, r, sweetsGst), payments: () => paymentsTable(d, r), dues: () => duesTable(d, today), spends: () => spendsTable(spends, d, r),
   };
   const built = parts.map(p => tables[p]());
   const total = (t?: Table) => Number(t?.total?.total ?? t?.total?.amount ?? 0);

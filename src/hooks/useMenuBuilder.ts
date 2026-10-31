@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
+import { SaveItem, saveGroups } from '../lib/menuSheet';
 
 export interface MenuCategory {
   id: string;
@@ -24,6 +25,8 @@ export interface MenuItem {
   subcategory?: MenuSubcategory & { category?: MenuCategory };
   name: string;
   default_price?: number | null;
+  // Food styles the dish suits (see lib/foodStyles).
+  food_styles?: string[] | null;
   is_active: boolean;
   created_at: string;
 }
@@ -181,6 +184,29 @@ export const useUpdateMenuItem = () => {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['menu_items_full'] }),
+  });
+};
+
+// Sheet save: identical patches go together, a few requests at a time; a failure carries the ids already saved.
+export const useBulkUpdateMenuItems = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ items, onProgress }: { items: SaveItem[]; onProgress?: (done: number) => void }) => {
+      const groups = saveGroups(items);
+      const saved: string[] = [];
+      for (let i = 0; i < groups.length; i += 6) {
+        const results = await Promise.all(groups.slice(i, i + 6).map(async g => {
+          const { error } = await supabase.from('menu_items').update(g.patch).in('id', g.ids);
+          if (!error) saved.push(...g.ids);
+          return error;
+        }));
+        onProgress?.(saved.length);
+        const failed = results.find(Boolean);
+        if (failed) throw Object.assign(new Error(failed.message || 'Could not save'), { saved });
+      }
+      return saved;
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['menu_items_full'] }),
   });
 };
 

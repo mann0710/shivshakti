@@ -1,5 +1,5 @@
 /* Money, Invoices and the shared kit for Home: tiles, cards, rows, chips and dialog fields. */
-.mx-page { max-width: 1180px; margin: 0 auto; padding: 26px 32px 40px; display: flex; flex-direction: column; gap: 16px; color: var(--ink); }
+.mx-page { max-width: var(--page-max); margin: 0 auto; padding: 26px 32px 40px; display: flex; flex-direction: column; gap: 16px; color: var(--ink); }
 .mx-page .ui-btn, .mx-dlg .ui-btn { min-height: 44px; font-size: 14px; }
 .mx-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .mx-head h1 { font-size: 24px; font-weight: 700; }
@@ -36,9 +36,9 @@ button.mx-tile:hover { border-color: #E8A867; }
 .mx-purple { color: #4A41A8; }
 
 .mx-date { display: flex; flex-direction: column; align-items: center; background: #F7F5F0; border-radius: 9px; padding: 4px 0; width: 48px; }
-.mx-date small { font-size: 10.5px; font-weight: 600; color: #8A4B00; }
+.mx-date small { font-size: 12px; font-weight: 600; color: #8A4B00; }
 .mx-date b { font-size: 17px; font-weight: 700; line-height: 1.1; }
-.mx-chip { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 10px; white-space: nowrap; display: inline-block; }
+.mx-chip { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 10px; white-space: nowrap; display: inline-block; }
 
 /* Period picker: a segmented control on a computer, chips on a phone */
 .mx-seg { display: flex; background: #ECEBE5; border-radius: 10px; padding: 3px; flex-wrap: wrap; }
@@ -97,10 +97,10 @@ button.mx-tile:hover { border-color: #E8A867; }
 .mn-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
 .mn-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: end; height: 170px; border-bottom: 1px solid var(--line); }
 .mn-bars > div { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 0; height: 100%; }
-.mn-bars small { font-size: 11px; color: #4A4A45; margin-bottom: 4px; white-space: nowrap; }
+.mn-bars small { font-size: 12px; color: #4A4A45; margin-bottom: 4px; white-space: nowrap; }
 .mn-bars i { width: 70%; display: block; }
 .mn-bars i.top { border-radius: 3px 3px 0 0; }
-.mn-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; font-size: 11.5px; color: var(--muted); text-align: center; }
+.mn-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; font-size: 12px; color: var(--muted); text-align: center; }
 .mn-profit { border-style: dashed; border-color: #D9C2A5; }
 .mn-profit p { font-size: 13.5px; color: #4A4A45; line-height: 1.5; }
 .mn-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -126,7 +126,7 @@ button.mx-tile:hover { border-color: #E8A867; }
 .iv-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: #fff; border-bottom: 1px solid var(--line); padding: 12px 28px; }
 .iv-back { text-decoration: none; min-width: 44px; }
 .iv-top .sep { width: 1px; height: 22px; background: var(--line); }
-.iv-body { max-width: 1320px; margin: 0 auto; padding: 20px 28px 40px; display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.iv-body { max-width: var(--page-max); margin: 0 auto; padding: 20px 28px 40px; display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
 .iv-main { flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .iv-side { flex: 1 1 340px; max-width: 380px; min-width: 0; display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; }
 .iv-sec { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
@@ -174,7 +174,7 @@ button.iv-plan:hover { background: #FFFCF6; }
   .mx-head h1 { font-size: 22px; }
   .mx-tiles { gap: 8px; }
   .mx-tile { padding: 10px 12px; }
-  .mx-tile-k { font-size: 11px; }
+  .mx-tile-k { font-size: 12px; }
   .mx-tile-v { font-size: 18px; }
   .mx-tile-n { display: none; }
   .mx-card-head { padding: 10px 16px 8px; }

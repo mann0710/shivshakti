@@ -5,6 +5,10 @@ const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 export const cleanGstin = (v: string) => v.replace(/\s/g, '').toUpperCase();
 export const isValidGstin = (v: string) => GSTIN_RE.test(cleanGstin(v));
 
+// FSSAI licence numbers are 14 digits.
+export const cleanFssai = (v: string) => v.replace(/\s/g, '');
+export const fssaiProblem = (v: string) => (cleanFssai(v) && !/^\d{14}$/.test(cleanFssai(v)) ? 'An FSSAI licence number has 14 digits' : null);
+
 // First two digits of a GSTIN are the state code.
 const stateOf = (gstin?: string | null) => (gstin && isValidGstin(gstin) ? cleanGstin(gstin).slice(0, 2) : '');
 
@@ -24,6 +28,13 @@ export const placeOfSupply = (shopGstin?: string | null, buyerGstin?: string | n
 };
 
 export type TaxLine = { label: string; amount: number };
+
+// GST already inside a price (sweets): total = taxable value + GST at `rate`%.
+export const gstInside = (total: number, rate: number) => {
+  if (!(rate > 0) || !(total > 0)) return { taxable: total, gst: 0 };
+  const taxable = Math.round(((total * 100) / (100 + rate)) * 100) / 100;
+  return { taxable, gst: Math.round((total - taxable) * 100) / 100 };
+};
 
 // Same state (or unknown buyer state) → CGST + SGST halves; different state → IGST.
 export const taxSplit = (gstAmount: number, rate: number, shopGstin?: string | null, buyerGstin?: string | null): TaxLine[] => {

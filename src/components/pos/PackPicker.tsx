@@ -34,7 +34,7 @@ const PackPicker: React.FC<Props> = ({ item, packs, loose, onAdd, onClose }) => 
   return (
     <Modal title={loose ? `${item.name} · ${pieces ? 'other count' : 'loose'}` : item.name} onClose={onClose} width={420}
       footer={<button type="button" className="ui-btn" onClick={onClose}>Close</button>}>
-      <div style={{ fontSize: 12, color: '#888880', marginBottom: 12 }}>{rateLabel(item.rate, item.unit)}</div>
+      <div style={{ fontSize: 12, color: '#6B6B66', marginBottom: 12 }}>{rateLabel(item.rate, item.unit)}</div>
 
       {!loose && (
         <>

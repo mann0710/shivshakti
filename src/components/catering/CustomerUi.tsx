@@ -5,7 +5,7 @@ export const ORANGE = '#E8750A';
 export const card: React.CSSProperties = { background: '#FFFFFF', border: '0.5px solid #E5E5E0', borderRadius: 12, padding: 16 };
 export const btnPrimary: React.CSSProperties = { background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 14px', minHeight: 36, borderRadius: 8, fontSize: 13, cursor: 'pointer', fontWeight: 500 };
 export const btnGhost: React.CSSProperties = { background: 'transparent', border: '0.5px solid #D0D0CC', padding: '6px 12px', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#666660' };
-export const label: React.CSSProperties = { fontSize: 11, color: '#888880', display: 'block', marginBottom: 4 };
+export const label: React.CSSProperties = { fontSize: 12, color: '#6B6B66', display: 'block', marginBottom: 4 };
 export const input: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 7, border: '0.5px solid #D0D0CC', fontSize: 13, background: '#FFFFFF', color: '#1A1A18', boxSizing: 'border-box' };
 
 // Phones stack the detail panel under the list, so bring it into view after a tap.

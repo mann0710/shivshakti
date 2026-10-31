@@ -3,7 +3,7 @@ import React from 'react';
 // Shared inline styles for the sweets screens; colours come from the CSS tokens in index.css.
 export const NAVY = 'var(--primary)';
 export const NAVY_SOFT = '#FFF1E3';
-export const MUTED = '#888880';
+export const MUTED = '#6B6B66';
 export const DANGER = 'var(--danger)';
 export const SUCCESS = '#3B6D11';
 

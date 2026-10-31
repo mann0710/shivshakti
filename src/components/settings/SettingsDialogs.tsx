@@ -11,14 +11,15 @@ import {
   useCreateTeamMember, useUpdateTeamMember, useDeleteTeamMember,
 } from '../../hooks/useDataCenter';
 import { fileNameOf, uploadedOn, useFssai } from './useFssai';
+import { cleanFssai, fssaiProblem } from '../../lib/gst';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const Input: React.FC<{ label: string; error?: string; full?: boolean } & React.InputHTMLAttributes<HTMLInputElement>> = ({ label, error, full, ...rest }) => (
+export const Input: React.FC<{ label: string; error?: string; full?: boolean } & React.InputHTMLAttributes<HTMLInputElement>> = ({ label, error, full, ...rest }) => (
   <label className={`st-field${full ? ' full' : ''}`}><span>{label}</span><input className={error ? 'bad' : ''} {...rest} />{error && <small className="bad">{error}</small>}</label>
 );
 
-const Foot: React.FC<{ onRemove?: () => void; removeLabel?: string; onClose: () => void; primary: string; busy?: boolean; form?: string }> = ({ onRemove, removeLabel = 'Remove', onClose, primary, busy, form }) => (
+export const Foot: React.FC<{ onRemove?: () => void; removeLabel?: string; onClose: () => void; primary: string; busy?: boolean; form?: string }> = ({ onRemove, removeLabel = 'Remove', onClose, primary, busy, form }) => (
   <>
     {onRemove && <button type="button" className="st-danger-link" onClick={onRemove} disabled={busy}>{removeLabel}</button>}
     <button type="button" className="ui-btn" onClick={onClose}>Cancel</button>
@@ -118,10 +119,18 @@ export const TeamMemberDialog: React.FC<{ member?: TeamMember; onClose: () => vo
   );
 };
 
-// Settings → Business → FSSAI certificate: view, download, replace or remove the uploaded file.
-export const FssaiDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+// Settings → Business → FSSAI certificate: licence number, then view, download, replace or remove the uploaded file.
+export const FssaiDialog: React.FC<{ number: string; onSaveNumber?: (v: string) => Promise<void>; onClose: () => void }> = ({ number, onSaveNumber, onClose }) => {
   const { url, busy, upload, remove, download } = useFssai();
   const { confirm, dialog } = useConfirm();
+  const [lic, setLic] = useState(number);
+  const [licError, setLicError] = useState<string | null>(null);
+  const saveNumber = async () => {
+    const problem = fssaiProblem(lic);
+    if (problem) { setLicError(problem); return; }
+    await onSaveNumber?.(cleanFssai(lic));
+    onClose();
+  };
   const when = uploadedOn(url);
   const pick = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) upload(file); };
 
@@ -133,11 +142,17 @@ export const FssaiDialog: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   return (
     <Modal title="FSSAI certificate" onClose={onClose} width={440} busy={busy}
+      dirty={lic !== number}
       footer={<>
         {url && <button type="button" className="st-danger-link" onClick={drop} disabled={busy}>Remove certificate…</button>}
-        <button type="button" className="ui-btn" onClick={onClose}>Close</button>
+        <button type="button" className="ui-btn" onClick={onClose}>{onSaveNumber ? 'Cancel' : 'Close'}</button>
+        {onSaveNumber && <button type="submit" form="fssai-form" className="ui-btn primary" disabled={busy}>Save number</button>}
       </>}>
       <p className="st-sub">{url ? `${when ? `Uploaded ${format(when, 'd MMM')} · ` : ''}${fileNameOf(url)}` : 'No certificate uploaded yet. PDF, JPG or PNG.'}</p>
+      <form id="fssai-form" className="st-form" style={{ marginBottom: 12 }} onSubmit={e => { e.preventDefault(); saveNumber(); }} noValidate>
+        <Input label="Licence number" full inputMode="numeric" placeholder="14 digits · printed on every bill and invoice" value={lic} error={licError ?? undefined}
+          disabled={!onSaveNumber} onChange={e => { setLic(e.target.value); setLicError(null); }} />
+      </form>
       <div className="st-cards">
         {url && <a className="st-card-btn" href={url} target="_blank" rel="noopener noreferrer"><b>View</b><span>Opens the file</span></a>}
         {url && <button type="button" className="st-card-btn" onClick={download}><b>Download</b><span>Save a copy</span></button>}

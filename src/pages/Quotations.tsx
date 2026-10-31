@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuoteForm } from '../hooks/useQuoteForm';
-import { useAcceptFlow } from '../hooks/useAcceptFlow';
-import { useStoredState } from '../hooks/useStoredState';
+import { useAcceptFlow, useQuotePdfPref } from '../hooks/useAcceptFlow';
 import { useHasQuoteOptions } from '../hooks/useSchemaStatus';
 import { useInvoices } from '../hooks/useInvoices';
 import { Quotation } from '../hooks/useQuotations';
@@ -23,7 +22,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
   const hasOptions = useHasQuoteOptions();
   const { data: invoices = [] } = useInvoices();
   const invoiced = useMemo(() => new Set(invoices.map(i => i.booking_id)), [invoices]);
-  const [pdf, setPdf] = useStoredState('shivshakti.quotePdf', () => ({ prices: true }));
+  const [pdf, setPdf] = useQuotePdfPref();
   const [session, setSession] = useState(0);
   const [newOpen, setNewOpen] = useState(false);
   const [newEvent, setNewEvent] = useState(false);
@@ -44,17 +43,16 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     if (b) { setStartFor(null); openCreate(b); }
   }, [startFor, f.bookings]); // eslint-disable-line
 
-  // Nav intent: 'open' edits a quote (by its id or booking id); 'new' opens the booking's draft or starts one.
+  // Nav intent: 'open' edits a quote (by its id or booking id); 'new' always starts one, for the booking when given.
   useEffect(() => {
     if (!intent || handled.current || !f.quotationsFetched) return;
     const id = intent.id;
     const qs = f.quotations;
     const q = intent.action === 'open' && id ? qs.find(x => x.id === id) ?? qs.find(x => x.booking_id === id) : undefined;
-    const draft = intent.action === 'new' && id ? qs.find(x => x.booking_id === id && x.status === 'draft') : undefined;
     const b = id ? f.bookings.find(x => x.id === id) : undefined;
-    if (!q && !draft && id && !b && !f.bookingsFetched) return;
+    if (!q && id && !b && !f.bookingsFetched) return;
     handled.current = true;
-    if (q || draft) openEdit((q ?? draft)!);
+    if (q) openEdit(q);
     else if (b) openCreate(b);
     else setNewOpen(true);
   }, [intent, f.quotationsFetched, f.bookingsFetched, f.quotations, f.bookings]); // eslint-disable-line

@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { useInvoices } from '../hooks/useInvoices';
 import { useQuotations } from '../hooks/useQuotations';
 import { useBookings } from '../hooks/useBookings';
-import { Navigate, useNavIntent } from '../hooks/useNavIntent';
+import { Navigate, useNavIntent, canGoBack } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Invoice } from '../types';
 import { todayIST } from '../lib/ist';
@@ -30,6 +30,8 @@ const Billing: React.FC<Props> = () => {
   const { settle, busy: settlingAll } = useSettleOutside();
   const { confirm, dialog } = useConfirm();
   const [openId, setOpenId] = useState<string | null>(intent?.action === 'open' ? intent.id ?? null : null);
+  // Opened from another screen: Back returns there instead of the list.
+  const [linked, setLinked] = useState(() => intent?.action === 'open' && canGoBack());
   const [creating, setCreating] = useState<string | null>(intent?.action === 'new' ? intent.id ?? '' : null);
   const [paying, setPaying] = useState<Invoice | null>(null);
   const [settling, setSettling] = useState<Ready | null>(null);
@@ -37,7 +39,8 @@ const Billing: React.FC<Props> = () => {
   const [showAll, setShowAll] = useState(false);
   const today = todayIST();
   const todo = useMemo(() => {
-    const t = invoiceTodo(bookings, quotations, invoices, today);
+    // Cancelled bookings' invoices stay out, as on Home and Money.
+    const t = invoiceTodo(bookings, quotations, invoices.filter(i => i.booking?.status !== 'cancelled'), today);
     return { ...t, ready: t.ready.filter(r => !awaitsAcceptance(r.booking.id, quotations)) };
   }, [bookings, quotations, invoices, today]);
   const owed = todo.owing.reduce((s, o) => s + o.invoice.balance_due, 0);
@@ -60,7 +63,8 @@ const Billing: React.FC<Props> = () => {
     toast.success(`${done} past events marked as settled`, { id });
   };
 
-  if (open) return <InvoiceEditor key={open.id} invoice={open} onBack={() => setOpenId(null)} onDeleted={() => setOpenId(null)} />;
+  const close = () => { setLinked(false); setOpenId(null); };
+  if (open) return <InvoiceEditor key={open.id} invoice={open} onBack={linked ? () => window.history.back() : close} onDeleted={close} backLabel={linked ? 'Back' : undefined} />;
 
   const matches = q.trim() ? invoices.filter(i => invoiceMatches(i, q)) : [];
   const settleBooking = settling ? bookingOf(settling.booking.id) : undefined;

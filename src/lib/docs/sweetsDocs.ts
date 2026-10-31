@@ -17,7 +17,7 @@ export function preorderSlipHtml(r: ReceiptData, ctx: DocContext = docContext())
     ...(b.advance > 0 ? [{ label: `Advance · ${b.advance_mode}`, value: b.advance, sign: '-' as const }] : []),
     ...(b.collected > 0 ? [{ label: `Paid at hand-over · ${b.collected_mode}`, value: b.collected, sign: '-' as const }] : []),
   ];
-  const body = `${header(ctx, 'Pre-booking', `#${r.number}`, `Booked ${r.date}${r.occasion ? ` · ${r.occasion}` : ''}`, 'Shiv Shakti Sweets')}
+  const body = `${header(ctx, 'Pre-booking', `#${r.number}`, `Booked ${r.date}${r.occasion ? ` · ${r.occasion}` : ''}`, ctx.settings.sweets_name)}
 <div class="wrap">
   <div class="intro" style="grid-template-columns:minmax(0,1fr) 250px">
     <div class="fact"><span class="lbl">Customer</span><span class="big">${esc(r.customer_name)}</span>

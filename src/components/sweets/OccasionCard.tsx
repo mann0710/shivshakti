@@ -47,7 +47,7 @@ const OccasionCard: React.FC<Props> = ({ o, sweets, count, today, busy, onEdit, 
         {o.is_active
           ? <button type="button" className="ui-btn grow" onClick={onEnd} disabled={busy}>Season over — hide its sweets</button>
           : <button type="button" className="ui-btn primary grow" onClick={onStart} disabled={busy}>Start season{n ? ` — show its ${n} sweet${n === 1 ? '' : 's'}` : ''}</button>}
-        <button type="button" className="ui-btn" onClick={onSee}>See sweets</button>
+        {n > 0 && <button type="button" className="ui-btn" onClick={onSee}>See sweets</button>}
       </div>
     </article>
   );

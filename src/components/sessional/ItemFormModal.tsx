@@ -66,13 +66,13 @@ const ItemFormModal: React.FC<Props> = ({ item, items, occasions, defaults, lega
           <span style={lbl}>Item name *</span>
           <input style={inp} value={f.name} autoFocus placeholder="e.g. Kaju Katli" onChange={e => set({ name: e.target.value })} />
           {hasWeightToken(f.name) && (
-            <span style={{ fontSize: 11, color: '#B26A00' }}>
+            <span style={{ fontSize: 12, color: '#B26A00' }}>
               No need for the weight in the name; pack sizes are calculated automatically.{' '}
               <button type="button" style={{ ...btnSm, padding: '1px 6px' }} onClick={() => set({ name: baseName(f.name) })}>Use "{baseName(f.name)}"</button>
             </span>
           )}
           {twin && (
-            <span style={{ fontSize: 11, color: '#C0392B' }}>
+            <span style={{ fontSize: 12, color: '#C0392B' }}>
               {item
                 ? <>Another row "{twin.name}" exists. Use <b>Merge duplicates</b> on the items page to combine them.</>
                 : <>"{twin.name}" already exists for this occasion.{' '}
@@ -123,7 +123,7 @@ const ItemFormModal: React.FC<Props> = ({ item, items, occasions, defaults, lega
               <input style={{ ...inp, padding: '5px 8px' }} inputMode="decimal" disabled={legacy}
                 value={f.pack_prices?.[String(p.size)] ?? ''} placeholder={rate ? String(Math.round((rate * p.size) / unitInfo.factor)) : '—'}
                 onChange={e => setManual(p.size, e.target.value)} aria-label={`Price for ${p.label}`} />
-              <span style={{ fontSize: 10, color: p.manual ? '#B26A00' : '#888880' }}>{rate ? (p.manual ? 'Manual' : `Auto ${inr(p.price)}`) : ''}</span>
+              <span style={{ fontSize: 12, color: p.manual ? '#B26A00' : '#888880' }}>{rate ? (p.manual ? 'Manual' : `Auto ${inr(p.price)}`) : ''}</span>
             </label>
           ))}
         </div>

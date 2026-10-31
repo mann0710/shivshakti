@@ -1,10 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { Menu } from '../types';
+import { useHasTeamBin } from './useSchemaStatus';
+
+// Before the tiers migration every package has one price, so quotes and screens ignore price_tiers.
+const onePrice = (rows: Menu[]) => rows.map(m => ({ ...m, price_tiers: [] }));
 
 // Active packages by default; the Packages page can include inactive ones to reactivate them.
-export const useMenus = (includeInactive = false) =>
-  useQuery({
+export const useMenus = (includeInactive = false) => {
+  const tiers = useHasTeamBin();
+  return useQuery({
     queryKey: ['menus', includeInactive],
     queryFn: async () => {
       let q = supabase.from('menus').select('*').order('name', { ascending: true });
@@ -13,7 +18,9 @@ export const useMenus = (includeInactive = false) =>
       if (error) throw error;
       return data as Menu[];
     },
+    select: tiers ? undefined : onePrice,
   });
+};
 
 export const useCreateMenu = () => {
   const qc = useQueryClient();

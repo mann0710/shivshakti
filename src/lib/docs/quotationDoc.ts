@@ -136,10 +136,10 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   ${s.schedule.length ? `<section class="keep">${sectionHead('Payment schedule', grouped ? 'of the option you choose' : open ? 'final once you choose' : '')}${paySteps(grouped ? null : q.total_amount, s.schedule, perOption, isRange(q) ? q.total_max ?? 0 : 0)}</section>` : ''}
   ${s.extras.length ? `<section class="keep">${sectionHead('On request, charged extra')}${chips(s.extras)}</section>` : ''}
   <div class="keep"><section>${sectionHead('Terms')}${terms([...s.terms, ...(validTill ? [`This quotation is valid till ${day(validTill)}.`] : [])])}</section>
-  <div class="close">${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', 'For Shiv Shakti Catering Service')}
+  <div class="close">${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', `For ${ctx.settings.catering_name}`)}
     ${s.quote_qr ? upiBox(ctx, firstStep, firstStep ? `Confirm with ${money(firstStep)}` : 'Pay the booking amount', `Booking ${q.quotation_number}`) : ''}</div></div>
 </div>
-${endLine(ctx, 'Thank you for considering Shiv Shakti Catering Service')}`;
+${endLine(ctx, `Thank you for considering ${ctx.settings.catering_name}`)}`;
 
   return {
     html: page(`Quotation ${number}`, s.accent, body),

@@ -1,5 +1,5 @@
 /* Home: greeting, "Needs you" with two actions per row, tiles, next events and sweets this week. */
-.hm-page { max-width: 1160px; gap: 18px; }
+.hm-page { max-width: var(--page-max); gap: 18px; }
 .hm-sub { font-size: 13px; color: var(--muted); }
 .hm-new { display: none; }
 .needs-card .needs-acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }

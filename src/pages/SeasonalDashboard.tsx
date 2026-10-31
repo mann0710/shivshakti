@@ -9,6 +9,7 @@ import { occasionOn, seasonBanner } from '../lib/occasions';
 import { addDays, bookedOf, dueList, makePlan, seasonSoFar, unpaidOf } from '../lib/sweetsToday';
 import { todayIST } from '../lib/ist';
 import { inr } from '../lib/money';
+import { posLink } from '../lib/posIntent';
 import DueList from '../components/sweets/DueList';
 import MakeList from '../components/sweets/MakeList';
 import SeasonSoFar from '../components/sweets/SeasonSoFar';
@@ -59,8 +60,8 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
   const unpaidNote = !unpaid.first ? 'Nothing to collect'
     : unpaid.count === 1 ? `${unpaid.first.name}${unpaid.first.billNo ? ` · bill #${unpaid.first.billNo}` : ''}`
     : `${plural(unpaid.count, 'bill')} · oldest ${unpaid.first.name}`;
-  const openPos = () => onNavigate('seasonal_billing');
-  const toPos = (id: string) => onNavigate('seasonal_billing', { action: 'open', id });
+  const openPos = () => onNavigate('seasonal_billing', posLink.bill());
+  const newPreorder = () => onNavigate('seasonal_billing', posLink.preorder());
 
   return (
     <div className="sw-page has-cta">
@@ -68,10 +69,10 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
         <div>
           <h1>Sweets today</h1>
           <span className="sw-sub sw-desk">{clock(now, true)} · counter, pre-bookings and what to make</span>
-          <span className="sw-sub sw-phone">{clock(now, false)} · {banner.short}</span>
+          <span className="sw-sub sw-phone">{clock(now, false)} · {banner.short} · <button type="button" className="sw-link" onClick={() => setChanging(true)}>Change</button></span>
         </div>
         <div className="sw-actions sw-desk">
-          <button type="button" className="ui-btn" onClick={() => onNavigate('seasonal_billing', { action: 'new', id: 'preorder' })}>+ Pre-booking</button>
+          <button type="button" className="ui-btn" onClick={newPreorder}>+ Pre-booking</button>
           <button type="button" className="ui-btn primary" onClick={openPos}>Open the counter (POS)</button>
         </div>
       </div>
@@ -91,13 +92,16 @@ const SeasonalDashboard: React.FC<Props> = ({ onNavigate }) => {
       </div>
 
       <div className="sw-two">
-        <DueList list={due} today={today} onAll={() => toPos('preorders')} />
+        <DueList list={due} today={today} onAll={() => onNavigate('seasonal_billing', posLink.preorders())} />
         <MakeList plan={plan} />
       </div>
 
-      <SeasonSoFar season={season} data={soFar} onOccasions={() => onNavigate('seasonal_occasions')} onReports={() => toPos('reports')} />
+      <SeasonSoFar season={season} data={soFar} onOccasions={() => onNavigate('seasonal_occasions')} onReports={id => onNavigate('seasonal_billing', posLink.report(id))} />
 
-      <div className="sw-cta"><button type="button" className="ui-btn primary" onClick={openPos}>Open the counter</button></div>
+      <div className="sw-cta">
+        <button type="button" className="ui-btn" onClick={newPreorder}>+ Pre-booking</button>
+        <button type="button" className="ui-btn primary" onClick={openPos}>Open the counter</button>
+      </div>
       {changing && <ChangeSeasonModal occasions={occasions} sweets={o => items.filter(i => i.occasion_id === o.id).length} onClose={() => setChanging(false)} />}
     </div>
   );

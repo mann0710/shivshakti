@@ -31,8 +31,10 @@ describe('homeNeeds', () => {
     expect(openChoicesOf({ is_multi_day: false, items })).toEqual([{ label: 'Farsan', options: ['South Boll', 'Mix Bhajiya'] }]);
     expect(openChoicesOf({ is_multi_day: false, items: items.map(i => (i.item_name === 'South Boll' ? { ...i, chosen: true } : i)) })).toEqual([]);
   });
-  it('hides the tidy-up row after Later', () => {
-    expect(homeNeeds(base, { ...ctx, hideTidy: true }).some(i => i.kind === 'tidy')).toBe(false);
+  it('hides both tidy-up rows after Later', () => {
+    const both = [...base, need('tidy-quotes', 'grey', 'quotations', '3 quotes out of step', 'Settle them')];
+    expect(homeNeeds(both, ctx).filter(i => i.kind === 'tidy').map(i => i.page)).toEqual(['billing', 'quotations']);
+    expect(homeNeeds(both, { ...ctx, hideTidy: true }).some(i => i.kind === 'tidy')).toBe(false);
   });
 });
 

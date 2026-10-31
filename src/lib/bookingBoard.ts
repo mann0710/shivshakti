@@ -68,9 +68,10 @@ export function bookingView(b: Booking, ctx: { quotes: Quotation[]; invoices: In
   const end = b.end_date && b.end_date > start ? b.end_date : start;
   const past = end < ctx.today;
   const sibs = (q: Quotation) => siblingsOf(q, ctx.quotes).length;
-  const toPick = quotes.find(q => pendingChoice(q, sibs(q)));
-  const quote = toPick ?? pickQuotation(ctx.quotes, b.id);
+  // Only a sent quote can be picked from or accepted; an unsent draft waits to be sent.
+  const toPick = quotes.find(q => q.status === 'sent' && pendingChoice(q, sibs(q)));
   const next = nextStep(b, stage, past, invoice, toPick, toPick ? sibs(toPick) : 1, quotes.some(q => q.status === 'draft'));
+  const quote = toPick ?? (next?.kind === 'accept' ? quotes.find(q => q.status === 'sent') : undefined) ?? pickQuotation(ctx.quotes, b.id);
   const tab: Tab = stage === 'cancelled' ? 'cancelled' : past && next ? 'attention' : past ? 'past' : 'upcoming';
   const valueText = invoice ? inr(ctx.value) : quote && quote.status !== 'rejected' ? totalText(quote) : ctx.value > 0 ? inr(ctx.value) : 'No quote yet';
   return { b, stage, tab, next, quote, invoice, value: ctx.value, valueText, start, end };

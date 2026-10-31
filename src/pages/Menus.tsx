@@ -5,7 +5,9 @@ import { useBookings } from '../hooks/useBookings';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import PackageEditor from '../components/settings/PackageEditor';
 import { buildTree, groupsOf, placesByName, plateRow, plateSummary, plural } from '../lib/menuCatalog';
-import { inr } from '../lib/money';
+import { todayIST } from '../lib/ist';
+import { priceSpan, sampleBooking } from '../lib/priceTiers';
+import { range } from '../lib/quoteSummary';
 import '../styles/settings.css';
 
 // Ready-made plates with a fixed price: the list on the left, the picked one open on the right.
@@ -31,6 +33,7 @@ const Menus: React.FC = () => {
   const list = menus.filter(m => showHidden || m.is_active || m.id === picked);
   const current = picked === 'new' ? undefined : menus.find(m => m.id === picked) ?? list[0];
   const editingNew = picked === 'new' || (!current && !isLoading);
+  const sample = useMemo(() => sampleBooking(bookings, editingNew ? undefined : current?.id, todayIST()), [bookings, editingNew, current?.id]);
 
   const pick = async (id: string | 'new') => {
     if (id === picked) return;
@@ -54,9 +57,10 @@ const Menus: React.FC = () => {
           {isLoading && <div className="mb-empty">Loading packages…</div>}
           {list.map(m => {
             const rows = (m.items ?? []).map(t => plateRow(t, places, groups));
+            const span = priceSpan(m);
             return (
               <button key={m.id} type="button" className={`pk-card${m.id === current?.id && !editingNew ? ' on' : ''}${m.is_active ? '' : ' off'}`} onClick={() => pick(m.id)}>
-                <span className="pk-card-top"><b>{m.name}</b><span className="pk-price">{inr(m.price_per_plate)} <small>/ plate</small></span></span>
+                <span className="pk-card-top"><b>{m.name}</b><span className="pk-price">{range(span.low, span.high)} <small>/ plate</small></span></span>
                 <span>{m.category} · {plateSummary(rows)}</span>
                 <small className="muted">{m.is_active ? `Used in ${plural(used.get(m.id) ?? 0, 'booking')}` : 'Hidden from quotes and bookings'}</small>
               </button>
@@ -68,7 +72,7 @@ const Menus: React.FC = () => {
 
         {(current || editingNew) && (
           <PackageEditor key={editingNew ? 'new' : current!.id} menu={editingNew ? undefined : current} places={places} groups={groups} suggestions={suggestions}
-            takenNames={menus.map(m => m.name)} onDirty={setDirty} onSaved={id => { setDirty(false); setPicked(id); }} />
+            takenNames={menus.map(m => m.name)} sample={sample} onDirty={setDirty} onSaved={id => { setDirty(false); setPicked(id); }} />
         )}
       </div>
       {dialog}

@@ -34,7 +34,7 @@ const ChangeSeasonModal: React.FC<Props> = ({ occasions, sweets, onClose }) => {
       footer={<>
         <button type="button" className="ui-btn" onClick={onClose}>Cancel</button>
         <button type="button" className="ui-btn primary" onClick={save} disabled={actions.busy}>
-          {same ? `Keep ${chosen ? chosen.name : 'no season'}` : chosen ? `Start ${chosen.name}` : 'End the season'}
+          {same ? `Keep ${chosen ? chosen.name : 'no season'}` : chosen?.is_active ? `Keep only ${chosen.name}` : chosen ? `Start ${chosen.name}` : 'End the season'}
         </button>
       </>}>
       <div className="sw-form">

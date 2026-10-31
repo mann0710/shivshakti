@@ -8,26 +8,33 @@ let current: DocContext = { settings: DEFAULT_DOC_SETTINGS, logo: '/logo.png' };
 export const docContext = () => current;
 export const setDocContext = (patch: Partial<DocContext>) => { current = { ...current, ...patch }; };
 
-let logoJob: Promise<void> | null = null;
+let logoJob: { src: string; job: Promise<void> } | null = null;
 
-// Shrinks the logo into an embedded image so PDFs need no network access for it.
+// Shrinks the logo (the uploaded one, else /logo.png) into an embedded image so PDFs need no network access for it.
 export function ensureLogo(): Promise<void> {
-  if (current.logo.startsWith('data:') || typeof document === 'undefined') return Promise.resolve();
-  logoJob ??= new Promise<void>(resolve => {
+  const src = current.settings.logo_url || '/logo.png';
+  if (typeof document === 'undefined') return Promise.resolve();
+  if (logoJob?.src === src) return logoJob.job;
+  setDocContext({ logo: src });
+  const job = new Promise<void>(resolve => {
     const img = new Image();
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
         const w = 520;
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = Math.round((img.naturalHeight / img.naturalWidth) * w);
-        canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setDocContext({ logo: canvas.toDataURL('image/jpeg', 0.9) });
+        const g = canvas.getContext('2d');
+        // White under see-through logos, which JPEG would turn black.
+        if (g) { g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height); g.drawImage(img, 0, 0, canvas.width, canvas.height); }
+        if (logoJob?.src === src) setDocContext({ logo: canvas.toDataURL('image/jpeg', 0.9) });
       } catch { /* keep the plain URL */ }
       resolve();
     };
     img.onerror = () => resolve();
-    img.src = '/logo.png';
+    img.src = src;
   });
-  return logoJob;
+  logoJob = { src, job };
+  return job;
 }

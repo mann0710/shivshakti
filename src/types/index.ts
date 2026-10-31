@@ -17,8 +17,13 @@ export interface Menu {
   category: string;
   items: string[];
   is_active: boolean;
+  // Price by guest count; empty means one price (see lib/priceTiers).
+  price_tiers?: PriceTier[] | null;
   created_at: string;
 }
+
+// Up to `upto` guests (null: and more) costs `price` a plate.
+export interface PriceTier { upto: number | null; price: number }
 
 export interface Booking {
   id: string;
@@ -97,6 +102,18 @@ export interface DataCenter {
   // Printed-document settings (see lib/docs/settings)
   doc_settings?: Record<string, unknown> | null;
   updated_at?: string;
+}
+
+// A login on the staff list and what it may do.
+export type StaffRole = 'owner' | 'counter' | 'kitchen';
+export interface StaffLogin {
+  email: string;
+  name?: string | null;
+  mobile?: string | null;
+  role: StaffRole;
+  can_sign_in: boolean;
+  invited_at?: string | null;
+  created_at: string;
 }
 
 export interface TeamMember {

@@ -5,8 +5,9 @@ import { parseAmount, range } from '../../lib/quoteSummary';
 import { openPicks } from '../../lib/quoteBoard';
 import { inr } from '../../lib/money';
 import { Tick } from './EventSection';
+import type { PackagePrice } from './usePackagePrice';
 
-interface Props { f: QuoteForm }
+interface Props { f: QuoteForm; pkg?: PackagePrice }
 
 type Kind = 'transport' | 'discount' | 'extra';
 const ADD: [Kind, string][] = [['extra', 'Service staff'], ['extra', 'Counter / live station'], ['extra', 'Decoration'], ['extra', 'Other charge'], ['transport', 'Transport'], ['discount', 'Discount']];
@@ -23,7 +24,7 @@ const AmountInput: React.FC<{ value: number; base: number; label: string; onChan
 };
 
 // Plate price (from dish prices or your own), then transport, discounts, extras and GST.
-const PriceSection: React.FC<Props> = ({ f }) => {
+const PriceSection: React.FC<Props> = ({ f, pkg }) => {
   const dishMode = f.showPrices && f.autoPrice;
   const r = f.range;
   const picks = openPicks({ is_multi_day: false, event_days: [], items: f.selectedItems }).map(p => p.label.toLowerCase());
@@ -71,6 +72,10 @@ const PriceSection: React.FC<Props> = ({ f }) => {
               )}</span>
           </div>
         </div>
+      )}
+      {pkg?.hint && (
+        <p className="q-hint" role="status">{pkg.hint.follows ? pkg.hint.text : <>
+          Package price: {pkg.hint.text} <button type="button" className="q-link" onClick={pkg.use}>Use {inr(pkg.hint.price)}</button></>}</p>
       )}
       <div className="q-extras">
         {(['transport', 'discount', 'extra'] as Kind[]).flatMap(k => shown(k).map((c, i) => row(k, c, i)))}

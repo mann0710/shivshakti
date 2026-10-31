@@ -8,6 +8,7 @@ export const PRICE_MIGRATION_FILE = 'supabase/migrations/20261101_prices_gstin.s
 export const PREORDER_MIGRATION_FILE = 'supabase/migrations/20261104_preorder_fulfillment.sql';
 export const DOC_SETTINGS_MIGRATION_FILE = 'supabase/migrations/20261105_doc_settings.sql';
 export const QUOTE_OPTIONS_MIGRATION_FILE = 'supabase/migrations/20261106_quote_options.sql';
+export const TEAM_BIN_MIGRATION_FILE = 'supabase/migrations/20261110_team_bin_tiers.sql';
 
 const missingColumn = (e: { code?: string; message?: string }) =>
   e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find/i.test(e.message ?? '');
@@ -56,4 +57,11 @@ export const useHasDocSettings = () => useSchema('doc_settings', () => [
 // Quotation options (A/B) and price ranges.
 export const useHasQuoteOptions = () => useSchema('quote_options', () => [
   supabase.from('quotations').select('option_group, option_label, option_name, per_plate_max, total_max').limit(1),
+]).data === 'ready';
+
+// Team roles, the recycle bin, dish food styles and package price by guest count.
+export const useHasTeamBin = () => useSchema('team_bin', () => [
+  supabase.from('deleted_items').select('id').limit(1),
+  supabase.from('menus').select('price_tiers').limit(1),
+  supabase.from('menu_items').select('food_styles').limit(1),
 ]).data === 'ready';

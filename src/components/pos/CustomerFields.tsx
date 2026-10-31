@@ -60,7 +60,7 @@ const CustomerFields: React.FC<Props> = ({ name, phone, address, customers, requ
           {matches.map(c => (
             <div key={c.id} role="option" aria-selected={false} onMouseDown={() => pick(c)}
               style={{ padding: '8px 10px', cursor: 'pointer', fontSize: 13, borderBottom: '0.5px solid #F0F0EC' }}>
-              <b>{c.name}</b>{c.phone ? <span style={{ color: '#888880' }}> · {c.phone}</span> : null}
+              <b>{c.name}</b>{c.phone ? <span style={{ color: '#6B6B66' }}> · {c.phone}</span> : null}
             </div>
           ))}
         </div>

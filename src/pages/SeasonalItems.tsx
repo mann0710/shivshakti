@@ -16,6 +16,9 @@ import PackDefaultsModal from '../components/sessional/PackDefaultsModal';
 import MigrationBanner from '../components/sessional/MigrationBanner';
 import SweetGroupTable, { SweetActions } from '../components/sweets/SweetGroupTable';
 import { useConfirm } from '../components/ui/ConfirmDialog';
+import { printHtml } from '../lib/receipt';
+import { rateCardHtml } from '../lib/docs/rateCard';
+import { todayIST } from '../lib/ist';
 import '../styles/sweets.css';
 
 type Dialog = { kind: 'form'; item: SeasonalItem | null } | { kind: 'bulk'; items: SeasonalItem[] } | { kind: 'merge'; key?: string } | { kind: 'sizes' } | null;
@@ -80,7 +83,8 @@ const SeasonalItems: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate }) => {
           <span className="sw-sub sw-phone">{onPos} of {items.length} on the POS</span>
         </div>
         <div className="sw-actions">
-          <button type="button" className="ui-btn sw-desk" onClick={() => setDialog({ kind: 'sizes' })}>Pack sizes</button>
+          <button type="button" className="ui-btn" onClick={() => setDialog({ kind: 'sizes' })}>Pack sizes</button>
+          <button type="button" className="ui-btn sw-desk" onClick={() => printHtml(rateCardHtml(items, occasions, todayIST()))} disabled={!onPos}>Rate card</button>
           <button type="button" className="ui-btn sw-desk" onClick={() => setDialog({ kind: 'bulk', items: selected.length ? selected : shown })} disabled={!shown.length}>
             Change prices{selected.length ? ` (${selected.length})` : ''}
           </button>

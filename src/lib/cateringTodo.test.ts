@@ -41,5 +41,32 @@ describe('cateringTodo', () => {
     expect(items.find(i => i.key === '1')?.title).toBe("Bhavin's quote is still a draft");
     expect(items[items.length - 1].title).toBe('16 quotes out of step');
   });
+  it('gives each tidy-up its own row and screen', () => {
+    const items = needsYou({ bookings: [b('n', 'completed', '2026-05-07')], quotes: [], invoices: [], unpaidBills: [], preorders: [], outOfStep: 1, today: TODAY });
+    expect(items.map(i => [i.key, i.page, i.title])).toEqual([
+      ['tidy', 'billing', '1 past event has no invoice'], ['tidy-quotes', 'quotations', '1 quote out of step'],
+    ]);
+  });
   it('counts days', () => expect(daysBetween('2026-10-31', '2026-11-26')).toBe(26));
+
+  it('shows each reminder at the time set in Settings, or not at all', () => {
+    const base = {
+      bookings: [b('j', 'confirmed', '2026-11-10', 'Jigar'), b('k', 'followup', '2026-11-26', 'Bhavin')],
+      quotes: [{ ...q('1', 'k', 'sent', 35175), created_at: '2026-10-30T09:00:00Z' }],
+      invoices: [{ id: 'i', booking_id: 'j', invoice_number: 'INV-0002', total_amount: 50000, balance_due: 20000, status: 'sent' as const }],
+      unpaidBills: [{ name: 'Krinal', total: 400, at: '2026-10-27T10:00:00Z' }],
+      preorders: [{ name: 'Mira', date: '2026-11-01', total: 1200, advance: 500, open: true }],
+      outOfStep: 0, today: TODAY,
+    };
+    const keys = (r?: any) => needsYou({ ...base, reminders: r }).map(i => i.key);
+    // Defaults: money 3 days before (event is 10 days away), reply after 2 days (sent 1 day ago), pickup the day before, bills after 7 days.
+    expect(keys()).toEqual(['pick-2026-11-01']);
+    const on = (days: number) => ({ on: true, days });
+    expect(keys({ pay_due: on(14), quote_reply: on(1), pickup: on(1), sweets_unpaid: on(3) })).toEqual(['i', 'bill-0', 'pick-2026-11-01', '1']);
+    expect(keys({ pay_due: on(14), quote_reply: { on: false, days: 0 }, pickup: { on: false, days: 1 }, sweets_unpaid: { on: false, days: 0 } })).toEqual(['i']);
+    const pick = needsYou({ ...base }).find(i => i.key === 'pick-2026-11-01')!;
+    expect(pick.title).toBe('1 pre-booking to hand over on 1 Nov');
+    expect(pick.line).toBe('Mira ₹700 to collect');
+    expect(needsYou({ ...base, reminders: { pay_due: on(14), quote_reply: on(9), pickup: on(0), sweets_unpaid: on(9) } })[0].line).toBe('INV-0002 · Vashtu on 10 Nov · event in 10 days');
+  });
 });

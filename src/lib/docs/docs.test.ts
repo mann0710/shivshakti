@@ -100,4 +100,24 @@ describe('invoice and event menu', () => {
     const r = orderReceipt({ id: 'b', bill_no: 5, customer_name: 'Walk-in', phone: '', items: [], subtotal: 0, discount_amount: 0, discount_type: 'amount', total_amount: 0, is_paid: true, payment_mode: 'cash', year: 2026, created_at: '2026-10-31T10:00:00Z' } as any);
     expect(posBillHtml(r, ctx)).toContain('Thank you! Visit again.');
   });
+  it('prints the saved names, FSSAI number and sweets GST', () => {
+    const own = { ...ctx, settings: { ...ctx.settings, catering_name: 'Shiv Shakti Caterers', sweets_name: 'Shiv Shakti Mithai', fssai_number: '10712345678901', sweets_gst_rate: 5 } };
+    const q = quotationDoc(quote({}), {}, own).html;
+    expect(q).toContain('Shiv Shakti Caterers');
+    expect(q).toContain('<b>FSSAI</b> 10712345678901');
+    expect(q).not.toContain('Shiv Shakti Catering Service');
+    const r = orderReceipt({ id: 'b', bill_no: 5, customer_name: 'Walk-in', phone: '', items: [], subtotal: 1050, discount_amount: 0, discount_type: 'amount', total_amount: 1050, is_paid: true, payment_mode: 'cash', year: 2026, created_at: '2026-10-31T10:00:00Z' } as any, undefined, '24ABCDE1234F1Z5');
+    const bill = posBillHtml(r, own);
+    expect(bill).toContain('SHIV SHAKTI MITHAI');
+    expect(bill).toContain('FSSAI 10712345678901');
+    expect(bill).toContain('Incl. GST 5%');
+    expect(bill).toContain('₹50');
+    expect(posBillHtml({ ...r, gst_number: undefined }, own)).not.toContain('Incl. GST');
+  });
+  it('keeps a saved reminder and falls back on bad values', () => {
+    const s2 = mergeDocSettings({ reminders: { pay_due: { on: false, days: 5 }, pickup: { on: true, days: -3 } } } as any);
+    expect(s2.reminders.pay_due).toEqual({ on: false, days: 5 });
+    expect(s2.reminders.pickup).toEqual({ on: true, days: 1 });
+    expect(mergeDocSettings({ catering_name: '  ' } as any).catering_name).toBe('Shiv Shakti Catering Service');
+  });
 });

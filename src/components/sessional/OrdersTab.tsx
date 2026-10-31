@@ -21,6 +21,7 @@ interface Props {
   occasions: SeasonalOccasion[];
   gst?: string;
   onEdit: (o: SeasonalOrder) => void;
+  search?: string;
 }
 
 type Show = 'today' | 'unpaid' | 'all';
@@ -32,11 +33,12 @@ const matches = (term: string, name: string, phone?: string, no?: string) => {
 };
 
 // Today's money, then bills (and handed-over bookings still owing) with collect, remind and ⋯ More.
-const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit }) => {
+const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit, search }) => {
   const bills = useBillActions();
   const bookings = usePreorderActions();
-  const [show, setShow] = useState<Show>('today');
-  const [q, setQ] = useState('');
+  // Opened for one customer: all their bills, not just today's.
+  const [show, setShow] = useState<Show>(search ? 'all' : 'today');
+  const [q, setQ] = useState(search ?? '');
   const occName = (id?: string) => occasions.find(o => o.id === id)?.name;
   const today = todayIST();
 

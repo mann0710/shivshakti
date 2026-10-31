@@ -37,7 +37,7 @@ const MergeDuplicatesModal: React.FC<Props> = ({ plans, onClose }) => {
   return (
     <Modal title="Merge duplicate pack rows" onClose={merge.isPending ? () => {} : onClose} width={640}
       footer={<>
-        {progress && <span style={{ fontSize: 12, color: '#888880', marginRight: 'auto' }}>{progress}…</span>}
+        {progress && <span style={{ fontSize: 12, color: '#6B6B66', marginRight: 'auto' }}>{progress}…</span>}
         <button style={btnGhost} onClick={onClose} disabled={merge.isPending}>Cancel</button>
         <button style={btnPrimary} onClick={run} disabled={!chosen.length || merge.isPending}>
           {merge.isPending ? 'Merging…' : `Merge ${chosen.length} item${chosen.length === 1 ? '' : 's'}${rows ? ` (remove ${rows} rows)` : ''}`}
@@ -54,15 +54,15 @@ const MergeDuplicatesModal: React.FC<Props> = ({ plans, onClose }) => {
             <div style={{ fontSize: 13, fontWeight: 600 }}>
               {p.update.name} <span style={{ fontWeight: 500, color: NAVY }}>· {rateLabel(p.update.rate, p.update.unit)}</span>
             </div>
-            <div style={{ fontSize: 11, color: '#888880', margin: '2px 0 6px' }}>From: {p.sourceNames.join(', ')}</div>
+            <div style={{ fontSize: 12, color: '#6B6B66', margin: '2px 0 6px' }}>From: {p.sourceNames.join(', ')}</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {p.preview.map(r => (
-                <span key={r.size} style={{ fontSize: 11, background: '#F3F2EE', color: NAVY, borderRadius: 10, padding: '2px 8px' }}>
+                <span key={r.size} style={{ fontSize: 12, background: '#F3F2EE', color: NAVY, borderRadius: 10, padding: '2px 8px' }}>
                   {r.label} {inr(r.newPrice)}{r.oldPrice === null ? ' (new)' : ''}
                 </span>
               ))}
             </div>
-            {p.conflicts.map(c => <div key={c} style={{ fontSize: 11, color: '#B26A00', marginTop: 4 }}>⚠ {c}</div>)}
+            {p.conflicts.map(c => <div key={c} style={{ fontSize: 12, color: '#B26A00', marginTop: 4 }}>⚠ {c}</div>)}
           </div>
         </label>
       ))}

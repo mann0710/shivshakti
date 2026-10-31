@@ -10,6 +10,7 @@ import { openPicks } from '../../lib/quoteBoard';
 import { readyChecks, quoteItems, coursesOf, range } from '../../lib/quoteSummary';
 import { quotePdf } from '../../lib/quotationShare';
 import { downloadDoc } from '../../lib/docs/output';
+import { priceAt } from '../../lib/priceTiers';
 import QuotationMultiDay from '../catering/QuotationMultiDay';
 import { useAutosave } from './useAutosave';
 import OptionTabs, { CompareTable } from './OptionTabs';
@@ -19,6 +20,7 @@ import PriceSection from './PriceSection';
 import { PaymentSection, PdfSection } from './PlanSections';
 import SummaryAside from './SummaryAside';
 import { PackageDialog, CopyDialog } from './MenuSources';
+import { usePackagePrice } from './usePackagePrice';
 import { StatusChip, firstName } from './bits';
 
 interface Props {
@@ -47,6 +49,7 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
   const [compare, setCompare] = useState(false);
   const [busy, setBusy] = useState(false);
   const [source, setSource] = useState<'package' | 'copy' | null>(null);
+  const pkg = usePackagePrice(f, session);
 
   const draft = f.draftQuotation();
   const siblings = f.editingQuotation ? siblingsOf(f.editingQuotation, f.quotations) : [];
@@ -67,10 +70,12 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
   const flushed = async () => { if (await auto.flush()) return true; toast.error(auto.why()); return false; };
   const send = async () => { if (await flushed()) onSend(current(), live.length > 1 ? live.map(o => (o.id === draft.id ? current() : o)) : undefined); };
   const preview = () => downloadDoc(quotePdf(draft, pdfPrices));
-  const leave = async () => {
+  // Leaves once saved, or after you agree to drop what couldn't be saved.
+  const leaveTo = async (go: () => void) => {
     if (!(await auto.flush()) && !(await confirm({ title: 'Leave without your last changes?', message: `They could not be saved: ${auto.why()}`, confirmLabel: 'Leave', danger: true }))) return;
-    onClose();
+    go();
   };
+  const leave = () => leaveTo(onClose);
   const addOption = async () => {
     if (!(await flushed())) return;
     setBusy(true);
@@ -110,7 +115,7 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
         {compare ? <CompareTable options={live} /> : (
           <div className="q-ed-cols">
             <div className="q-ed-main">
-              <EventSection f={f} onOpenBooking={onOpenBooking && (id => { auto.flush().then(() => onOpenBooking(id)); })} onSeveralDays={() => f.toggleMultiDay(true)} />
+              <EventSection f={f} onOpenBooking={onOpenBooking && (id => { leaveTo(() => onOpenBooking(id)); })} onSeveralDays={() => f.toggleMultiDay(true)} />
               <section className="q-sec" aria-label="Menu">
                 <div className="q-sec-head">
                   <h2><Tick ok={dishes > 0} />Menu <small>{dishes} dish{dishes === 1 ? '' : 'es'}</small></h2>
@@ -134,7 +139,7 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
                   <span className="q-hint">Tap a dish to set its price, note or "served with" items. Dishes with no price are part of the plate price and never show ₹0 on the PDF.</span>
                 </>}
               </section>
-              <PriceSection f={f} />
+              <PriceSection f={f} pkg={pkg} />
               <PaymentSection steps={settings.schedule} lo={draft.total_amount} hi={draft.total_max ?? null} />
               <PdfSection who={who} prices={pdfPrices} canPrice={f.hasItemPrices} onPrices={onPdfPrices} note={f.notes} onNote={f.setNotes} />
             </div>
@@ -149,9 +154,10 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
       </div>
 
       {source === 'package' && (
-        <PackageDialog menuItems={f.activeItems} hasDishes={f.selectedItems.length > 0} onClose={() => setSource(null)}
-          onApply={(found, price, replace, missing) => {
-            f.applyPackage(found, price, replace);
+        <PackageDialog menuItems={f.activeItems} hasDishes={f.selectedItems.length > 0} guests={f.guestCount} onClose={() => setSource(null)}
+          onApply={(found, menu, replace, missing) => {
+            f.applyPackage(found, priceAt(menu, f.guestCount), replace);
+            pkg.link(menu);
             toast.success(`Added ${found.length} dish${found.length === 1 ? '' : 'es'}${missing.length ? ` · not in Menu Builder: ${missing.join(', ')}` : ''}`, { duration: 6000 });
           }} />
       )}

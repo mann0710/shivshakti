@@ -21,13 +21,15 @@ const ALL = '__all';
 // Search + category chips + touch-friendly tiles, most-sold first.
 const ProductGrid: React.FC<Props> = ({ items, defaults, popularity, inCart, onAdd, onOpen, onLoose, toolbar }) => {
   const [query, setQuery] = useState('');
-  const [chip, setChip] = useState(ALL);
+  const [picked, setChip] = useState(ALL);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const categories = useMemo(
     () => Array.from(new Set(items.map(i => i.category).filter(Boolean) as string[])).sort(),
     [items],
   );
+  // A category missing after the occasion changes falls back to All.
+  const chip = picked === ALL || categories.includes(picked) ? picked : ALL;
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();

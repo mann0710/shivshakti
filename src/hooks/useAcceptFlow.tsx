@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { Quotation, useQuotations, useUpdateQuotation, useUpdateQuotationStatus } from './useQuotations';
 import { useUpdateBooking } from './useBookings';
 import { useQuoteLifecycle } from './useQuoteLifecycle';
+import { useStoredState } from './useStoredState';
 import { Navigate } from './useNavIntent';
 import { acceptPatch } from '../lib/quoteChoices';
 import { siblingsOf } from '../lib/quoteOptions';
@@ -11,6 +12,9 @@ import SendDialog from '../components/quotes/SendDialog';
 import { todayIST } from '../lib/ist';
 
 type SendTarget = { q: Quotation; options: Quotation[]; all: boolean; prices: boolean };
+
+// "Show each dish's price" on the quote PDF, remembered across screens.
+export const useQuotePdfPref = () => useStoredState('shivshakti.quotePdf', () => ({ prices: true }));
 
 // Accept (which option, dishes and advance) and Send (WhatsApp with the PDF) for any screen that shows quotes.
 export const useAcceptFlow = (onNavigate?: Navigate) => {
@@ -35,7 +39,7 @@ export const useAcceptFlow = (onNavigate?: Navigate) => {
       }
       if (guests && chosen.booking_id && chosen.booking?.guest_count !== guests) await updateBooking.mutateAsync({ id: chosen.booking_id, guest_count: guests });
       if (advance?.amount && chosen.booking_id) await updateBooking.mutateAsync({ id: chosen.booking_id, advance_received: advance.amount, advance_mode: advance.mode, advance_date: todayIST() });
-      await lifecycle.setStatus({ ...chosen, ...patch } as Quotation, 'accepted');
+      await lifecycle.setStatus([{ ...chosen, ...patch } as Quotation], 'accepted');
       setTarget(null);
     } catch (e: any) { toast.error(e?.message || 'Could not accept'); }
     finally { setBusy(false); }
@@ -62,7 +66,7 @@ export const useAcceptFlow = (onNavigate?: Navigate) => {
 
   return {
     accept,
-    setStatus: (q: Quotation, status: string) => (status === 'accepted' ? accept(q) : lifecycle.setStatus(q, status)),
+    setStatus: (list: Quotation[], status: string) => (status === 'accepted' ? accept(list[0]) : lifecycle.setStatus(list, status)),
     share,
     ui,
   };

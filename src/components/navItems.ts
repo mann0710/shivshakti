@@ -35,3 +35,22 @@ export const PINNED: { page: Page; label: string }[] = [
 
 export const isPage = (p: string | null): p is Page => !!p && (p in PARENT || NAV_ITEMS.some(i => i.page === p));
 export const navPage = (p: Page): Page => PARENT[p] ?? p;
+
+// Who sees what: owners everything; counter staff the sweets screens (never Money or Settings); kitchen the events and the make list.
+export type Role = 'owner' | 'counter' | 'kitchen';
+const ROLE_PAGES: Record<Exclude<Role, 'owner'>, Page[]> = {
+  counter: ['seasonal_billing', 'seasonal_dashboard', 'seasonal_items', 'seasonal_occasions', 'seasonal_customers'],
+  kitchen: ['bookings', 'calendar', 'seasonal_dashboard'],
+};
+
+export const ROLES: { id: Role; label: string; note: string }[] = [
+  { id: 'owner', label: 'Owner', note: 'Everything' },
+  { id: 'counter', label: 'Counter', note: 'POS, pre-bookings, sweet items — not Money' },
+  { id: 'kitchen', label: 'Kitchen only', note: 'Bookings and the sweets make list' },
+];
+
+export const canOpen = (role: Role, page: Page) => role === 'owner' || ROLE_PAGES[role].includes(page);
+// Where each role lands after signing in.
+export const homeFor = (role: Role): Page => (role === 'owner' ? 'dashboard' : ROLE_PAGES[role][0]);
+export const navFor = (role: Role) => NAV_ITEMS.filter(i => canOpen(role, i.page));
+export const pinnedFor = (role: Role) => PINNED.filter(i => canOpen(role, i.page));

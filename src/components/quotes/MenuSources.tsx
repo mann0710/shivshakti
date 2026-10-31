@@ -6,7 +6,10 @@ import type { PickerItem } from '../../lib/quoteLines';
 import { dishCount } from '../../lib/quoteChoices';
 import { formatDateIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
+import { priceAt, rangeAt } from '../../lib/priceTiers';
+import type { Menu } from '../../types';
 import { PickCard } from './bits';
+import { PackageDish, packageDishes } from './packageMenu';
 
 const key = (s: string) => s.trim().toLowerCase();
 
@@ -21,10 +24,10 @@ const AddOrReplace: React.FC<{ replace: boolean; onChange: (r: boolean) => void 
   </>
 );
 
-interface PackageProps { menuItems: PickerItem[]; hasDishes: boolean; onClose: () => void; onApply: (found: PickerItem[], price: number, replace: boolean, missing: string[]) => void }
+interface PackageProps { menuItems: PickerItem[]; hasDishes: boolean; guests: number; onClose: () => void; onApply: (found: PackageDish[], menu: Menu, replace: boolean, missing: string[]) => void }
 
 // "Start from a package": its dishes fill the menu, matched to Menu Builder by name.
-export const PackageDialog: React.FC<PackageProps> = ({ menuItems, hasDishes, onClose, onApply }) => {
+export const PackageDialog: React.FC<PackageProps> = ({ menuItems, hasDishes, guests, onClose, onApply }) => {
   const { data: menus = [] } = useMenus();
   const [find, setFind] = useState('');
   const [replace, setReplace] = useState(false);
@@ -33,9 +36,8 @@ export const PackageDialog: React.FC<PackageProps> = ({ menuItems, hasDishes, on
   const chosen = shown.find(m => m.id === pick) ?? shown[0];
   const apply = () => {
     if (!chosen) return;
-    const byName = new Map(menuItems.map(it => [key(it.name), it]));
-    const found = (chosen.items || []).map(n => byName.get(key(n))).filter((x): x is PickerItem => !!x);
-    onApply(found, chosen.price_per_plate, replace, (chosen.items || []).filter(n => !byName.has(key(n))));
+    const { found, missing } = packageDishes(chosen.items || [], menuItems);
+    onApply(found, chosen, replace, missing);
     onClose();
   };
   return (
@@ -47,8 +49,8 @@ export const PackageDialog: React.FC<PackageProps> = ({ menuItems, hasDishes, on
       <div className="q-h">{shown.length} package{shown.length === 1 ? '' : 's'}</div>
       <div className="q-cards q-scroll" role="radiogroup" aria-label="Packages">
         {shown.map(m => (
-          <PickCard key={m.id} on={chosen?.id === m.id} title={`${m.name} · ${m.category}`} line={(m.items || []).slice(0, 8).join(' · ')}
-            right={`${inr(m.price_per_plate)} a plate`} onClick={() => setPick(m.id)} />
+          <PickCard key={m.id} on={chosen?.id === m.id} title={`${m.name} · ${m.category}`} line={[rangeAt(m, guests), ...(m.items || []).slice(0, 8)].filter(Boolean).join(' · ')}
+            right={`${inr(priceAt(m, guests))} a plate`} onClick={() => setPick(m.id)} />
         ))}
         {!shown.length && <p className="q-hint">{menus.length ? 'No package matches.' : 'No packages yet. Make one on the Packages page.'}</p>}
       </div>

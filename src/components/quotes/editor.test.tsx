@@ -19,6 +19,8 @@ const mockMenu = [
   { id: 'puri', name: 'Puri', subcategory: { name: 'Indian Breads', category: { name: 'Indian Breads' } } },
   { id: 'dal', name: 'Gujarati Dal', subcategory: { name: 'Dal', category: { name: 'Main Course' } } },
 ];
+const mockPackages = [{ id: 'pk', name: 'Besic', category: 'Gujarati', price_per_plate: 270, items: ['Puri', 'Gujarati Dal'], is_active: true, created_at: '',
+  price_tiers: [{ upto: 150, price: 270 }, { upto: 300, price: 250 }, { upto: null, price: 230 }] }];
 
 jest.mock('../../lib/supabase', () => ({ supabase: { from: () => ({ update: () => ({ eq: async () => ({ error: null }) }) }) } }));
 jest.mock('../../lib/docs/output', () => ({ downloadDoc: jest.fn(), shareDoc: jest.fn(), pdfBlob: jest.fn() }));
@@ -36,7 +38,7 @@ jest.mock('../../hooks/useItemPrices', () => ({ useItemPrices: () => () => 0 }))
 jest.mock('../../hooks/useDataCenter', () => ({ useDataCenter: () => ({ data: { gst_rate: 5 } }), useEventTypes: () => ({ data: [] }), DEFAULT_EVENTS: ['Wedding'] }));
 jest.mock('../../hooks/useInvoices', () => ({ useInvoices: () => ({ data: [] }) }));
 jest.mock('../../hooks/useSchemaStatus', () => ({ useHasQuoteOptions: () => true }));
-jest.mock('../../hooks/useMenus', () => ({ useMenus: () => ({ data: [] }), useCreateMenu: () => ({ mutateAsync: jest.fn() }) }));
+jest.mock('../../hooks/useMenus', () => ({ useMenus: () => ({ data: mockPackages }), useCreateMenu: () => ({ mutateAsync: jest.fn() }) }));
 jest.mock('../../hooks/useDocSettings', () => ({ useDocSettings: () => jest.requireActual('../../lib/docs/settings').DEFAULT_DOC_SETTINGS }));
 jest.mock('../catering/BookingFormModal', () => () => null);
 
@@ -78,6 +80,26 @@ describe('quote editor', () => {
     fireEvent.change(screen.getByLabelText('Note for Kavit'), { target: { value: 'Live counter on request' } });
     unmount();
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: 'k', notes: 'Live counter on request' })));
+  });
+
+  it('a package price follows the guest count until a price is typed', async () => {
+    render(<Quotations />);
+    fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Start from a package' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use Besic' }));
+    const own = screen.getByLabelText('Own price a plate') as HTMLInputElement;
+    expect(own.value).toBe('270');
+    expect(screen.getByText('₹270 a plate for up to 150 guests (Besic)')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Guests'), { target: { value: '200' } });
+    expect(own.value).toBe('250');
+    expect(screen.getByText('₹250 a plate for 151–300 guests (Besic)')).toBeInTheDocument();
+    fireEvent.change(own, { target: { value: '260' } });
+    fireEvent.change(screen.getByLabelText('Guests'), { target: { value: '400' } });
+    expect(own.value).toBe('260');
+    fireEvent.click(screen.getByRole('button', { name: 'Use ₹230' }));
+    expect(own.value).toBe('230');
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: 'k', guest_count: 400, per_plate_amount: 230 })), { timeout: 3000 });
   });
 
   it('a new quote is created on the first change', async () => {

@@ -6,14 +6,18 @@ import { SHOP } from '../shop';
 
 export type Fact = [label: string, value: string | number | null | undefined];
 
+// "GSTIN … · FSSAI …" for document headers; empty when neither is saved.
+export const licenceLine = (ctx: DocContext) => [ctx.gstNumber && `<b>GSTIN</b> ${esc(ctx.gstNumber)}`, ctx.settings.fssai_number && `<b>FSSAI</b> ${esc(ctx.settings.fssai_number)}`].filter(Boolean).join(' · ');
+
 // Logo + shop details on the left, document kind / number / dates on the right.
-export function header(ctx: DocContext, kind: string, number: string, meta: string, shopName = 'Shiv Shakti Catering Service'): string {
+export function header(ctx: DocContext, kind: string, number: string, meta: string, shopName = ctx.settings.catering_name): string {
   const s = ctx.settings;
+  const licence = licenceLine(ctx);
   return `<header class="hdr">
-  <div class="brand"><img src="${esc(ctx.logo)}" alt="${esc(SHOP.name)} logo">
+  <div class="brand"><img src="${esc(ctx.logo)}" alt="${esc(shopName)} logo">
     <div class="shop"><b>${esc(shopName)}</b>${s.address ? `<span>${esc(s.address)}</span>` : ''}
       <span class="num">+91 ${esc(SHOP.phone)} · ${esc(SHOP.email)}</span>
-      ${ctx.gstNumber ? `<span class="num"><b>GSTIN</b> ${esc(ctx.gstNumber)}</span>` : ''}</div></div>
+      ${licence ? `<span class="num">${licence}</span>` : ''}</div></div>
   <div class="doc"><span class="kind">${esc(kind)}</span><span class="docno">${esc(number)}</span><span class="meta num">${esc(meta)}</span></div>
 </header><div class="rule"></div>`;
 }

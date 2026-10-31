@@ -36,7 +36,7 @@ const QuoteTidyBanner: React.FC<Props> = ({ quotations, onSee }) => {
         <span className="q-dk">{parts.map((p, i) => <React.Fragment key={i}>{i > 0 && ' · '}{p}</React.Fragment>)}</span>
       </div>
       <div className="q-tidy-acts">
-        {onSee && <button type="button" className="ui-btn q-dk" onClick={() => onSee(fixes.map(f => f.id))}>See the {n}</button>}
+        {onSee && <button type="button" className="ui-btn" onClick={() => onSee(fixes.map(f => f.id))}>See the {n}</button>}
         <button type="button" className="ui-btn primary q-tidy-fix" disabled={busy} onClick={fixAll}>{busy ? 'Fixing…' : <>Fix all<span className="q-dk"> {n}</span></>}</button>
       </div>
     </section>

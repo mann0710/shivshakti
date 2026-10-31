@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { PayStep } from '../../lib/docs/settings';
 import { GST_SLABS, isOldSlab } from '../../lib/settingsIndex';
-import { Field, Panel, Row, Soon } from './SettingsUi';
+import { Field, Panel, Row } from './SettingsUi';
 import { SettingsApi } from './useSettingsSave';
 
 const UPI_RE = /^[\w.-]{2,}@[a-zA-Z][\w.-]*$/;
@@ -37,7 +37,7 @@ const PlanEditor: React.FC<{ steps: PayStep[]; disabled: boolean; onSave: (s: Pa
   );
 };
 
-// GST, UPI, the usual payment plan and how long quotes stay valid.
+// GST on catering and on sweets, UPI, the usual payment plan and how long quotes stay valid.
 const MoneyGroup: React.FC<{ api: SettingsApi }> = ({ api }) => {
   const { dc, docs, docsReady, saveDc, saveDoc } = api;
   const rate = Number(dc?.gst_rate ?? 18);
@@ -47,8 +47,8 @@ const MoneyGroup: React.FC<{ api: SettingsApi }> = ({ api }) => {
     <Panel id="money" title="Money & tax" sub="What goes on bills and how people pay.">
       <div className="st-grid">
         <label className="st-field">
-          <span>GST on bills</span>
-          <select value={String(rate)} onChange={e => saveDc('GST on bills', 'gst_rate', Number(e.target.value))}>
+          <span>GST on catering</span>
+          <select value={String(rate)} onChange={e => saveDc('GST on catering', 'gst_rate', Number(e.target.value))}>
             <option value="0">Not GST-registered (bill of supply)</option>
             {GST_SLABS.filter(Boolean).map(n => <option key={n} value={n}>{n}%</option>)}
             {old && <option value={rate}>{rate}% (no longer a GST slab)</option>}
@@ -57,8 +57,18 @@ const MoneyGroup: React.FC<{ api: SettingsApi }> = ({ api }) => {
             {old ? `Saved as ${rate}%, which is no longer a slab. Pick 5% or 18% with your CA.` : rate === 0 ? 'Bills print as "Bill of supply", with no tax lines' : 'Added to quotations and invoices'}
           </small>
         </label>
+        <label className="st-field">
+          <span>GST on sweets</span>
+          <select value={rate === 0 ? '0' : String(docs.sweets_gst_rate)} disabled={!docsReady || rate === 0}
+            onChange={e => saveDoc('GST on sweets', 'sweets_gst_rate', Number(e.target.value))}>
+            <option value="0">{rate === 0 ? 'None (not GST-registered)' : 'Not charged on sweets'}</option>
+            {GST_SLABS.filter(Boolean).map(n => <option key={n} value={n}>{n}% (inside the price)</option>)}
+          </select>
+          <small>{rate === 0 ? 'Sweets and catering can differ once you are GST-registered'
+            : docs.sweets_gst_rate ? `Counter bills show the ${docs.sweets_gst_rate}% GST already in the price` : 'Sweets and catering can differ'}</small>
+        </label>
         <Field label="UPI ID for QR codes" value={docs.upi_id} placeholder="name@bank" disabled={!docsReady} warn={!docs.upi_id}
-          hint={docs.upi_id ? 'Shown as a QR on quotes, invoices and bills' : 'Add it so customers can scan and pay'}
+          hint={docs.upi_id ? 'Shown on the counter and on bills, quotes and invoices' : 'Add it so customers can scan and pay at the counter'}
           check={v => (v.trim() && !UPI_RE.test(v.trim()) ? 'Looks like name@bank' : null)}
           onSave={v => saveDoc('UPI ID', 'upi_id', v.trim())} />
         <Field label="Quotes are valid for (days)" value={String(docs.quote_valid_days)} inputMode="numeric" disabled={!docsReady}
@@ -69,9 +79,6 @@ const MoneyGroup: React.FC<{ api: SettingsApi }> = ({ api }) => {
         <span className="st-block-label">Usual payment plan</span>
         <small className="st-block-note">Percent · step · when. Printed on quotations.</small>
         <PlanEditor steps={docs.schedule} disabled={!docsReady} onSave={s => saveDoc('Payment plan', 'schedule', s)} />
-      </div>
-      <div className="st-rows">
-        <Soon label="GST on sweets" note="Sweets and catering can differ" />
       </div>
       {!docsReady && <Row label="UPI, plan and validity" note="Run the document settings database update to change these." warn />}
     </Panel>

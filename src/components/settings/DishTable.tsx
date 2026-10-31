@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Dish, placeOf, plural } from '../../lib/menuCatalog';
+import { Dish, placeOf } from '../../lib/menuCatalog';
 import DotsMenu from '../people/DotsMenu';
+import PanelHead, { Mode } from '../menu/PanelHead';
+import StyleChips from '../menu/StyleChips';
 import { Switch } from './SettingsUi';
 import '../../styles/settings.css';
 
@@ -29,6 +31,10 @@ interface Props {
   addTo: string | null;
   fresh: string | null;
   act: DishActions;
+  // View / Edit as sheet, for a subcategory.
+  mode?: Mode;
+  // Opens "Add many dishes" for the subcategory being added to.
+  onPaste?: () => void;
 }
 
 const PAGE = 150;
@@ -53,7 +59,7 @@ const PriceBox: React.FC<{ d: Dish; onSave: (p: number | null) => void; focusKey
 };
 
 // The dishes of one subcategory (or a search) with price, shown-on-quotes and a ⋯ menu each.
-const DishTable: React.FC<Props> = ({ crumb, title, group, dishes, showPlace, hasPrice, addTo, fresh, act }) => {
+const DishTable: React.FC<Props> = ({ crumb, title, group, dishes, showPlace, hasPrice, addTo, fresh, act, mode, onPaste }) => {
   const [limit, setLimit] = useState(PAGE);
   const [focus, setFocus] = useState<{ id: string; n: number }>({ id: '', n: 0 });
   const [name, setName] = useState('');
@@ -68,19 +74,18 @@ const DishTable: React.FC<Props> = ({ crumb, title, group, dishes, showPlace, ha
 
   return (
     <section className="mb-panel" aria-label={title}>
-      <div className="mb-panel-head">
-        <div>{crumb && <span className="mb-crumb">{crumb} ›</span>}<h2>{title} <small>· {plural(dishes.length, 'dish', 'dishes')}</small></h2></div>
+      <PanelHead crumb={crumb} title={title} count={dishes.length} mode={mode}>
         {group && <>
           <button type="button" className="ui-btn" onClick={() => act.renameGroup(group)}>Rename</button>
           <button type="button" className="ui-btn" onClick={() => act.shownGroup(group)}>{group.is_active ? 'Hide from quotes' : 'Show on quotes'}</button>
           <DotsMenu label={`More for ${group.name}`} items={[{ label: `Delete ${group.kind === 'cat' ? 'category' : 'subcategory'}…`, danger: true, onClick: () => act.removeGroup(group) }]} />
         </>}
-      </div>
+      </PanelHead>
       <div className={`mb-tr th`}><span>Dish</span>{hasPrice ? <span>Price / plate</span> : <span />}<span>On quotes</span><span /></div>
       {!dishes.length && <div className="mb-empty">{showPlace ? 'No dishes match.' : 'No dishes here yet. Add one below.'}</div>}
       {dishes.slice(0, limit).map(d => (
         <div key={d.id} id={`dish-${d.id}`} className={`mb-tr${d.is_active ? '' : ' off'}${d.id === fresh ? ' new' : ''}`}>
-          <span className="mb-dish">{d.name}{showPlace && <small>{placeOf(d)}</small>}</span>
+          <span className="mb-dish">{d.name}{showPlace && <small>{placeOf(d)}</small>}<StyleChips styles={d.food_styles} /></span>
           {hasPrice ? <PriceBox d={d} onSave={p => act.price(d, p)} focusKey={focus.id === d.id ? focus.n : 0} /> : <span />}
           <Switch label={`${d.name} on quotes`} on={d.is_active} words={['Shown', 'Hidden']} onChange={v => act.shown(d, v)} />
           <DotsMenu label={`More for ${d.name}`} items={[
@@ -99,6 +104,7 @@ const DishTable: React.FC<Props> = ({ crumb, title, group, dishes, showPlace, ha
           <input className="dish" value={name} placeholder={`+ Add a dish to ${addTo}`} aria-label={`New dish in ${addTo}`} onChange={e => setName(e.target.value)} />
           {hasPrice && <input className="price" inputMode="decimal" value={price} placeholder="₹ Price" aria-label="Price per plate" onChange={e => setPrice(e.target.value.replace(/[^\d.]/g, ''))} />}
           <button type="submit" className="ui-btn primary" disabled={!name.trim()}>Add</button>
+          {onPaste && <button type="button" className="ui-btn" onClick={onPaste}>Paste a list</button>}
         </form>
       )}
     </section>

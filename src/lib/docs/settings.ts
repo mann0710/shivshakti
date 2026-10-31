@@ -2,6 +2,10 @@
 
 export interface PayStep { pct: number; label: string; when: string }
 
+// Home reminders: each can be off, and shows `days` before (or after) its date.
+export type ReminderKey = 'pay_due' | 'quote_reply' | 'pickup' | 'sweets_unpaid';
+export interface Reminder { on: boolean; days: number }
+
 export interface DocSettings {
   accent: string;
   address: string;
@@ -18,6 +22,15 @@ export interface DocSettings {
   invoice_qr: boolean;
   slip_stub: boolean;
   bill_footer: string;
+  catering_name: string;
+  sweets_name: string;
+  fssai_number: string;
+  // Uploaded logo; empty uses the bundled /logo.png.
+  logo_url: string;
+  // GST included in sweets prices; 0 when not charged.
+  sweets_gst_rate: number;
+  reminders: Record<ReminderKey, Reminder>;
+  last_backup_at: string;
 }
 
 export const ACCENTS: { name: string; color: string; text: string }[] = [
@@ -50,7 +63,31 @@ export const DEFAULT_DOC_SETTINGS: DocSettings = {
   invoice_qr: true,
   slip_stub: true,
   bill_footer: 'Thank you! Visit again.',
+  catering_name: 'Shiv Shakti Catering Service',
+  sweets_name: 'Shiv Shakti Sweets',
+  fssai_number: '',
+  logo_url: '',
+  sweets_gst_rate: 0,
+  reminders: {
+    pay_due: { on: true, days: 3 },
+    quote_reply: { on: true, days: 2 },
+    pickup: { on: true, days: 1 },
+    sweets_unpaid: { on: true, days: 7 },
+  },
+  last_backup_at: '',
 };
+
+// Saved reminders over the defaults, each one checked.
+function mergeReminders(raw: unknown): DocSettings['reminders'] {
+  const d = DEFAULT_DOC_SETTINGS.reminders;
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, Partial<Reminder>>;
+  const one = (k: ReminderKey): Reminder => {
+    const x = r[k];
+    const days = Number(x?.days);
+    return { on: typeof x?.on === 'boolean' ? x.on : d[k].on, days: Number.isFinite(days) && days >= 0 && days <= 60 ? Math.round(days) : d[k].days };
+  };
+  return { pay_due: one('pay_due'), quote_reply: one('quote_reply'), pickup: one('pickup'), sweets_unpaid: one('sweets_unpaid') };
+}
 
 const lines = (v: unknown, fallback: string[]) =>
   Array.isArray(v) ? v.map(String).map(s => s.trim()).filter(Boolean) : fallback;
@@ -64,7 +101,10 @@ export function mergeDocSettings(raw?: Partial<DocSettings> | null): DocSettings
     : d.schedule;
   return {
     ...d,
-    ...Object.fromEntries(Object.entries(r).filter(([k, v]) => k in d && typeof v === typeof (d as any)[k] && !Array.isArray(v))),
+    ...Object.fromEntries(Object.entries(r).filter(([k, v]) => k in d && typeof v === typeof (d as any)[k] && !Array.isArray(v) && typeof v !== 'object')),
+    catering_name: String(r.catering_name ?? '').trim() || d.catering_name,
+    sweets_name: String(r.sweets_name ?? '').trim() || d.sweets_name,
+    reminders: mergeReminders(r.reminders),
     schedule: steps,
     extras: lines(r.extras, d.extras),
     terms: lines(r.terms, d.terms),

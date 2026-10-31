@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { EventType } from '../../types';
 import { useBookings } from '../../hooks/useBookings';
 import { useEventTypes, useCreateEventType, DEFAULT_EVENTS } from '../../hooks/useDataCenter';
-import { Panel, Row, Soon } from './SettingsUi';
+import { LinkBtn, Panel, Row, Soon } from './SettingsUi';
 import { EventTypeDialog } from './SettingsDialogs';
 
 // Event types offered in bookings (tap one to rename or remove) and the fixed food styles.
@@ -42,7 +42,9 @@ const CateringGroup: React.FC = () => {
       </div>
       <div className="st-rows">
         <Row label="Food styles" note="Regular · Jain · Swaminarayan · fixed for now"><b>3</b></Row>
-        <Soon label="Dish tags" note="No onion-garlic, Jain, spicy…" />
+        <Row label="Dish tags" note="Jain, Swaminarayan, has onion / garlic · set on each dish in Menu Builder (Edit as sheet)">
+          <LinkBtn href="#menubuilder">Open Menu Builder</LinkBtn>
+        </Row>
         <Soon label="Courses and their order" note="Sweet, Farsan, Main course…" />
       </div>
       {open && (

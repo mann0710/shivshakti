@@ -179,6 +179,32 @@ Independent UX review of the master canvas, then fixed in the design. These item
 | Money counted invoices of cancelled bookings; "average" was per invoice | **Fixed** |
 | GST rate 12% stored after the Sept 2025 rate change | **Flagged.** Settings offers Not registered / 5% / 18% and warns on 12% (confirm with the CA) |
 
+## Layout and button audit (owner feedback, 31 Oct 2026)
+
+"Some pages take full width, some half; some fonts too small; some buttons don't do what they say (+ Pre booking opens Bill)." Every page measured at 1920 / 1440 / 390 px, and every button's handler read against its label.
+
+| Finding | Status |
+|---|---|
+| Bookings, Calendar and POS used 100% of a wide screen; other pages stopped at 1160–1240px (≈70%) | **Fixed.** One `--page-max` (1440px) for every page; Bookings uses the shared page header. POS stays full-screen |
+| Text at 10–11.5px (sidebar heads, date badges, chips, POS rates, tab counts) and faint #888880 grey | **Fixed.** 12px floor; `MUTED` and tab/table greys darkened |
+| "+ Pre-booking" (Sweets today, Home + New) opened the POS in Bill mode | **Fixed.** `posLink.preorder()`; the POS reads every link through `posStart` |
+| All five Reports links on Sweets today opened whatever report was last used; "Season vs last season" had no report | **Fixed.** Each opens its own report; the fifth is Pre-bookings |
+| POS ‹ Back always went to Home and added a history step | **Fixed.** Goes back to the previous screen, else Sweets today |
+| Editing a bill from Unpaid / a search came back to "Today" with the search cleared | **Fixed.** Bills and Pre-bookings stay mounted once opened |
+| "Ask for advance" sent "full amount is due"; "New bill" after a pre-booking stayed in pre-booking mode | **Fixed.** Advance message shared with Home; button says "New pre-booking" |
+| Phones: no "+ Pre-booking", "Change season" or "Pack sizes"; More never lit on pages outside the bar | **Fixed** |
+| A new occasion was switched on straight away, running two seasons | **Fixed.** Starts off ("set its dates") |
+| Bills tab badge counts unpaid bills while the tab opens on Today | **Left as is.** Today is what the counter needs most; Unpaid is one tap |
+| Unsent drafts with a choice showed "Pick & accept" (could accept a quote never sent); "Mark accepted" could take a newer draft | **Fixed** (`bookingBoard.ts`, tests added) |
+| "Send quote" and "+ New quote" both just reopened the draft | **Fixed.** Send opens the Send dialog; New starts a new quote |
+| Mark lost / sent / Delete on a quote with A/B/C options touched only option A | **Fixed.** Acts on every option |
+| Reopen on an expired quote was undone by "Fix all" | **Fixed.** Hidden after the event date; a cancelled booking goes back to follow-up |
+| Phones had no quote ⋯ menu, no "See the N", no "Download for CA" | **Fixed** |
+| Home: Pick & accept opened the editor; draft "Send on WhatsApp" didn't send; one Tidy up button for two jobs | **Fixed.** Accept dialog, real send, two rows |
+| "Received in October" opened Money on This year; Invoices counted cancelled bookings | **Fixed** |
+| "+ Record payment" on a paid invoice; Delete offered for a customer who can't be deleted | **Fixed.** Hidden / explained |
+| "+ Sweets bill" and sweets history on a customer opened a blank counter | **Fixed.** POS opens for that person |
+
 ## Code quality
 
 | Finding | Status |

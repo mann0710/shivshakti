@@ -6,13 +6,17 @@ import {
   useMenuSubcategories, useCreateSubcategory, useUpdateSubcategory, useDeleteSubcategory,
   useMenuItemsFull, useCreateMenuItem, useUpdateMenuItem, useDeleteMenuItem,
 } from '../hooks/useMenuBuilder';
-import { useHasPriceColumns } from '../hooks/useSchemaStatus';
+import { useHasPriceColumns, useHasTeamBin } from '../hooks/useSchemaStatus';
 import { buildTree, copyName, Dish, filterDishes, plural, withoutPrice } from '../lib/menuCatalog';
 import { inr } from '../lib/money';
 import { undoToast } from '../components/pos/undoToast';
 import MenuTree from '../components/settings/MenuTree';
 import DishTable, { DishActions, Group } from '../components/settings/DishTable';
 import NameDialog from '../components/settings/NameDialog';
+import SheetEdit from '../components/menu/SheetEdit';
+import { useSheetGuard } from '../components/menu/useSheetGuard';
+import ImportScreen from '../components/data/ImportScreen';
+import PasteDishesDialog from '../components/data/PasteDishesDialog';
 import '../styles/settings.css';
 
 type Dlg = { kind: 'newCat' } | { kind: 'newSub'; catId: string } | { kind: 'newDish' } | { kind: 'rename'; g: Group } | { kind: 'edit'; d: Dish } | { kind: 'move'; d: Dish };
@@ -23,6 +27,8 @@ const fail = (e: any) => toast.error(e?.message || 'Could not save');
 const MenuBuilder: React.FC = () => {
   const { confirm, dialog: confirmDialog } = useConfirm();
   const hasPrice = useHasPriceColumns();
+  // Food styles and the recycle bin come with the same migration.
+  const hasBin = useHasTeamBin();
   const { data: cats = [] } = useMenuCategories();
   const { data: subs = [] } = useMenuSubcategories();
   const { data: dishes = [] } = useMenuItemsFull();
@@ -38,6 +44,8 @@ const MenuBuilder: React.FC = () => {
   const [subId, setSubId] = useState<string | null | undefined>(undefined);
   const [fresh, setFresh] = useState<string | null>(null);
   const [dlg, setDlg] = useState<Dlg | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [pasting, setPasting] = useState(false);
 
   const tree = useMemo(() => buildTree(cats, subs, dishes, showHidden), [cats, subs, dishes, showHidden]);
   // A hidden or deleted pick falls back to the first category, or to the whole category.
@@ -49,12 +57,16 @@ const MenuBuilder: React.FC = () => {
   const missing = hasPrice ? withoutPrice(dishes) : 0;
   const searching = query.trim().length > 0;
   const shown = useMemo(() => filterDishes(dishes, { catId: cat, subId: sub, query, showHidden, noPrice }), [dishes, cat, sub, query, showHidden, noPrice]);
+  // Edit as sheet works on one subcategory; moving away with unsaved cells asks first.
+  const { sheet, dirty, setDirty, toggle: setSheet, done: closeSheet, guard } = useSheetGuard(confirm, !searching && !noPrice && !!subNode);
+  // After adding something, jump to it unless that would drop unsaved sheet cells.
+  const jump = (fn: () => void) => { if (!dirty) fn(); };
 
-  const reveal = (id: string, subcategory_id: string) => {
+  const reveal = (id: string, subcategory_id: string) => jump(() => {
     const c = subs.find(s => s.id === subcategory_id)?.category_id ?? null;
     setOpenCat(c); setSubId(subcategory_id); setQuery(''); setNoPrice(false); setFresh(id);
     setTimeout(() => document.getElementById(`dish-${id}`)?.scrollIntoView({ block: 'nearest' }), 300);
-  };
+  });
   const toggle = (d: Dish, patch: Partial<Dish>, back: Partial<Dish>, message: string) =>
     updateItem.mutateAsync({ id: d.id, ...patch }).then(() => undoToast(message, () => updateItem.mutate({ id: d.id, ...back }))).catch(fail);
 
@@ -84,7 +96,7 @@ const MenuBuilder: React.FC = () => {
     },
     removeGroup: async g => {
       const what = g.kind === 'cat' ? 'category, its subcategories and their dishes' : 'subcategory and its dishes';
-      if (!(await confirm({ title: `Delete ${g.name}?`, message: `This deletes the ${what}. Old quotations keep their copy. This cannot be undone.`, confirmLabel: 'Delete', danger: true }))) return;
+      if (!(await confirm({ title: `Delete ${g.name}?`, message: `This deletes the ${what}. Old quotations keep their copy. You can restore it from Settings › Data › Recycle bin for 30 days.`, confirmLabel: 'Delete', danger: true }))) return;
       try {
         await (g.kind === 'cat' ? deleteCat : deleteSub).mutateAsync(g.id);
         toast.success(`${g.name} deleted`);
@@ -101,20 +113,20 @@ const MenuBuilder: React.FC = () => {
     : catNode ? { crumb: '', title: catNode.cat.name, group: { kind: 'cat' as const, ...catNode.cat }, addTo: null }
     : null;
 
-  const onCat = (id: string) => {
+  const onCat = (id: string) => guard(() => {
     setQuery(''); setNoPrice(false);
     if (id === cat) { setSubId(null); return; }
     setOpenCat(id); setSubId(undefined);
-  };
+  });
 
   const dialogEl = (() => {
     if (!dlg) return null;
     const close = () => setDlg(null);
     switch (dlg.kind) {
       case 'newCat': return <NameDialog title="New category" sub="For example Sweet, Farsan or Chinese Cuisine." primary="Add category" onClose={close}
-        onSave={r => createCat.mutateAsync(r.name).then((c: { id: string }) => { setOpenCat(c.id); setSubId(undefined); toast.success(`${r.name} added`); })} />;
+        onSave={r => createCat.mutateAsync(r.name).then((c: { id: string }) => { jump(() => { setOpenCat(c.id); setSubId(undefined); }); toast.success(`${r.name} added`); })} />;
       case 'newSub': return <NameDialog title="New subcategory" sub={`Inside ${cats.find(c => c.id === dlg.catId)?.name ?? 'this category'}.`} primary="Add subcategory" onClose={close}
-        onSave={r => createSub.mutateAsync({ name: r.name, category_id: dlg.catId }).then((s: { id: string }) => { setOpenCat(dlg.catId); setSubId(s.id); toast.success(`${r.name} added`); })} />;
+        onSave={r => createSub.mutateAsync({ name: r.name, category_id: dlg.catId }).then((s: { id: string }) => { jump(() => { setOpenCat(dlg.catId); setSubId(s.id); }); toast.success(`${r.name} added`); })} />;
       case 'newDish': return <NameDialog title="New dish" sub="It shows in quotations straight away." label="Dish name" tree={tree} subId={sub ?? ''} withPrice={hasPrice} primary="Add dish" onClose={close}
         onSave={r => createItem.mutateAsync({ name: r.name, subcategory_id: r.subId, default_price: r.price }).then((d: Dish) => { reveal(d.id, d.subcategory_id); toast.success(`${r.name} added`); })} />;
       case 'rename': return <NameDialog title={`Rename ${dlg.g.name}`} sub="Old quotations keep the old name." name={dlg.g.name} onClose={close}
@@ -128,6 +140,8 @@ const MenuBuilder: React.FC = () => {
     }
   })();
 
+  if (importing) return <ImportScreen kind="dishes" onClose={() => setImporting(false)} />;
+
   return (
     <div className="mb-page">
       <div className="mb-head">
@@ -136,6 +150,7 @@ const MenuBuilder: React.FC = () => {
           <p>{plural(active, 'dish', 'dishes')} in {plural(tree.length, 'category', 'categories')} · picked from here when you make a quotation</p>
         </div>
         <div className="mb-head-acts">
+          <button type="button" className="ui-btn" onClick={() => guard(() => setImporting(true))}>Import from Excel</button>
           <button type="button" className="ui-btn" onClick={() => setDlg({ kind: 'newCat' })}>+ New category</button>
           <button type="button" className="ui-btn primary" onClick={() => setDlg({ kind: 'newDish' })}>+ New dish</button>
         </div>
@@ -144,7 +159,7 @@ const MenuBuilder: React.FC = () => {
       <label className="mb-search">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
         <span className="st-sr">Search dishes</span>
-        <input type="search" value={query} placeholder={`Search all ${plural(active, 'dish', 'dishes')}, subcategories and categories`} onChange={e => setQuery(e.target.value)} />
+        <input type="search" value={query} placeholder={`Search all ${plural(active, 'dish', 'dishes')}, subcategories and categories`} onChange={e => { const v = e.target.value; guard(() => setQuery(v)); }} />
       </label>
 
       {missing > 0 && (
@@ -152,21 +167,26 @@ const MenuBuilder: React.FC = () => {
           <span>{missing === active
             ? <><b>No dish has a price yet; today prices are typed into each quote.</b> Add a per-plate price and it fills in by itself when the dish is added to a quotation.</>
             : <><b>{plural(missing, 'dish', 'dishes')} still {missing === 1 ? 'has' : 'have'} no price.</b> A per-plate price fills in by itself when the dish is added to a quotation.</>}</span>
-          <button type="button" className="ui-btn" onClick={() => { setNoPrice(!noPrice); setQuery(''); }}>{noPrice ? 'Back to categories' : 'Show dishes without a price'}</button>
+          <button type="button" className="ui-btn" onClick={() => guard(() => { setNoPrice(!noPrice); setQuery(''); })}>{noPrice ? 'Back to categories' : 'Show dishes without a price'}</button>
         </div>
       )}
 
       <div className="mb-layout">
         <MenuTree tree={tree} openCat={cat} subId={sub} showHidden={showHidden} onCat={onCat}
-          onSub={(c, s) => { setOpenCat(c); setSubId(s); setQuery(''); setNoPrice(false); }}
+          onSub={(c, s) => guard(() => { setOpenCat(c); setSubId(s); setQuery(''); setNoPrice(false); })}
           onAddSub={c => setDlg({ kind: 'newSub', catId: c })} onShowHidden={setShowHidden} />
-        {view ? (
-          <DishTable {...view} dishes={shown} showPlace={searching || noPrice} hasPrice={hasPrice} fresh={fresh} act={act} />
+        {sheet && catNode && subNode ? (
+          <SheetEdit key={subNode.sub.id} crumb={catNode.cat.name} title={subNode.sub.name} subId={subNode.sub.id} dishes={dishes} tree={tree} hasPrice={hasPrice} hasBin={hasBin}
+            mode={{ sheet, onChange: setSheet }} onDirty={setDirty} onSaved={closeSheet} />
+        ) : view ? (
+          <DishTable {...view} dishes={shown} showPlace={searching || noPrice} hasPrice={hasPrice} fresh={fresh} act={act}
+            mode={view.group?.kind === 'sub' ? { sheet, onChange: setSheet } : undefined} onPaste={subNode ? () => setPasting(true) : undefined} />
         ) : (
           <div className="mb-panel"><div className="mb-empty">Add a category to start, for example Sweet or Farsan.</div></div>
         )}
       </div>
       {dialogEl}
+      {pasting && subNode && <PasteDishesDialog sub={subNode.sub} dishes={dishes} onClose={() => setPasting(false)} />}
       {confirmDialog}
     </div>
   );

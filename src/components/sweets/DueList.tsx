@@ -38,7 +38,7 @@ const DueList: React.FC<Props> = ({ list, today, onAll }) => {
           <button type="button" className="ui-btn sw-soft" onClick={() => act.startHandover(p)}>Hand over</button>
           <SweetsMenu label={`More for ${p.customer_name}`} items={[
             { label: p.status === 'ready' ? 'Not packed yet' : 'Mark packed', onClick: () => act.togglePacked(p), strong: true },
-            { label: noAdvance ? 'Ask for advance' : 'Send a reminder', onClick: () => act.remind(p), disabled: !p.phone, hint: p.phone ? 'WhatsApp' : 'no mobile' },
+            { label: noAdvance ? 'Ask for advance' : 'Send a reminder', onClick: () => (noAdvance ? act.askAdvance(p) : act.remind(p)), disabled: !p.phone, hint: p.phone ? 'WhatsApp' : 'no mobile' },
             { label: 'Cancel booking…', onClick: () => act.changeStatus(p, 'cancelled'), danger: true, sep: true },
           ]} />
         </div>

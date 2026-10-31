@@ -24,7 +24,7 @@ const SizeChips: React.FC<Props> = ({ unit, sizes, onChange, disabled }) => {
   return (
     <div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-        {sizes.length === 0 && <span style={{ fontSize: 12, color: '#AAAAAA' }}>No sizes yet</span>}
+        {sizes.length === 0 && <span style={{ fontSize: 12, color: '#6B6B66' }}>No sizes yet</span>}
         {sizes.map(s => (
           <span key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#F3F2EE', color: NAVY, borderRadius: 14, padding: '4px 6px 4px 10px', fontSize: 12, fontWeight: 600 }}>
             {formatSize(s, unit)}

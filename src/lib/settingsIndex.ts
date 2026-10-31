@@ -18,10 +18,10 @@ const R = (group: GroupId, label: string, words = '') => ({ group, label, words 
 export const SETTING_ROWS = [
   R('business', 'Name on catering documents', 'shop business'), R('business', 'Name on sweets bills', 'shop business'),
   R('business', 'Shop address', 'address'), R('business', 'Contact person', 'phone name'),
-  R('business', 'GST number', 'gstin tax'), R('business', 'FSSAI licence number', 'food licence'),
-  R('business', 'FSSAI certificate', 'food licence upload'), R('business', 'Logo', 'image'),
-  R('money', 'GST on bills', 'gst registered rate tax bill of supply 5% 18%'), R('money', 'GST on sweets', 'gst tax'),
-  R('money', 'UPI ID for QR codes', 'upi qr payment'), R('money', 'Usual payment plan', 'advance schedule balance'),
+  R('business', 'GST number', 'gstin tax'), R('business', 'FSSAI licence number', 'food licence fssai'),
+  R('business', 'FSSAI certificate', 'food licence upload fssai'), R('business', 'Logo', 'image upload'),
+  R('money', 'GST on catering', 'gst registered rate tax bill of supply 5% 18%'), R('money', 'GST on sweets', 'gst tax counter bill'),
+  R('money', 'UPI ID for QR codes', 'upi qr payment counter pos'), R('money', 'Usual payment plan', 'advance schedule balance'),
   R('money', 'Quotes are valid for', 'validity days quotation'),
   R('documents', 'Colour', 'color accent pdf'), R('documents', 'Menu layout', 'columns'), R('documents', 'Dish prices on quotes', 'price'),
   R('documents', 'Invoice: list every payment', 'payments'), R('documents', 'Invoice: UPI QR for the balance', 'upi qr'),
@@ -36,9 +36,9 @@ export const SETTING_ROWS = [
   R('sweets', 'Day close', 'cash drawer'),
   R('reminders', 'Payment due', 'whatsapp'), R('reminders', 'Quote with no reply', 'whatsapp follow up'),
   R('reminders', 'Pre-booking pickup', 'whatsapp'), R('reminders', 'Unpaid sweets bill', 'whatsapp due'),
-  R('team', 'Signed in now', 'login email account'), R('team', 'Add someone', 'invite login staff'),
+  R('team', 'Signed in now', 'login email account role owner counter kitchen'), R('team', 'Add someone', 'invite login staff'), R('team', 'Your password', 'login change'),
   R('team', 'Team list for events', 'cooks helpers staff members'),
-  R('data', 'Import from Excel', 'upload'), R('data', 'Download everything', 'export excel'), R('data', 'Backup copy', 'backup'),
+  R('data', 'Import from Excel', 'upload xlsx csv dishes sweets customers'), R('data', 'Download everything', 'export excel xlsx'), R('data', 'Backup copy', 'backup json'),
   R('data', 'Recycle bin', 'deleted restore'), R('data', 'Database updates', 'migration schema'),
 ];
 
@@ -68,8 +68,11 @@ export interface StatusInput {
   docsReady: boolean;
   eventTypes: number;
   teamMembers: number;
+  logins: number;
   undated: string[];
   updates: number;
+  reminders: number;
+  backupStale: boolean;
 }
 export interface GroupNote { note: string; warn: boolean }
 
@@ -86,8 +89,9 @@ export function groupNotes(i: StatusInput): Record<GroupId, GroupNote> {
     documents: i.docsReady ? { note: 'Colour, terms, what prints', warn: false } : { note: 'Needs a database update to save', warn: true },
     catering: { note: `${plural(i.eventTypes, 'event type')} · 3 food styles`, warn: false },
     sweets: i.undated.length ? { note: `${i.undated[0]} has no dates yet${i.undated.length > 1 ? ` (+${i.undated.length - 1})` : ''}`, warn: true } : { note: 'Box sizes · seasons and dates', warn: false },
-    reminders: { note: 'Coming soon', warn: false },
-    team: { note: `${plural(i.teamMembers, 'team member')} for events`, warn: false },
-    data: i.updates ? { note: `${plural(i.updates, 'database update')} to run`, warn: true } : { note: 'Database up to date', warn: false },
+    reminders: { note: i.reminders ? `${i.reminders} of 4 on · one tap sends on WhatsApp` : 'All off', warn: false },
+    team: { note: [i.logins ? plural(i.logins, 'login') : '', `${plural(i.teamMembers, 'team member')} for events`].filter(Boolean).join(' · '), warn: false },
+    data: i.updates ? { note: `${plural(i.updates, 'database update')} to run`, warn: true }
+      : i.backupStale ? { note: 'No backup this week', warn: true } : { note: 'Backed up · database up to date', warn: false },
   };
 }

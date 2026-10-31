@@ -9,7 +9,20 @@ const storagePath = (url: string) => {
 };
 
 export const fileNameOf = (url: string) => decodeURIComponent(url.split('/').pop()?.split('?')[0] || '').replace(/^\d+_/, '') || 'certificate';
-export const uploadedOn = (url: string) => { const t = Number(url.match(/\/fssai\/(\d+)_/)?.[1]); return t ? new Date(t) : null; };
+export const uploadedOn = (url: string) => { const t = Number(url.match(/\/(?:fssai|logo)\/(\d+)_/)?.[1]); return t ? new Date(t) : null; };
+
+// Puts a file in the "documents" storage bucket under `folder` and returns its link.
+export async function uploadDocument(folder: string, file: File): Promise<string> {
+  const path = `${folder}/${Date.now()}_${file.name.replace(/[^\w.-]+/g, '_')}`;
+  const { error } = await supabase.storage.from('documents').upload(path, file, { upsert: true, contentType: file.type || undefined });
+  if (error) throw new Error(/bucket/i.test(error.message) ? 'The "documents" storage bucket is missing in Supabase.' : error.message);
+  return supabase.storage.from('documents').getPublicUrl(path).data.publicUrl;
+}
+
+export const removeDocument = async (url: string) => {
+  const path = storagePath(url);
+  if (path) await supabase.storage.from('documents').remove([path]).catch(() => {});
+};
 
 // Upload, replace, download and remove the FSSAI certificate in the "documents" storage bucket.
 export function useFssai() {
@@ -21,14 +34,10 @@ export function useFssai() {
   const upload = async (file: File) => {
     setBusy(true);
     try {
-      const path = `fssai/${Date.now()}_${file.name}`;
-      const { error } = await supabase.storage.from('documents').upload(path, file, { upsert: true });
-      if (error) throw new Error(/bucket/i.test(error.message) ? 'The "documents" storage bucket is missing in Supabase.' : error.message);
-      const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(path);
-      const old = url ? storagePath(url) : null;
+      const publicUrl = await uploadDocument('fssai', file);
       await upsert.mutateAsync({ fssai_certificate_url: publicUrl });
       // The old file goes only after the new one is saved.
-      if (old && old !== path) await supabase.storage.from('documents').remove([old]).catch(() => {});
+      if (url && url !== publicUrl) await removeDocument(url);
       toast.success(url ? 'Certificate replaced' : 'Certificate uploaded');
     } catch (e: any) { toast.error(e?.message || 'Upload failed'); }
     finally { setBusy(false); }
@@ -37,9 +46,8 @@ export function useFssai() {
   const remove = async () => {
     setBusy(true);
     try {
-      const old = storagePath(url);
       await upsert.mutateAsync({ fssai_certificate_url: '' });
-      if (old) await supabase.storage.from('documents').remove([old]).catch(() => {});
+      await removeDocument(url);
       toast.success('Certificate removed');
     } catch (e: any) { toast.error(e?.message || 'Could not remove'); }
     finally { setBusy(false); }

@@ -6,9 +6,10 @@ import {
 import { useHasPreorderColumns } from './useSchemaStatus';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import CollectModal from '../components/pos/CollectModal';
-import { balanceOf, STATUS_LABEL, PreStatus, packedToggle } from '../lib/preorders';
+import { balanceOf, STATUS_LABEL, PreStatus, packedToggle, istDay } from '../lib/preorders';
 import { PayMode, PayKind, preorderPayments, preorderLedger } from '../lib/payments';
-import { sendReminder } from '../lib/sessionalReceipts';
+import { sendReminder, advanceText } from '../lib/sessionalReceipts';
+import { openWhatsApp } from '../lib/receipt';
 import { inr } from '../lib/money';
 import { roundMoney } from '../lib/units';
 
@@ -37,6 +38,7 @@ export const usePreorderActions = () => {
   };
 
   const remind = (p: SeasonalPreorder) => sendReminder(p.phone, p.customer_name, balanceOf(p), 'your sweets pre-booking');
+  const askAdvance = (p: SeasonalPreorder) => openWhatsApp(p.phone, advanceText(p.customer_name, p.delivery_date || istDay(p.created_at), p.total_amount));
 
   const take = async (amount: number, mode: PayMode) => {
     if (!taking) return;
@@ -66,7 +68,7 @@ export const usePreorderActions = () => {
   );
 
   return {
-    changeStatus, togglePacked, remove, remind,
+    changeStatus, togglePacked, remove, remind, askAdvance,
     startHandover: (p: SeasonalPreorder) => setTaking({ p, kind: 'handover' }),
     startCollect: (p: SeasonalPreorder) => setTaking({ p, kind: 'due' }),
     ui: <>{modal}{dialog}</>,

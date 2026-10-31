@@ -36,7 +36,7 @@ Because the anon key is public (it ships inside the website), anyone could read 
    - Every table gets row-level security with a single rule: only signed-in emails listed in the `staff` table can read or write. The check (`private.is_staff()`) lives in a schema the API doesn't expose.
    - The open policies are removed.
    - The documents bucket stays viewable by direct link, but only staff can list, upload, replace or delete files.
-4. Open the app and sign in. To add staff later, run `insert into public.staff (email) values ('name@example.com');` and create their user in Authentication.
+4. Open the app and sign in. To add staff later use **Settings → Team & access → Invite** (after `20261110_team_bin_tiers.sql`, see below).
 
 A signed-in email that isn't on the staff list sees an "Access not set up" screen. Sign out is at the bottom of the sidebar, and in the phone **More** menu.
 
@@ -200,12 +200,12 @@ Design: the "Shiv Shakti — Master Design" canvas (its first board maps every s
 - **Home:** "Needs you" first (two actions per row, Later, See all), then To collect, Received, Next 30 days and Quotes tiles, Next events and Sweets this week. Phone: the same with a **+ New** sheet.
 - **Quotations:** follow-ups first (Waiting for the customer, Drafts to send), tabs To do / Accepted / Declined & expired / All, a side panel for the selected quote. A quote with options is one row with lettered option lines under it. The editor **saves as you type** (a new quote is created on the first change), has option tabs plus **Compare**, a sticky summary with "Ready to send?", and a **Send** dialog (WhatsApp on a computer with the PDF saved to attach; the share sheet on a phone). The old quote calendar view is gone: Bookings → Calendar shows every event.
 - **Invoices:** Waiting for money, Ready to invoice, Past events with no invoice (with **Mark all as settled outside**). The invoice editor saves as you type; **Record payment** is the main action.
-- **Money:** period picker, received / to collect / booked / past-no-invoice tiles, who owes by age, coming in, received each month (catering vs sweets), payments received, **Add a spend** and **Paste from Excel** (`spends` table), and **Download for CA** (one CSV with a section per part).
+- **Money:** period picker, received / to collect / booked / past-no-invoice tiles, who owes by age, coming in, received each month (catering vs sweets), payments received, **Add a spend** and **Paste from Excel** (`spends` table), and **Download for CA** (one Excel file with a sheet per part).
 - **Customers:** one list for catering and sweets (matched by phone), filters All / Catering / Sweets / Owes money, a "saved twice" banner with **Combine** (gives the copies one name, with Undo), history across both, and one customer form that warns when the phone number already exists.
 - **Bookings:** a shorter booking form (customer picker, event chips, food style, notes; status is set later), the event page as a side panel (stages, next step, quotes, invoice, payments, advance), and a grouped ⋯ menu with arrow keys. A booking whose quote is only a draft is still an Inquiry ("Send quote"); one confirmed while its sent quote waits for the customer's pick stays Quoted. Food style is saved in `bookings.food_type`.
 - **Sweets today:** season strip from the occasion dates, today's tiles (cancelled bills never count), pre-bookings due with Hand over, What to make by day, This season so far, and Reports links that open the POS tab.
 - **Sweet items / Occasions:** kg price with box sizes, season filters; occasions show their dates and counts and are edited in a small dialog.
-- **Settings:** eight groups with their status and search; each change saves by itself with Undo. Items that have no data yet say "Coming soon".
+- **Settings:** eight groups with their status and search; each change saves by itself with Undo (see *Settings, team and data* below).
 - **Counter on a computer:** the POS takes the whole screen; **‹ Back** returns to the app.
 
 ### Sweets POS (redesign)
@@ -227,6 +227,41 @@ Run in the Supabase SQL editor, in order (both are additive and safe to re-run):
 3. `supabase/migrations/20261109_spends.sql` — the `spends` table for Money → Add a spend (staff-only).
 
 Until they run, the app hides Cancel bill and Day close and saves bills without the new fields.
+
+### Layout and button fixes (audit, Nov 2026)
+
+- **One page width:** every page uses `--page-max` (1440px, `index.css`) and the same gutters (16px on phones); Bookings now has the same header as the other pages. Only the POS is full-screen.
+- **Readable text:** nothing is smaller than 12px, and faint grey text (`MUTED`, tab labels, table heads) is darker.
+- **Links into the POS** (`lib/posIntent.ts`): `posLink.preorder()` opens the counter in Pre-booking mode, `posLink.bill(who)` starts a bill for a customer (an open bill for someone else is held first), `posLink.bills(who)` / `posLink.preorders(id, who)` open those lists filtered to the person, `posLink.report(id)` opens one report. **‹ Back** returns to the screen you came from.
+- **Sweets:** "+ Pre-booking" (also on phones) opens a pre-booking; each Reports link on Sweets today opens its own report; "Ask for advance" asks for an advance, not the full amount; after a pre-booking the button says **New pre-booking**; Bills and Pre-bookings keep their filter and search after an edit; Pack sizes and Change season work on phones; a new occasion starts switched off; a category chip resets to All when the occasion changes.
+- **Phone bar:** **More** lights up on pages that aren't in the bar.
+- **Bookings & quotes:** an unsent draft shows **Send quote** (opens the Send dialog), never "Pick & accept"; **Mark accepted** takes the sent quote, not a newer draft; **+ New quote** always starts a new one; Mark sent / lost / Reopen / Delete on a quote with options act on every option; **Reopen** is hidden once the event date has passed and brings a cancelled booking back to follow-up; Send everywhere follows the "Show each dish's price" setting (`useQuotePdfPref`); phones get the quote ⋯ menu and "See the N" on the tidy banner.
+- **Home, Money, Invoices, Customers:** Pick & accept opens the Accept dialog; a draft's **Send on WhatsApp** sends it and **Open** opens the quote; the tidy row is split into invoices and quotes; "Received in <month>" opens Money on This month; Invoices leaves out cancelled bookings like Home and Money; **+ Record payment** hides when nothing is due; an invoice opened from a booking goes back to it; **Download for CA** works on phones; **+ Sweets bill** and a customer's sweets history open the POS for that person; a customer with bookings gets an explanation instead of a Delete that always fails.
+
+## Settings, team and data (Nov 2026)
+
+Everything that said "Coming soon" in Settings now works. Database update: [`supabase/migrations/20261110_team_bin_tiers.sql`](supabase/migrations/20261110_team_bin_tiers.sql) (additive, safe to re-run; take a schema copy first like `backup_20261110`). Until it runs, Team & access, the recycle bin, dish food styles and package price tiers stay hidden and Settings › Data lists it under *Database updates*.
+
+- **Business:** the names on catering documents and on sweets bills, the FSSAI licence number (14 digits) and the logo are editable. The names and the FSSAI number print in every document header and on the 80 mm counter bill; an uploaded logo (PNG/JPG/WebP, up to 2 MB, saved in the `documents` bucket under `logo/`) replaces `/logo.png` on documents and in the sidebar, and **Use the original** goes back. The FSSAI certificate dialog also edits the number.
+- **Money & tax:** *GST on catering* (not registered / 5% / 18%) and a separate *GST on sweets*. Sweets prices include GST: a registered shop's counter bill shows the taxable value and the GST inside the total, and **Download for CA** splits sweets sales the same way. The UPI ID is the one used for the counter QR, bills, quotes and invoices.
+- **Reminders on Home:** payment due (N days before the event), quote with no reply (after N days), pre-booking pickup (N days before, new "to hand over" row with a WhatsApp reminder that includes the balance) and unpaid sweets bill (after N days). Each can be switched off; Home's *Needs you* follows them (`lib/cateringTodo.ts`).
+- **Team & access:** people who sign in, each with a role: **Owner** (everything), **Counter** (Sweets today, POS, Sweet items, occasions and sweets customers; never Money or Settings) or **Kitchen only** (Bookings and the sweets make list). **Invite** saves them on the staff list and emails a one-tap sign-in link (Supabase must allow new sign-ups for this; otherwise add the user in Supabase → Authentication and they use "Forgot password?"). The link signs them in and asks them to set a password; **Your password** changes it later. *Can sign in* off locks a person out at once. The database lets only owners change the team or the settings (`data_center`), and never lets the last owner be removed or downgraded. Screens are filtered per role in the app (`components/navItems.ts`).
+- **Data:** **Import from Excel** (dishes, sweets, customers, with a preview of every change), **Download everything** (one `.xlsx`, a sheet per list, with customer and dish names next to their ids), **Backup copy** (a JSON file in the same shape as `backups/`; flagged when older than a week) and the **Recycle bin**.
+- **Recycle bin:** deleting a customer, sweets customer, booking, quotation, package, menu category, subcategory, dish, sweet or pre-booking keeps a copy for 30 days (`deleted_items`, filled by a database trigger, so every delete path is covered). **Restore** brings back the row with the parents it needs (a dish's subcategory and category, a quote's booking) and whatever was deleted along with it (a category's dishes, a booking's quotes). Excel imports and sheet edits keep an undo copy for 7 days. **Delete now** and **Empty bin** remove copies for good.
+- **Excel files** are read and written by `lib/xlsx.ts` (small, built on `fflate`); CSV is accepted for imports.
+
+### Menu Builder: edit many dishes at once
+
+- **Edit as sheet** (View / Edit as sheet on a subcategory): type straight into Dish name, Price / plate, Food style and On quotes cells; Tab moves right, Enter moves down, arrows move, and Ctrl+V pastes a column (or a block) from Excel. Changed cells turn yellow with what they were. Select rows for **Set price…**, **Change by %…**, **Move to…**, **Food style…** and **Hide / Show on quotes**. Nothing saves until **Review & save**, which lists every change; the save keeps an undo copy for 7 days in the recycle bin. Leaving the sheet, switching subcategory or changing page with unsaved cells asks first.
+- **Food styles** on dishes (Jain, Swaminarayan, Has onion / garlic) show as chips under each dish (`menu_items.food_styles`).
+- **Paste a list** (next to *Add* under a subcategory's dishes): paste dish names from WhatsApp or Excel, one per line with the price at the end if known ("Raj Kachori 60", "Dahi Puri - 50", "₹ 60/-"). Each line shows New, Update price or Same before **Add 5 · update 1**.
+- **Import from Excel** (Menu Builder header, or Settings › Data for dishes, sweets or customers): **Download current** or an **Empty template**, fill it in, upload (.xlsx or .csv). Columns are matched loosely. Tiles count new, changed, moved and same-as-today rows; questions are asked once per kind ("₹ 60/-" → use 60 for all ten rows, an unknown subcategory → the closest one or create it, a look-alike name → same dish or new). Nothing saves until **Save N changes**, and the import can be undone for 7 days from the recycle bin. Customers are matched by mobile, sweets and dishes by name; an empty cell never clears a saved value (`lib/importPlan.ts`, `importDishes.ts`, `importSweets.ts`, `importCustomers.ts`).
+
+### Packages and sweets
+
+- **Package price by guest count** (Packages → Price per plate → *By number of guests*): ranges like "Up to 150 guests ₹270 · 151 – 300 ₹250 · 301 and more ₹230" (`menus.price_tiers`; the first price is also kept in `price_per_plate`). The editor shows what the soonest booking would pay. On a quotation the plate price fills in from the guest count and moves with it while it still equals the package's price; a price typed by hand is never overwritten, and a hint shows the range and package (`lib/priceTiers.ts`, `components/quotes/usePackagePrice.ts`).
+- **Save menu as package** (quotation ⋯ menu) opens a dialog with the course summary, name, price and *Keep "choose 1 farsan" as a choice*.
+- **Sweets rate card** (Sweet items → *Rate card*): an A5 card to print or save as PDF with the logo, this season's specials and the all-year sweets at 1 kg / 500 g / 250 g (litre sweets by the litre, piece sweets per piece), only sweets on the POS, and the WhatsApp number (`lib/docs/rateCard.ts`).
 
 ## Bookings: list, calendar and pipeline
 
@@ -346,17 +381,26 @@ src/
   lib/docs/                         printed documents: theme, parts, menu blocks, quotation, invoice/event menu, sweets, settings, QR, output (PDF service → download/share, print fallback)
   api/pdf.js                        PDF service (Vercel function, headless Chrome)
   components/DocSettingsCard.tsx    Data Center → Documents
+  components/settings/              Settings groups (Business, Money, Reminders, Team & access, Data), team, password, FSSAI and recycle-bin dialogs
+  components/menu/                  Menu Builder "Edit as sheet": grid, toolbar, bulk dialogs, review, food-style chips
+  components/data/                  Paste a list of dishes, Import from Excel (dishes, sweets, customers) with a preview
+  lib/xlsx.ts                       .xlsx read/write (fflate) and CSV for imports, exports and backups
+  lib/recycleBin.ts, hooks/useRecycleBin.ts   recycle bin: names, grouping, restore plan (parents first), undo of imports
+  lib/backup.ts, hooks/useBackup.ts           "Download everything" sheets and the JSON backup copy
+  lib/menuSheet.ts, lib/foodStyles.ts         sheet edits (pending changes, paste, % change, save plan) and dish food styles
+  lib/priceTiers.ts, lib/docs/rateCard.ts     package price by guest count; the printable sweets rate card
+  hooks/useStaff.ts, components/navItems.ts   team logins and invites; which screens each role sees
   lib/quoteMath.ts                  shared catering money math
   pages/                            one file per screen
 supabase/
   schema.sql                        baseline schema (inferred from the code, for local dev)
-  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN, invoice/quote numbers, pre-booking fulfillment, document settings, quote options)
+  migrations/                       SQL to run on the live database (pack sizes, security/RLS, item prices + GSTIN, invoice/quote numbers, pre-booking fulfillment, document settings, quote options, POS payments, spends, team roles + recycle bin + food styles + price tiers)
 ```
 
 ## Tests and checks
 
 ```bash
-CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, documents, reports, pre-booking sheet/slip, nav
+CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, documents, reports, pre-booking sheet/slip, nav and roles, Excel, recycle bin, backups, sheet edits, imports, price tiers, rate card
 npx tsc --noEmit -p .                             # type check
 npx eslint src --ext .ts,.tsx                     # lint (the hosted build fails on warnings when CI=true)
 ```

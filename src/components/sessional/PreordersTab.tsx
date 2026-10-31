@@ -21,6 +21,8 @@ interface Props {
   occasions: SeasonalOccasion[];
   gst?: string;
   onEdit: (p: SeasonalPreorder) => void;
+  search?: string;
+  openId?: string;
 }
 
 type Show = 'open' | 'due' | 'done' | 'all';
@@ -29,14 +31,14 @@ const SHOW_LABEL: Record<Show, string> = { open: 'Open', due: 'Due by tomorrow',
 const dueBy = (p: SeasonalPreorder, day: string) => isOpen(p) && !!p.delivery_date && p.delivery_date <= day;
 
 // Pre-bookings as a register (to-do sheet) or cards: Booked → Packed → Handed over; a name opens the booking.
-const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit }) => {
+const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, search, openId: startId }) => {
   const { data: items = [] } = useSeasonalItems();
   const actions = usePreorderActions();
   const [prefs, setPrefs] = useStoredState<{ view: View }>('shivshakti.preorderView', () => ({ view: 'sheet' }));
   const view = prefs.view;
-  const [show, setShow] = useState<Show>('open');
-  const [q, setQ] = useState('');
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [show, setShow] = useState<Show>(search ? 'all' : 'open');
+  const [q, setQ] = useState(search ?? '');
+  const [openId, setOpenId] = useState<string | null>(startId ?? null);
   const today = todayIST();
   const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const occName = (id?: string) => occasions.find(o => o.id === id)?.name;

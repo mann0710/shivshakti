@@ -13,7 +13,7 @@ interface Props {
 const TicketLines: React.FC<Props> = ({ lines, onQty }) => (
   <div className="pos-lines" aria-label="Bill lines">
     {lines.length === 0 ? (
-      <div style={{ textAlign: 'center', color: '#AAAAAA', padding: '28px 8px', fontSize: 13 }}>
+      <div style={{ textAlign: 'center', color: '#6B6B66', padding: '28px 8px', fontSize: 13 }}>
         <div style={{ fontSize: 28, marginBottom: 6 }}>🧾</div>
         No items yet. Tap a pack size to add it.
       </div>
@@ -23,7 +23,7 @@ const TicketLines: React.FC<Props> = ({ lines, onQty }) => (
         <div key={key} className="pos-line">
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.item_name}</div>
-            <div style={{ fontSize: 11, color: '#888880' }}>{formatLineSize(l.weight, l.weight_unit)} · {inr(l.price)}</div>
+            <div style={{ fontSize: 12, color: '#6B6B66' }}>{formatLineSize(l.weight, l.weight_unit)} · {inr(l.price)}</div>
           </div>
           <div className="pos-qty">
             <button type="button" aria-label={`One less ${l.item_name}`} onClick={() => onQty(key, l.qty - 1)}>{l.qty === 1 ? '🗑' : '−'}</button>

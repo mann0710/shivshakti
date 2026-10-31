@@ -1,6 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../ui/ConfirmDialog';
+import Modal from '../ui/Modal';
+import { posLink } from '../../lib/posIntent';
 import { useUpdateBooking } from '../../hooks/useBookings';
 import { NavIntent, Navigate } from '../../hooks/useNavIntent';
 import { Booking } from '../../types';
@@ -41,6 +43,7 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
   const [view, setView] = useState<'list' | 'detail'>(intent?.action === 'open' ? 'detail' : 'list');
   const [editing, setEditing] = useState<string | 'new' | null>(intent?.action === 'new' ? 'new' : null);
   const [combining, setCombining] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<string | null>(null);
   const top = useRef<HTMLDivElement>(null);
 
   const shown = useMemo(() => searchPeople(rows, search).filter(p => matchesFilter(p.s, filter)), [rows, search, filter]);
@@ -55,11 +58,11 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
   const remove = async () => {
     if (!current) return;
     const n = current.s.history.filter(h => h.kind === 'booking').length;
+    // Bookings block the delete, so only explain it.
+    if (n) return setBlocked(`${current.name} has ${n} booking${n === 1 ? '' : 's'} on record. A customer with bookings can't be deleted until those bookings are removed.`);
     const ok = await confirm({
       title: `Delete ${current.name}?`,
-      message: n
-        ? `${current.name} has ${n} booking${n === 1 ? '' : 's'} on record. A customer with bookings can't be deleted until those bookings are removed.`
-        : 'The saved contact is removed for catering and sweets. Old bills keep the name printed on them. This cannot be undone.',
+      message: 'The saved contact is removed for catering and sweets. Old bills keep the name printed on them. It stays in Settings › Data › Recycle bin for 30 days.',
       confirmLabel: 'Delete', danger: true,
     });
     if (!ok) return;
@@ -85,7 +88,9 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
     } catch (e: any) { toast.error(e?.message || 'Could not update the booking'); }
   };
 
-  const openItem = (h: HistoryItem) => (h.kind === 'booking' ? onNavigate('bookings', { action: 'open', id: h.id }) : onNavigate('seasonal_billing'));
+  const who = current && { name: current.name, phone: current.phone };
+  const openItem = (h: HistoryItem) => (h.kind === 'booking' ? onNavigate('bookings', { action: 'open', id: h.id })
+    : onNavigate('seasonal_billing', h.kind === 'bill' ? posLink.bills(who) : posLink.preorders(h.id, who)));
   const editingPerson = editing && editing !== 'new' ? byKey(editing) : undefined;
   const combinePerson = byKey(combining);
 
@@ -105,7 +110,7 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
           onFilter={setFilter} onSearch={setSearch} onSelect={select} onCombine={p => setCombining(p.key)} />
         {current ? (
           <CustomerDetail p={current} onBack={() => { setView('list'); toTop(top.current); }} onEdit={() => setEditing(current.key)} onDelete={remove}
-            onCombine={() => setCombining(current.key)} onNewBooking={newBooking} onSweetsBill={() => onNavigate('seasonal_billing')}
+            onCombine={() => setCombining(current.key)} onNewBooking={newBooking} onSweetsBill={() => onNavigate('seasonal_billing', posLink.bill(who))}
             onMarkCompleted={markCompleted} onOpen={openItem} />
         ) : (
           <section className="pp-detail"><div className="pp-placeholder">{isLoading ? 'Loading…' : 'Pick a customer to see their bookings and bills.'}</div></section>
@@ -119,6 +124,12 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
           onOpen={key => { setEditing(null); select(key); }} />
       )}
       {combinePerson && <CombineDialog person={combinePerson} onClose={() => setCombining(null)} />}
+      {blocked && (
+        <Modal title="Can't delete this customer" onClose={() => setBlocked(null)} width={400}
+          footer={<button type="button" className="ui-btn primary" onClick={() => setBlocked(null)}>OK</button>}>
+          <p style={{ fontSize: 13, color: '#444', lineHeight: 1.5 }}>{blocked}</p>
+        </Modal>
+      )}
       {dialog}
     </div>
   );

@@ -95,7 +95,7 @@ export function invoiceDoc(inv: Invoice, q: Quotation | undefined, payments: Pay
     <div style="text-align:right"><div style="height:46px;border-bottom:1px solid #1C1C24;margin-left:60px"></div><span class="muted" style="font-size:12px">Authorised signatory</span></div></div>
   ${s.invoice_menu && menu ? `<section style="break-before:page">${sectionHead('Menu served', [b?.event_type, span].filter(Boolean).join(' · '))}${menu}</section>` : ''}
 </div>
-${endLine(ctx, 'Thank you for choosing Shiv Shakti Catering Service')}`;
+${endLine(ctx, `Thank you for choosing ${ctx.settings.catering_name}`)}`;
 
   return {
     html: page(`Invoice ${inv.invoice_number}`, s.accent, body),

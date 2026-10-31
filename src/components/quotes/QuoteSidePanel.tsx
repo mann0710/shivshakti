@@ -7,9 +7,9 @@ import { choiceGroups, pickedOf, acceptPatch, pickKey } from '../../lib/quoteCho
 import { formatDateIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
 import { fmtTime } from '../catering/BookingCalendar';
-import { QuoteActions } from './QuoteMenu';
+import QuoteMenu, { QuoteActions } from './QuoteMenu';
 import { runNext } from './QuoteRow';
-import { Letter, StatusChip, SumRow } from './bits';
+import { Letter, StatusChip, SumRow, useMedia, PHONE } from './bits';
 
 interface Props { r: BoardRow; a: QuoteActions; today: string }
 
@@ -18,6 +18,8 @@ const QuoteSidePanel: React.FC<Props> = ({ r, a, today }) => {
   const g = r.group;
   const q = r.head;
   const b = q.booking;
+  // Phones hide the row's ⋯, so the panel carries it.
+  const phone = useMedia(PHONE);
   // One open "choose 1" group can be decided right here.
   const open = useMemo(() => (q.is_multi_day ? [] : choiceGroups(q.items).filter(x => !pickedOf(x).length)), [q]);
   const single = r.section === 'waiting' && !g.grouped && open.length === 1 && Math.max(1, open[0].meta.pick) === 1 ? open[0] : null;
@@ -70,10 +72,11 @@ const QuoteSidePanel: React.FC<Props> = ({ r, a, today }) => {
         <button type="button" className={`ui-btn${r.next.kind === 'send' ? '' : ' primary'}`} onClick={() => runNext(r, a)}>{r.next.label}</button>
       )}
 
-      <div className="q-acts">
+      <div className="q-acts" style={phone ? { gridTemplateColumns: 'repeat(3, minmax(0, 1fr)) 44px' } : undefined}>
         <button type="button" className="ui-btn" onClick={() => a.send(q, g.grouped ? g.options : undefined)}>WhatsApp</button>
         <button type="button" className="ui-btn" onClick={() => a.pdf(q, g.grouped ? g.options : undefined)}>PDF</button>
         <button type="button" className="ui-btn" onClick={() => a.open(q)}>Edit</button>
+        {phone && <QuoteMenu g={g} q={q} a={a} />}
       </div>
 
       <div className="q-hist">

@@ -28,7 +28,7 @@ export const useCreateSeasonalOccasion = () => {
     mutationFn: async (name: string) => {
       const { data, error } = await supabase
         .from('seasonal_occasions')
-        .insert({ name, is_active: true })
+        .insert({ name, is_active: false })
         .select()
         .single();
       if (error) throw error;
