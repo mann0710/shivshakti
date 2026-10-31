@@ -204,6 +204,7 @@ Independent UX review of the master canvas, then fixed in the design. These item
 | "Received in October" opened Money on This year; Invoices counted cancelled bookings | **Fixed** |
 | "+ Record payment" on a paid invoice; Delete offered for a customer who can't be deleted | **Fixed.** Hidden / explained |
 | "+ Sweets bill" and sweets history on a customer opened a blank counter | **Fixed.** POS opens for that person |
+| Pre-booking register print: one column per sweet, so with 10+ sweets the last sweets and the Total / Paid / Balance columns fell off the page; 4 bookings a page; grand totals repeated under page 1; no page numbers; PDF saved as Shiv_Shakti.pdf | **Fixed.** New register: to-pack list by size with box numbers, bookings by day with money to collect and a Received line, header repeats, Page X of Y, PDF named after the print |
 | On a 2560px monitor pages filled 61% of the screen and 14px text looked tiny | **Fixed.** App zooms 1.3× from 2500px (1.15× from 2200px, 1.6× from 3200px); pages fill 82%, menus and dialogs still sit in the right place |
 
 ## Code quality

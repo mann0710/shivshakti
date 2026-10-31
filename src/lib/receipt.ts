@@ -44,14 +44,22 @@ export function printHtml(html: string) {
   const frame = document.createElement('iframe');
   Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
   document.body.appendChild(frame);
-  const doc = frame.contentWindow?.document;
-  if (!doc) return;
+  const win = frame.contentWindow;
+  const doc = win?.document;
+  if (!win || !doc) return;
   doc.open(); doc.write(html); doc.close();
-  setTimeout(() => {
-    frame.contentWindow?.focus();
-    frame.contentWindow?.print();
+  // Wait for the stylesheet, logo and web fonts (max 3 s) so the first print isn't in fallback fonts.
+  const loaded = new Promise<void>(res => (doc.readyState === 'complete' ? res() : win.addEventListener('load', () => res(), { once: true })));
+  const ready = loaded.then(() => { void doc.body?.offsetHeight; return doc.fonts?.ready; });
+  Promise.race([ready, new Promise(res => setTimeout(res, 3000))]).finally(() => {
+    // Chrome names the saved PDF after the top page's title.
+    const was = document.title;
+    document.title = doc.title || was;
+    win.focus();
+    win.print();
+    document.title = was;
     setTimeout(() => frame.remove(), 1000);
-  }, 250);
+  });
 }
 
 

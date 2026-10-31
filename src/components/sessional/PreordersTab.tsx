@@ -5,7 +5,7 @@ import { useSeasonalItems } from '../../hooks/useSeasonalItems';
 import { usePreorderActions } from '../../hooks/usePreorderActions';
 import { useStoredState } from '../../hooks/useStoredState';
 import { preorderReceipt, printReceipt, shareReceipt, formatDay } from '../../lib/sessionalReceipts';
-import { buildSheet, sheetHtml } from '../../lib/preorderSheet';
+import { buildPlan, registerHtml, printedNow } from '../../lib/preorderPrint';
 import { isOpenPreorder as isOpen, isPacked, balanceOf, STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf } from '../../lib/preorders';
 import { printHtml } from '../../lib/receipt';
 import { formatLineSize } from '../../lib/units';
@@ -28,6 +28,7 @@ interface Props {
 type Show = 'open' | 'due' | 'done' | 'all';
 type View = 'sheet' | 'list';
 const SHOW_LABEL: Record<Show, string> = { open: 'Open', due: 'Due by tomorrow', done: 'Done', all: 'All' };
+const PRINT_SCOPE: Record<Show, string> = { open: 'Open, not handed over yet', due: 'Due by tomorrow', done: 'Handed over or cancelled', all: 'All pre-bookings' };
 const dueBy = (p: SeasonalPreorder, day: string) => isOpen(p) && !!p.delivery_date && p.delivery_date <= day;
 
 // Pre-bookings as a register (to-do sheet) or cards: Booked → Packed → Handed over; a name opens the booking.
@@ -54,7 +55,11 @@ const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, sear
 
   const dueCount = preorders.filter(p => dueBy(p, tomorrow)).length;
   const receipt = (p: SeasonalPreorder) => preorderReceipt(p, occName(p.occasion_id), gst);
-  const printSheet = () => printHtml(sheetHtml(buildSheet(shown, items), `Pre-booking register · ${SHOW_LABEL[show]}`));
+  const printSheet = () => {
+    const ids = new Set(shown.map(p => p.occasion_id));
+    const scope = q.trim() ? `${PRINT_SCOPE[show]} · matching “${q.trim()}”` : PRINT_SCOPE[show];
+    printHtml(registerHtml(buildPlan(shown), { scope, occasion: ids.size === 1 ? occName(Array.from(ids)[0]) : undefined, printedAt: printedNow() }));
+  };
   const opened = openId ? preorders.find(p => p.id === openId) : undefined;
 
   return (

@@ -133,7 +133,7 @@ The grid-and-bill layout follows NodeDR POS.
   - Today / Unpaid / All year filters; search by name, mobile or bill #;
   - mark paid (Cash/UPI), print, WhatsApp, edit (loads the bill back into the POS) and delete with confirmation.
 - **Pre-bookings tab:**
-  - **Sheet view** (default), the paper register as a to-do list: one row per customer, one column per sweet with its ₹/kg, cells like "500 g × 2", a **Total quantity** row, and tick boxes for **Packed** and **Given**. Ticking Given asks for the balance received (Cash/UPI). **Print sheet** prints it landscape with tick boxes;
+  - **Sheet view** (default), the paper register as a to-do list: one row per customer, one column per sweet with its ₹/kg, cells like "500 g × 2", a **Total quantity** row, and tick boxes for **Packed** and **Given**. Ticking Given asks for the balance received (Cash/UPI). **Print sheet** prints the paper register (see *Pre-booking register print* below);
   - **List view**: cards with Confirm, Mark packed, Hand over & collect, Print slip, WhatsApp, Edit, Cancel, Delete;
   - status flow: Pending → Confirmed → Packed → Handed over (or Cancelled);
   - Open / Due by tomorrow / Done / All filters, search, overdue highlighting;
@@ -239,6 +239,16 @@ Until they run, the app hides Cancel bill and Day close and saves bills without 
 - **Bookings & quotes:** an unsent draft shows **Send quote** (opens the Send dialog), never "Pick & accept"; **Mark accepted** takes the sent quote, not a newer draft; **+ New quote** always starts a new one; Mark sent / lost / Reopen / Delete on a quote with options act on every option; **Reopen** is hidden once the event date has passed and brings a cancelled booking back to follow-up; Send everywhere follows the "Show each dish's price" setting (`useQuotePdfPref`); phones get the quote ⋯ menu and "See the N" on the tidy banner.
 - **Home, Money, Invoices, Customers:** Pick & accept opens the Accept dialog; a draft's **Send on WhatsApp** sends it and **Open** opens the quote; the tidy row is split into invoices and quotes; "Received in <month>" opens Money on This month; Invoices leaves out cancelled bookings like Home and Money; **+ Record payment** hides when nothing is due; an invoice opened from a booking goes back to it; **Download for CA** works on phones; **+ Sweets bill** and a customer's sweets history open the POS for that person; a customer with bookings gets an explanation instead of a Delete that always fails.
 
+### Pre-booking register print (Nov 2026)
+
+**Print sheet** on POS › Pre-bookings prints a black-and-white A4 landscape register (`lib/preorderPrint.ts`) for packing and the hand-over counter. The old print put one column per sweet with the money at the far right, so with 10+ sweets the money and the last sweets were cut off the page.
+
+- **To make and pack:** every sweet with packs by size (`2 × 1 kg + 3 × 500 g`), total weight and the box numbers that get it; boxes already packed are left out.
+- **Bookings by day:** a numbered row each (write the # on the box), day, customer and phone (names title-cased), sweets in two neat columns with the count in bold, a **DELIVERY** tag with the address, notes, **Packed**, **To collect** (with the advance under it), a **Received ₹** line to write on and **Given**. Already packed or given rows print the word, not a tick.
+- **Totals:** a subtotal for each day with more than one booking, two blank rows for walk-ins and changes, then the grand total, each with a line for the cash counted.
+- **Pages:** the column header repeats on every page; from page 2 the page margin carries the title and print time, and every page says *Page X of Y* (Chrome `@page` margin boxes).
+- **Printing** (`printHtml`, all prints): waits for the page, logo and fonts before opening the print dialog, and the saved PDF is named after the document (e.g. *Pre-bookings Diwali Sat 31 Oct.pdf*) instead of *Shiv_Shakti.pdf*.
+
 ## Settings, team and data (Nov 2026)
 
 Everything that said "Coming soon" in Settings now works. Database update: [`supabase/migrations/20261110_team_bin_tiers.sql`](supabase/migrations/20261110_team_bin_tiers.sql) (additive, safe to re-run; take a schema copy first like `backup_20261110`). Until it runs, Team & access, the recycle bin, dish food styles and package price tiers stay hidden and Settings › Data lists it under *Database updates*.
@@ -313,7 +323,7 @@ One look ("Navy & Leaf", from the logo) for everything that is printed or shared
 - **Sweets:**
   - 80 mm bill (black only, big total, payment status);
   - A4 pre-booking slip with every payment and a tear-off counter stub (Packed / Given);
-  - register sheet and kitchen prep list in the same style.
+  - kitchen prep list in the same style (the register has its own black-and-white print, below).
 - **Reports:** the same header, headline tiles and tables.
 - **Data Center → Documents:** accent colour, shop address, UPI ID, bank details, contact person, quote validity, payment schedule (must add up to 100%), "on request" list, terms, and switches for the QR codes, invoice payments, invoice menu page and the slip stub, plus the bill footer line.
 - **Menu layout on paper (design A):** a two-column grid of course cards, each a plain list of dishes with dotted rules — no sub-headings. Courses follow the order you arranged the dishes in; dal, rice, breads, sabji / shaak, kathod and kadhi sit in one **Main Course**; farsan and starters are their own course even when kept under Main Course in Menu Builder; "Including" / accompaniments always come last; a course with more than 8 dishes spans both columns. A "choose any" group that is a whole course prints as a green choice card ("Farsan · choose any 1", tick boxes, "Tick one."); with other dishes it sits as a small green box inside the course.
@@ -369,7 +379,8 @@ src/
   lib/cart.ts, lib/posForm.ts       bill lines, totals, validation, save payloads
   lib/receipt.ts, sessionalReceipts.ts   thermal receipt, print, WhatsApp text
   lib/preorders.ts                  pre-booking statuses, balances, pickup/delivery, hand-over date
-  lib/preorderSheet.ts, preorderSlip.ts   pre-booking register (sheet + print) and the A4 slip
+  lib/preorderSheet.ts, preorderSlip.ts   on-screen pre-booking register and the A4 slip
+  lib/preorderPrint.ts              paper pre-booking register (to-pack list, bookings by day, money to collect)
   lib/reports/                      report builders (sweets, money, pipeline), date ranges, Print/PDF + CSV export
   hooks/usePreorderActions.tsx      pack, hand over + collect, cancel, delete (shared by sheet and list)
   hooks/useReportData.ts            data for one report period
