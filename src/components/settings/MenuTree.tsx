@@ -6,6 +6,7 @@ interface Props {
   tree: CatNode[];
   openCat: string | null;
   subId: string | null;
+  expanded: Set<string>;
   showHidden: boolean;
   onCat: (id: string) => void;
   onSub: (catId: string, subId: string) => void;
@@ -13,15 +14,16 @@ interface Props {
   onShowHidden: (v: boolean) => void;
 }
 
-// Categories down the left; the open one lists its subcategories.
-const MenuTree: React.FC<Props> = ({ tree, openCat, subId, showHidden, onCat, onSub, onAddSub, onShowHidden }) => (
+// Categories down the left, collapsed until opened; an open one lists its subcategories.
+const MenuTree: React.FC<Props> = ({ tree, openCat, subId, expanded, showHidden, onCat, onSub, onAddSub, onShowHidden }) => (
   <nav className="mb-tree" aria-label="Categories">
     {!tree.length && <div className="mb-empty">No categories yet.</div>}
     {tree.map(({ cat, count, subs }) => {
-      const open = cat.id === openCat;
+      const open = expanded.has(cat.id);
+      const shown = cat.id === openCat && !subId;
       return (
         <React.Fragment key={cat.id}>
-          <button type="button" className={`mb-node cat${open ? ' open' : ''}${cat.is_active ? '' : ' hidden'}`} aria-expanded={open} onClick={() => onCat(cat.id)}>
+          <button type="button" className={`mb-node cat${open ? ' open' : ''}${shown ? ' on' : ''}${cat.is_active ? '' : ' hidden'}`} aria-expanded={open} aria-current={shown ? 'true' : undefined} onClick={() => onCat(cat.id)}>
             <i aria-hidden="true">{open ? '▾' : '▸'}</i><span>{cat.name}</span><span className="mb-count">{count}</span>
           </button>
           {open && subs.map(({ sub, count: n }) => (

@@ -1,4 +1,4 @@
-import { buildTree, filterDishes, withoutPrice, placesByName, placeFor, addDish, copyName, groupsOf, matchGroup, plateRow, withCount, plateSummary, Dish } from './menuCatalog';
+import { buildTree, filterDishes, withoutPrice, placesByName, placeFor, addDish, copyName, groupsOf, matchGroup, plateRow, withCount, plateSummary, searchSubs, Dish } from './menuCatalog';
 import type { MenuCategory, MenuSubcategory } from '../hooks/useMenuBuilder';
 
 const at = '2026-01-01T00:00:00Z';
@@ -61,5 +61,18 @@ describe('menu catalog', () => {
     const rows = ['Sabji 2(Gujarati)', 'Roti', 'Dahi Balla'].map(t => plateRow(t, places, groups));
     expect(plateSummary(rows)).toBe('2 courses · 4 dishes');
     expect(plateSummary([])).toBe('No dishes yet');
+  });
+});
+
+describe('subcategory search for the dish form', () => {
+  const tree = [
+    { cat: { id: 'c1', name: 'Main Course' }, count: 0, subs: [{ sub: { id: 's1', name: 'Farsan' }, count: 0 }, { sub: { id: 's2', name: 'Punjabi Sabji' }, count: 0 }] },
+    { cat: { id: 'c2', name: 'Farsan Specials' }, count: 0, subs: [{ sub: { id: 's3', name: 'Live Farsan' }, count: 0 }] },
+  ] as any;
+  it('matches every word across category and subcategory, names starting with it first', () => {
+    expect(searchSubs(tree, 'main far').map(o => o.id)).toEqual(['s1']);
+    expect(searchSubs(tree, 'farsan').map(o => o.id)).toEqual(['s1', 's3']);
+    expect(searchSubs(tree, '').map(o => o.id)).toEqual(['s1', 's2', 's3']);
+    expect(searchSubs(tree, 'paneer')).toEqual([]);
   });
 });

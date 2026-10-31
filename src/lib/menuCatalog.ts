@@ -104,3 +104,15 @@ export function plateSummary(rows: PlateRow[]): string {
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-IN')} ${n === 1 ? one : many}`;
+
+export interface SubOption { id: string; cat: string; sub: string }
+
+// Subcategories for a picker: every typed word must match the category or subcategory; names starting with the text first.
+export function searchSubs(tree: CatNode[], term: string): SubOption[] {
+  const all = tree.flatMap(c => c.subs.map(s => ({ id: s.sub.id, cat: c.cat.name, sub: s.sub.name })));
+  const words = key(term).split(/\s+/).filter(Boolean);
+  if (!words.length) return all;
+  const t = key(term);
+  return all.filter(o => words.every(w => key(`${o.cat} ${o.sub}`).includes(w)))
+    .sort((a, b) => Number(!key(a.sub).startsWith(t)) - Number(!key(b.sub).startsWith(t)));
+}

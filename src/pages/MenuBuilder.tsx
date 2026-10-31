@@ -41,7 +41,10 @@ const MenuBuilder: React.FC = () => {
   const [noPrice, setNoPrice] = useState(false);
   const [openCat, setOpenCat] = useState<string | null>(null);
   // undefined: the open category's first subcategory; null: the whole category.
-  const [subId, setSubId] = useState<string | null | undefined>(undefined);
+  const [subId, setSubId] = useState<string | null | undefined>(null);
+  // Categories start collapsed; showing something expands its category.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const show = (c: string | null, s: string | null | undefined) => { setOpenCat(c); setSubId(s); if (c) setExpanded(e => (e.has(c) ? e : new Set(e).add(c))); };
   const [fresh, setFresh] = useState<string | null>(null);
   const [dlg, setDlg] = useState<Dlg | null>(null);
   const [importing, setImporting] = useState(false);
@@ -64,7 +67,7 @@ const MenuBuilder: React.FC = () => {
 
   const reveal = (id: string, subcategory_id: string) => jump(() => {
     const c = subs.find(s => s.id === subcategory_id)?.category_id ?? null;
-    setOpenCat(c); setSubId(subcategory_id); setQuery(''); setNoPrice(false); setFresh(id);
+    show(c, subcategory_id); setQuery(''); setNoPrice(false); setFresh(id);
     setTimeout(() => document.getElementById(`dish-${id}`)?.scrollIntoView({ block: 'nearest' }), 300);
   });
   const toggle = (d: Dish, patch: Partial<Dish>, back: Partial<Dish>, message: string) =>
@@ -101,7 +104,7 @@ const MenuBuilder: React.FC = () => {
         await (g.kind === 'cat' ? deleteCat : deleteSub).mutateAsync(g.id);
         toast.success(`${g.name} deleted`);
         if (g.kind === 'cat') setOpenCat(null);
-        setSubId(undefined);
+        setSubId(null);
       } catch (e) { fail(e); }
     },
   };
@@ -113,10 +116,11 @@ const MenuBuilder: React.FC = () => {
     : catNode ? { crumb: '', title: catNode.cat.name, group: { kind: 'cat' as const, ...catNode.cat }, addTo: null }
     : null;
 
+  // A category click shows all its dishes and opens it; clicking the shown one again folds it.
   const onCat = (id: string) => guard(() => {
     setQuery(''); setNoPrice(false);
-    if (id === cat) { setSubId(null); return; }
-    setOpenCat(id); setSubId(undefined);
+    if (id !== cat || subId) { show(id, null); return; }
+    setExpanded(e => { const n = new Set(e); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   });
 
   const dialogEl = (() => {
@@ -124,9 +128,9 @@ const MenuBuilder: React.FC = () => {
     const close = () => setDlg(null);
     switch (dlg.kind) {
       case 'newCat': return <NameDialog title="New category" sub="For example Sweet, Farsan or Chinese Cuisine." primary="Add category" onClose={close}
-        onSave={r => createCat.mutateAsync(r.name).then((c: { id: string }) => { jump(() => { setOpenCat(c.id); setSubId(undefined); }); toast.success(`${r.name} added`); })} />;
+        onSave={r => createCat.mutateAsync(r.name).then((c: { id: string }) => { jump(() => show(c.id, undefined)); toast.success(`${r.name} added`); })} />;
       case 'newSub': return <NameDialog title="New subcategory" sub={`Inside ${cats.find(c => c.id === dlg.catId)?.name ?? 'this category'}.`} primary="Add subcategory" onClose={close}
-        onSave={r => createSub.mutateAsync({ name: r.name, category_id: dlg.catId }).then((s: { id: string }) => { jump(() => { setOpenCat(dlg.catId); setSubId(s.id); }); toast.success(`${r.name} added`); })} />;
+        onSave={r => createSub.mutateAsync({ name: r.name, category_id: dlg.catId }).then((s: { id: string }) => { jump(() => show(dlg.catId, s.id)); toast.success(`${r.name} added`); })} />;
       case 'newDish': return <NameDialog title="New dish" sub="It shows in quotations straight away." label="Dish name" tree={tree} subId={sub ?? ''} withPrice={hasPrice} primary="Add dish" onClose={close}
         onSave={r => createItem.mutateAsync({ name: r.name, subcategory_id: r.subId, default_price: r.price }).then((d: Dish) => { reveal(d.id, d.subcategory_id); toast.success(`${r.name} added`); })} />;
       case 'rename': return <NameDialog title={`Rename ${dlg.g.name}`} sub="Old quotations keep the old name." name={dlg.g.name} onClose={close}
@@ -172,8 +176,8 @@ const MenuBuilder: React.FC = () => {
       )}
 
       <div className="mb-layout">
-        <MenuTree tree={tree} openCat={cat} subId={sub} showHidden={showHidden} onCat={onCat}
-          onSub={(c, s) => guard(() => { setOpenCat(c); setSubId(s); setQuery(''); setNoPrice(false); })}
+        <MenuTree tree={tree} openCat={cat} subId={sub} expanded={expanded} showHidden={showHidden} onCat={onCat}
+          onSub={(c, s) => guard(() => { show(c, s); setQuery(''); setNoPrice(false); })}
           onAddSub={c => setDlg({ kind: 'newSub', catId: c })} onShowHidden={setShowHidden} />
         {sheet && catNode && subNode ? (
           <SheetEdit key={subNode.sub.id} crumb={catNode.cat.name} title={subNode.sub.name} subId={subNode.sub.id} dishes={dishes} tree={tree} hasPrice={hasPrice} hasBin={hasBin}

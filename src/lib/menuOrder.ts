@@ -1,15 +1,15 @@
 import type { QuotationLineItem } from '../hooks/useQuotations';
 import type { ChoiceGroup } from './quoteChoices';
 
-// How a menu is laid out on paper (design A): the owner's order, flat course lists,
-// farsan / starters as their own course, dal, rice, breads and sabji in one Main Course,
-// accompaniments last, and "choose any" groups where their first dish sits.
+// How a menu is laid out (design A): the owner's order and flat course lists. A dish sits in the
+// course the owner gave it in this quote, else a "choose any" group's own course, else its Menu Builder
+// category: dal, rice, breads, sabji and farsan kept under Main Course join one Main Course, and
+// accompaniments go last unless the owner placed them.
 export type Entry = { item: QuotationLineItem; choice?: undefined } | { choice: ChoiceGroup; item?: undefined };
 export interface Course { name: string; entries: Entry[]; sum: number; count: number }
 
 const MAIN = /main|sabji|sabzi|shaak|\bshak\b|vegetable|kathod|kathol|\bdal\b|daal|kadhi|rice|pulao|biryani|khichdi|bhaat|bread|roti|rotli|naan|puri|paratha|phulka|curry|gravy/i;
 const ACCOMP = /includ|accompan|salad|chutney|chatni|achar|aachar|pickle|papad|raita|condiment|water|mukhwas|mouth\s*fresh/i;
-const SNACK = /farsan|starter|snack|chaat|appeti/i;
 const DIP = /chutney|chatni|sauce|\bdip\b|raita|achar|aachar|pickle/i;
 
 const tags = (i: QuotationLineItem) => `${i.category_name || ''} ${i.subcategory_name || ''}`;
@@ -31,14 +31,12 @@ function dropServed(items: QuotationLineItem[]): QuotationLineItem[] {
   return items.filter(i => i.choice || !(ids.has(i.item_id) || names.has(i.item_name.toLowerCase())));
 }
 
-// Farsan kept under a "Main Course" category still prints as its own course.
 const courseName = (i: QuotationLineItem, mainName: string, accompName: string) => {
-  const cat = (i.category_name || '').trim();
-  const sub = (i.subcategory_name || '').trim();
+  const own = i.course?.trim() || i.choice?.label?.trim();
+  if (own) return own;
   if (roleOf(i) === 'accomp') return accompName;
-  if (SNACK.test(sub) && !SNACK.test(cat)) return sub;
   if (roleOf(i) === 'main') return mainName;
-  return cat || sub || 'Menu';
+  return (i.category_name || '').trim() || (i.subcategory_name || '').trim() || 'Menu';
 };
 
 export function planCourses(all: QuotationLineItem[], opts: { merge?: boolean; groups?: ChoiceGroup[] } = {}): Course[] {
@@ -47,16 +45,13 @@ export function planCourses(all: QuotationLineItem[], opts: { merge?: boolean; g
   const accompName = items.map(i => i.category_name).find(c => c && ACCOMP.test(c)) || 'Accompaniments';
   const groupOf = new Map((opts.groups ?? []).map(g => [g.meta.id, g]));
   const courses: Course[] = [];
-  let accomp: Course | null = null;
+  const placed = new Set<Course>();
 
   for (const it of items) {
     const name = courseName(it, mainName, accompName);
-    const isAccomp = name === accompName && roleOf(it) === 'accomp';
-    let c: Course | null | undefined = isAccomp ? accomp : courses.find(x => x.name === name);
-    if (!c) {
-      c = { name, entries: [], sum: 0, count: 0 };
-      if (isAccomp) accomp = c; else courses.push(c);
-    }
+    let c = courses.find(x => x.name === name);
+    if (!c) { c = { name, entries: [], sum: 0, count: 0 }; courses.push(c); }
+    if (it.course?.trim() || roleOf(it) !== 'accomp') placed.add(c);
     const g = it.choice && groupOf.get(it.choice.id);
     if (g) {
       if (!c.entries.some(e => e.choice?.meta.id === g.meta.id)) {
@@ -69,5 +64,5 @@ export function planCourses(all: QuotationLineItem[], opts: { merge?: boolean; g
     c.sum += Number(it.amount) || 0;
     c.count += 1;
   }
-  return accomp ? [...courses, accomp] : courses;
+  return [...courses.filter(c => placed.has(c)), ...courses.filter(c => !placed.has(c))];
 }

@@ -22,11 +22,15 @@ const menu = [
 ];
 
 describe('menu order (design A)', () => {
-  it('keeps the set order: farsan its own course, one flat Main Course, accompaniments last', () => {
+  it('keeps the set order: farsan under Main Course in one flat Main Course, accompaniments last', () => {
     const plan = planCourses(menu, { merge: true });
-    expect(plan.map(c => c.name)).toEqual(['Sweet', 'Main Course', 'Farsan', 'Including']);
-    expect(names(plan[1])).toEqual(['Puri', 'Ringan Bataka Nu Shaak', 'Desi Vaal', 'Taj-Laving Rice', 'Gujarati Varani Dal']);
-    expect(names(plan[3])).toEqual(['Green Salad', 'Aachar', 'Water Jug']);
+    expect(plan.map(c => c.name)).toEqual(['Sweet', 'Main Course', 'Including']);
+    expect(names(plan[1])).toEqual(['Puri', 'Ringan Bataka Nu Shaak', 'Desi Vaal', 'South Boll', 'Taj-Laving Rice', 'Gujarati Varani Dal']);
+    expect(names(plan[2])).toEqual(['Green Salad', 'Aachar', 'Water Jug']);
+  });
+  it('a course the owner set wins, and placed accompaniments stay where they are', () => {
+    const own = menu.map(i => (i.item_name === 'South Boll' ? { ...i, course: 'Farsan' } : i.item_name === 'Green Salad' ? { ...i, course: 'Salads' } : i));
+    expect(planCourses(own, { merge: true }).map(c => c.name)).toEqual(['Sweet', 'Main Course', 'Farsan', 'Salads', 'Including']);
   });
   it('prints "with Coconut Chutney" under the farsan and not again in Including', () => {
     const html = courseGrid(menu, false);

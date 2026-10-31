@@ -21,7 +21,7 @@ describe('settings search', () => {
 
   it('files every row under a known group', () => {
     const ids = GROUPS.map(g => g.id);
-    expect(GROUPS).toHaveLength(8);
+    expect(GROUPS).toHaveLength(9);
     SETTING_ROWS.forEach(r => expect(ids).toContain(r.group));
   });
 });

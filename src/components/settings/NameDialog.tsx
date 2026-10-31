@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Modal from '../ui/Modal';
 import { CatNode } from '../../lib/menuCatalog';
+import SubPicker from './SubPicker';
 import '../../styles/settings.css';
 
 export interface NameResult { name: string; subId: string; price: number | null }
@@ -51,16 +52,9 @@ const NameDialog: React.FC<Props> = ({ title, sub, label = 'Name', name = '', hi
           </label>
         )}
         {tree && (
-          <label className={`st-field${withPrice ? '' : ' full'}`}><span>Subcategory</span>
-            <select value={where} onChange={e => { setWhere(e.target.value); setError(''); }} autoFocus={hideName}>
-              <option value="">Pick one…</option>
-              {tree.map(c => (
-                <optgroup key={c.cat.id} label={c.cat.name}>
-                  {c.subs.map(s => <option key={s.sub.id} value={s.sub.id}>{s.sub.name}</option>)}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+          <div className={`st-field${withPrice ? '' : ' full'}`}><span>Subcategory</span>
+            <SubPicker tree={tree} value={where} autoFocus={hideName} bad={!!error && !where} onChange={id => { setWhere(id); setError(''); }} />
+          </div>
         )}
         {withPrice && (
           <label className="st-field"><span>Price per plate</span>

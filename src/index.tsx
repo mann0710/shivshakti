@@ -2,7 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { applyTextSize, readTextSize } from './lib/textSize';
 import reportWebVitals from './reportWebVitals';
+
+// This device's text size, before the first paint.
+applyTextSize(readTextSize());
 
 // Before React mounts, a crash shows on the page; afterwards errors are only logged so the app keeps running.
 let mounted = false;

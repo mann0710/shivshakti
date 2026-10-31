@@ -285,3 +285,19 @@
   .pt-tr.th { display: none; }
   .pt-one { max-width: none; }
 }
+
+/* This device › Text size */
+.st-size { display: inline-flex; align-items: center; gap: 8px; }
+.st-size b { min-width: 48px; text-align: center; font-size: 15px; }
+.st-size .ui-btn { min-width: 48px; font-weight: 700; }
+
+/* Searchable subcategory picker (New dish, Edit, Move) */
+.st-combo { position: relative; }
+.st-combo input { width: 100%; }
+.st-combo ul { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; list-style: none; margin: 0; padding: 4px; background: #fff; border: 1px solid #E0E0DA; border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); max-height: 280px; overflow-y: auto; }
+.st-combo li button { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 14px; color: var(--ink); min-height: 40px; padding: 0 10px; border-radius: 8px; cursor: pointer; }
+.st-combo li button.hi, .st-combo li button:hover { background: #F7F5F0; }
+.st-combo li button.cur { font-weight: 700; }
+.st-combo li small { color: #6B6B66; font-size: 12px; white-space: nowrap; }
+.st-combo-none { padding: 10px; color: #6B6B66; font-size: 13px; }
+.mb-node.cat.on { background: #FFF1E3; color: #8A4B00; font-weight: 700; }

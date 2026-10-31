@@ -10,6 +10,8 @@ import SweetsGroup, { useUndatedOccasions } from '../components/settings/SweetsG
 import RemindersGroup from '../components/settings/RemindersGroup';
 import TeamGroup from '../components/settings/TeamGroup';
 import DataGroup, { useDbUpdates } from '../components/settings/DataGroup';
+import DeviceGroup from '../components/settings/DeviceGroup';
+import { readTextSize } from '../lib/textSize';
 import { useStaffLogins } from '../hooks/useStaff';
 import { useHasTeamBin } from '../hooks/useSchemaStatus';
 import { backupStale } from '../lib/backup';
@@ -17,7 +19,7 @@ import ImportScreen from '../components/data/ImportScreen';
 import '../styles/settings.css';
 import '../styles/settings-data.css';
 
-// Settings in eight groups; each change saves by itself with Undo.
+// Settings in nine groups; each change saves by itself with Undo (text size is per device).
 const DataCenter: React.FC = () => {
   const api = useSettingsSave();
   const { data: eventTypes = [] } = useEventTypes();
@@ -29,12 +31,14 @@ const DataCenter: React.FC = () => {
   const [group, setGroup] = useState<GroupId>('business');
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [textSize, setTextSize] = useState(readTextSize);
   const top = useRef<HTMLDivElement>(null);
 
   const notes = groupNotes({
     gstNumber: api.dc?.gst_number || '', gstRate: Number(api.dc?.gst_rate ?? 18), upiId: api.docs.upi_id, address: api.docs.address,
     fssai: !!api.dc?.fssai_certificate_url, docsReady: api.docsReady, eventTypes: eventTypes.length, teamMembers: team.length, logins: logins.length,
     undated, updates: db.pending.length, reminders: Object.values(api.docs.reminders).filter(r => r.on).length, backupStale: backupStale(api.docs.last_backup_at),
+    textSize,
   });
   const hits = useMemo(() => searchSettings(query), [query]);
   const searching = query.trim().length > 0;
@@ -53,6 +57,7 @@ const DataCenter: React.FC = () => {
       case 'reminders': return <RemindersGroup api={api} />;
       case 'team': return <TeamGroup />;
       case 'data': return <DataGroup api={api} onImport={() => setImporting(true)} />;
+      case 'device': return <DeviceGroup size={textSize} onSize={setTextSize} />;
       default: return <div className="st-panel st-empty">No setting matches "{query}". Try "UPI" or "GST".</div>;
     }
   };

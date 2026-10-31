@@ -17,6 +17,8 @@ export interface QuotationLineItem {
   // "Choose any N" group this dish belongs to, and whether the customer picked it.
   choice?: ChoiceMeta;
   chosen?: boolean;
+  // Course the owner put this dish in for this quote (drag or rename); else it follows Menu Builder.
+  course?: string;
 }
 
 export interface ChoiceMeta { id: string; label: string; pick: number; included?: boolean }

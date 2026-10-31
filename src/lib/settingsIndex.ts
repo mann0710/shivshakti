@@ -1,6 +1,6 @@
 // The Settings groups, every row they show (for search) and the status line under each group.
 
-export type GroupId = 'business' | 'money' | 'documents' | 'catering' | 'sweets' | 'reminders' | 'team' | 'data';
+export type GroupId = 'business' | 'money' | 'documents' | 'catering' | 'sweets' | 'reminders' | 'team' | 'data' | 'device';
 
 export const GROUPS: { id: GroupId; title: string; sub: string }[] = [
   { id: 'business', title: 'Business', sub: 'Printed on every quotation, invoice and sweets bill.' },
@@ -11,6 +11,7 @@ export const GROUPS: { id: GroupId; title: string; sub: string }[] = [
   { id: 'reminders', title: 'Reminders on Home', sub: 'One tap sends each on WhatsApp.' },
   { id: 'team', title: 'Team & access', sub: 'Who can sign in and what they see.' },
   { id: 'data', title: 'Data', sub: 'Get data in and out, keep it safe.' },
+  { id: 'device', title: 'This device', sub: 'Saved on this computer or phone only.' },
 ];
 
 const R = (group: GroupId, label: string, words = '') => ({ group, label, words });
@@ -40,6 +41,7 @@ export const SETTING_ROWS = [
   R('team', 'Team list for events', 'cooks helpers staff members'),
   R('data', 'Import from Excel', 'upload xlsx csv dishes sweets customers'), R('data', 'Download everything', 'export excel xlsx'), R('data', 'Backup copy', 'backup json'),
   R('data', 'Recycle bin', 'deleted restore'), R('data', 'Database updates', 'migration schema'),
+  R('device', 'Text size', 'font bigger smaller zoom large small a+ a-'),
 ];
 
 // Groups with at least one row matching every word typed, and those rows' labels.
@@ -73,6 +75,7 @@ export interface StatusInput {
   updates: number;
   reminders: number;
   backupStale: boolean;
+  textSize?: number;
 }
 export interface GroupNote { note: string; warn: boolean }
 
@@ -93,5 +96,6 @@ export function groupNotes(i: StatusInput): Record<GroupId, GroupNote> {
     team: { note: [i.logins ? plural(i.logins, 'login') : '', `${plural(i.teamMembers, 'team member')} for events`].filter(Boolean).join(' · '), warn: false },
     data: i.updates ? { note: `${plural(i.updates, 'database update')} to run`, warn: true }
       : i.backupStale ? { note: 'No backup this week', warn: true } : { note: 'Backed up · database up to date', warn: false },
+    device: { note: `Text size ${Math.round((i.textSize ?? 1) * 100)}%`, warn: false },
   };
 }
