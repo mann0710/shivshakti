@@ -29,7 +29,7 @@ const itemPrice = (it: QuotationLineItem, prices: PriceShow) => (prices === true
 
 // "Choose any N": tick boxes for the customer, the picked ones ticked once decided.
 // With your own plate price ('diff') each dish shows what it adds over the cheapest one.
-function choiceParts(g: ChoiceGroup, prices: PriceShow) {
+function choiceParts(g: ChoiceGroup, prices: PriceShow, label = g.meta.label) {
   const n = Math.min(Math.max(1, g.meta.pick), g.items.length);
   const decided = pickedOf(g).length > 0;
   const a = g.items.map(i => Number(i.amount) || 0).sort((x, y) => x - y);
@@ -39,14 +39,30 @@ function choiceParts(g: ChoiceGroup, prices: PriceShow) {
   const priced = !decided && !!prices && !g.meta.included && (diff ? hi > lo : hi > 0);
   const price = (i: QuotationLineItem) => { const v = (Number(i.amount) || 0) - (diff ? a[0] : 0); return priced && v > 0 ? `${diff ? '+' : ''}${money(v)}` : ''; };
   const meta = !priced ? '' : diff ? `up to +${money(hi - lo)} / plate` : lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`;
-  const title = `${esc(g.meta.label)} · ${decided ? 'your choice' : `choose any ${n}`}`;
-  const hint = decided ? '' : `<div class="hint">Tick ${n === 1 ? 'one' : n}.${priced ? ' The plate price is final once you choose.' : ''}</div>`;
+  const title = `${esc(label)} · ${decided ? 'your choice' : `choose ${n} of ${g.items.length}`}`;
+  // The tick boxes say what to do; a line only when the pick changes the price (even with dish prices hidden).
+  const varies = !decided && !g.meta.included && hi > lo;
+  const hint = priced ? '<div class="hint">The plate price is final once you choose.</div>' : varies ? '<div class="hint">Your pick changes the plate price.</div>' : '';
   const list = g.items.map(i => dish(i, price(i), !!i.chosen)).join('');
   return { title, meta, hint, list };
 }
 
-// Design A: two-column grid of course cards with flat dish lists; a course that is only a
-// "choose any" group becomes a green choice card; a long course spans both columns.
+// Two "choose" boxes with the same title are numbered so the customer picks from each.
+function choiceLabels(groups: ChoiceGroup[]): Map<string, string> {
+  const total = new Map<string, number>();
+  groups.forEach(g => total.set(g.meta.label, (total.get(g.meta.label) ?? 0) + 1));
+  const seen = new Map<string, number>();
+  return new Map(groups.map(g => {
+    const k = (seen.get(g.meta.label) ?? 0) + 1;
+    seen.set(g.meta.label, k);
+    return [g.meta.id, (total.get(g.meta.label) ?? 0) > 1 ? `${g.meta.label} ${k}` : g.meta.label];
+  }));
+}
+
+// Design A: courses flow down two columns and on across pages like a newspaper, so a long course
+// never leaves page 1 blank; short courses, dishes and "choose" boxes are never split. Each course is a
+// one-column table so its heading repeats wherever it continues. A course that is only a "choose any"
+// group becomes a green choice card.
 // "quote" shows choice groups to tick; "served" shows only what will be served.
 export function courseGrid(all: QuotationLineItem[], prices: PriceShow, mode: 'quote' | 'served' = 'quote'): string {
   const items = mode === 'served' ? servedItems(all) : all;
@@ -54,23 +70,30 @@ export function courseGrid(all: QuotationLineItem[], prices: PriceShow, mode: 'q
   const groups = choiceGroups(items).filter(g => mode === 'quote' || !decided.has(g.meta.id));
   // Served copies list decided picks as normal dishes; open choices stay as choices.
   const list = items.map(i => (i.choice && !groups.some(g => g.meta.id === i.choice!.id) ? { ...i, choice: undefined } : i));
+  const labels = choiceLabels(groups);
+  const parts = (g: ChoiceGroup) => choiceParts(g, prices, labels.get(g.meta.id));
   return `<div class="courses">${planCourses(list, { merge: true, groups }).map(c => {
     if (c.entries.length === 1 && c.entries[0].choice) {
-      const p = choiceParts(c.entries[0].choice, prices);
+      const p = parts(c.entries[0].choice);
       return `<div class="course pick"><div class="course-h">${p.title}<span class="num">${p.meta}</span></div>${p.hint}${p.list}</div>`;
     }
     const meta = prices === true && c.sum > 0 ? `${money(c.sum)} / plate` : `${c.count} ${c.count === 1 ? 'dish' : 'dishes'}`;
     const entry = (e: Entry) => {
       if (!e.choice) return dish(e.item, itemPrice(e.item, prices));
-      const p = choiceParts(e.choice, prices);
+      const p = parts(e.choice);
       return `<div class="pickbox"><div class="course-h">${p.title}<span class="num">${p.meta}</span></div>${p.hint}${p.list}</div>`;
     };
     // A course mixing subcategories lists them under small headings (Main Course › Farsan).
     const groups = subGroups(c);
     const heads = showSubs(groups);
-    const body = groups.map(g => `${heads && g.name ? `<div class="sub-h">${esc(g.name)}</div>` : ''}${g.entries.map(entry).join('')}`).join('');
-    const rows = c.entries.length + (heads ? groups.length : 0);
-    return `<div class="course${rows > 8 ? ' wide' : ''}"><div class="course-h">${esc(c.name)}<span class="num">${meta}</span></div><div class="list">${body}</div></div>`;
+    const row = (html: string, cls = '') => `<tr${cls ? ` class="${cls}"` : ''}><td>${html}</td></tr>`;
+    // A subcategory's label sits in a narrow column beside its dishes, so labels add no extra lines.
+    const body = groups.map(g => (heads && g.name
+      ? row(`<div class="sg"><div class="sg-l">${esc(g.name)}</div><div>${g.entries.map(entry).join('')}</div></div>`)
+      : g.entries.map(e => row(entry(e))).join(''))).join('');
+    const rows = c.entries.length + 3 * c.entries.filter(e => e.choice).length;
+    // Only a course taller than about half a column may split; shorter ones stay whole.
+    return `<table class="course${rows > 14 ? ' long' : ''}"><thead><tr><th><div class="course-h">${esc(c.name)}<span class="num">${meta}</span></div></th></tr></thead><tbody>${body}</tbody></table>`;
   }).join('')}</div>`;
 }
 

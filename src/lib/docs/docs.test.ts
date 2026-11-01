@@ -72,7 +72,7 @@ describe('choose-any groups in documents', () => {
   const items = [dish('Main', '', 'Dal', 30), { ...dish('Sweets', '', 'Jamun', 40), choice: g }, { ...dish('Sweets', '', 'Halwa', 60), choice: g }];
   it('quote shows tick boxes and the price effect', () => {
     const html = courseGrid(items, true);
-    expect(html).toContain('Sweets · choose any 1');
+    expect(html).toContain('Sweets · choose 1 of 2');
     expect(html).toContain('+₹40 – ₹60 / plate');
   });
   it('served copies keep only the picked dish', () => {

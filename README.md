@@ -239,6 +239,16 @@ Until they run, the app hides Cancel bill and Day close and saves bills without 
 - **Bookings & quotes:** an unsent draft shows **Send quote** (opens the Send dialog), never "Pick & accept"; **Mark accepted** takes the sent quote, not a newer draft; **+ New quote** always starts a new one; Mark sent / lost / Reopen / Delete on a quote with options act on every option; **Reopen** is hidden once the event date has passed and brings a cancelled booking back to follow-up; Send everywhere follows the "Show each dish's price" setting (`useQuotePdfPref`); phones get the quote ⋯ menu and "See the N" on the tidy banner.
 - **Home, Money, Invoices, Customers:** Pick & accept opens the Accept dialog; a draft's **Send on WhatsApp** sends it and **Open** opens the quote; the tidy row is split into invoices and quotes; "Received in <month>" opens Money on This month; Invoices leaves out cancelled bookings like Home and Money; **+ Record payment** hides when nothing is due; an invoice opened from a booking goes back to it; **Download for CA** works on phones; **+ Sweets bill** and a customer's sweets history open the POS for that person; a customer with bookings gets an explanation instead of a Delete that always fails.
 
+### Quotation PDF: no more blank first page (Nov 2026)
+
+A quote whose Main Course held several "choose any" boxes printed an almost empty page 1: course cards could not split, so the tall Main Course jumped to page 2 and took the menu heading with it, and the short course beside it left a gap (`lib/docs/menu.ts`, `theme.ts`, `quotationDoc.ts`).
+
+- **The menu flows** down two columns and on across pages (`.courses { columns: 2 }`). Short courses, single dishes and "choose" boxes never split; a course taller than about half a column may continue in the next column, and because each course is a one-column table its heading repeats there (`<thead>`).
+- **Subcategory labels** sit in a narrow column beside their dishes (MAIN COURSE › PUNJABI SABJI · Paneer Angara), so they add no extra lines.
+- **"Choose" boxes** read "Punjabi Sabji · choose 1 of 2"; two boxes with the same title are numbered (Punjabi Sabji 1, Punjabi Sabji 2); the hint line shows only when the pick changes the plate price ("Your pick changes the plate price." even with dish prices hidden). Tick boxes are 17px.
+- **Page 1 shows the total** (or *Estimated total* for a range) next to the event facts, since a WhatsApp preview shows only the first page. Issued and Valid till sit on two lines.
+- **Pages:** a short price table stays with its subtotal and total; meal boxes may break across pages (`overflow: clip`); the closing "Thank you" line stays with the terms and signatures.
+
 ### Quote courses, text size and Menu Builder (Nov 2026)
 
 - **Courses follow Menu Builder:** a dish prints in its category's course (`lib/menuOrder.ts`), so Farsan kept under Main Course shows in Main Course. A course that mixes subcategories shows them as sections, in the editor and as small headings on the PDF (Main Course › Indian Breads, Gujarati Vegetables, Farsan …; `subGroups` in `lib/menuOrder.ts`). A "choose any" group keeps its own course, named after the group.
@@ -334,7 +344,7 @@ One look ("Navy & Leaf", from the logo) for everything that is printed or shared
   - kitchen prep list in the same style (the register has its own black-and-white print, below).
 - **Reports:** the same header, headline tiles and tables.
 - **Data Center → Documents:** accent colour, shop address, UPI ID, bank details, contact person, quote validity, payment schedule (must add up to 100%), "on request" list, terms, and switches for the QR codes, invoice payments, invoice menu page and the slip stub, plus the bill footer line.
-- **Menu layout on paper (design A):** a two-column grid of course cards, each a plain list of dishes with dotted rules — no sub-headings. Courses follow the order you arranged the dishes in; dal, rice, breads, sabji / shaak, kathod and kadhi sit in one **Main Course**; every dish follows its Menu Builder category, so farsan kept under Main Course prints in Main Course; a "choose any" group is its own course named after the group; "Including" / accompaniments come last unless you placed them; a course you set or renamed in the quote wins (see *Quote courses* below); a course with more than 8 dishes spans both columns. A "choose any" group that is a whole course prints as a green choice card ("Farsan · choose any 1", tick boxes, "Tick one."); with other dishes it sits as a small green box inside the course.
+- **Menu layout on paper (design A):** courses flow down two columns and on across pages like a newspaper (see *Quotation PDF: no more blank first page* below), each a plain list of dishes with dotted rules. Courses follow the order you arranged the dishes in; dal, rice, breads, sabji / shaak, kathod and kadhi sit in one **Main Course**; every dish follows its Menu Builder category, so farsan kept under Main Course prints in Main Course; a "choose any" group is its own course named after the group; "Including" / accompaniments come last unless you placed them; a course you set or renamed in the quote wins (see *Quote courses* below). A "choose any" group that is a whole course prints as a green choice card ("Farsan · choose 1 of 4", tick boxes); with other dishes it sits as a small green box inside the course.
 - **Served with (accompaniments):** under each selected dish, **+ Served with…** opens a list of accompaniments (dishes in an Including / Accompaniments category, chutneys, raita, pickle, papad) — tick as many as you like, or search any dish. They print as "with Coconut Chutney, Green Chutney" under the dish, and a picked accompaniment that is also on the menu is not printed twice. Tip: make an **Accompaniments** category in Menu Builder for chutneys and sauces.
 - **Every quotation layout** (per plate, per item, special price with GST, own price with a choice, choose 2 of 5, decided, free choice, prices hidden, big menu, one day two meals, three days, a meal with a choice, options A + B, one option) is on the design canvas "Shiv Shakti Quotation — Every Combination", rendered from the real code.
 - Gujarati names print correctly (Noto Sans Gujarati); amounts use the real ₹ sign — headings and big amounts use Outfit, which has no ₹, so the sign always comes from Noto Sans (`HEAD_FONT` in `lib/docs/theme.ts`); the PDF server has no other fonts to fall back on.
@@ -365,6 +375,20 @@ One look ("Navy & Leaf", from the logo) for everything that is printed or shared
   - the GST card no longer claims everything is at 18%.
 
 The full audit, with what is fixed and what is still open, is in [docs/AUDIT.md](docs/AUDIT.md).
+
+## Guest menu brochure (PDF)
+
+The 26-page **Guest Menu 2026-27** is built from `docs/guest-menu/` with the Shiv Shakti logo, navy and leaf-green colours and free-licence Unsplash photos (all vegetarian, no egg or alcohol in frame).
+
+```bash
+node docs/guest-menu/photos.js   # download the chosen photos into docs/guest-menu/img/ (once; --force re-downloads)
+node docs/guest-menu/build.js    # writes ../GUEST MENU 26_27 - Shiv Shakti.pdf (pass another path to change it, --html for HTML only)
+```
+
+- **Dishes:** `menu/soups-plating.js` (pages 1-13) and `menu/counters-starters.js` (pages 14-26). `*` before a dish marks it NEW, `NAME :: detail` adds a second line, and a trailing `(…)` prints as a lighter note.
+- **Photos:** `photos.json` maps each slot (`p05_2` = page 5, second photo; `p08` = full page) to an Unsplash photo id and focus point. Change the id, delete that file in `img/` and run `photos.js` again.
+- **Logo:** the one path is `LOGO` at the top of `build.js` (now `public/logo.png`). A flat light background is faded out automatically; a transparent PNG or an SVG works as is.
+- **Fit:** each page shrinks its spacing, then its type, until the list fits, and the build names any page that still overflows. Needs Chrome (`CHROME_PATH` to point elsewhere).
 
 ## Project structure
 

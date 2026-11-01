@@ -47,9 +47,9 @@ describe('menu order (design A)', () => {
   });
   it('prints subcategory headings inside a course that mixes them, none when it does not', () => {
     const html = courseGrid(menu, false);
-    expect(html).toContain('<div class="sub-h">Farsan</div>');
-    expect(html).toContain('<div class="sub-h">Indian Breads</div>');
-    expect(courseGrid([d('A', 'Sweet', 'Gujarati Sweet'), d('B', 'Sweet', 'Gujarati Sweet')], false)).not.toContain('sub-h');
+    expect(html).toContain('<div class="sg-l">Farsan</div>');
+    expect(html).toContain('<div class="sg-l">Indian Breads</div>');
+    expect(courseGrid([d('A', 'Sweet', 'Gujarati Sweet'), d('B', 'Sweet', 'Gujarati Sweet')], false)).not.toContain('sg-l');
   });
   it('keeps every dish when counting prices (no merge)', () => {
     expect(planCourses(menu).pop()!.entries).toHaveLength(4);
@@ -59,13 +59,24 @@ describe('menu order (design A)', () => {
     const withAlt = menu.map(i => (i.item_name === 'South Boll' ? { ...i, choice: g } : i));
     withAlt.splice(5, 0, d('Mix Bhajiya', 'Main Course', 'Farsan', { choice: g }));
     const html = courseGrid(withAlt, false);
-    expect(html).toContain('<div class="course pick"><div class="course-h">Farsan · choose any 1');
-    expect(html).toContain('Tick one.');
+    expect(html).toContain('<div class="course pick"><div class="course-h">Farsan · choose 1 of 2');
+    expect(html).not.toContain('Tick one.');
     expect(planCourses(withAlt, { groups: choiceGroups(withAlt) })[2].count).toBe(1);
   });
-  it('a long course spans both columns', () => {
-    const many = Array.from({ length: 9 }, (_, i) => d(`Sabji ${i}`, 'Main Course', 'Vegetables'));
-    expect(courseGrid(many, false)).toContain('class="course wide"');
+  it('a long course may continue in the next column under a repeated heading', () => {
+    const many = Array.from({ length: 15 }, (_, i) => d(`Sabji ${i}`, 'Main Course', 'Vegetables'));
+    const html = courseGrid(many, false);
+    expect(html).toContain('<table class="course long"><thead><tr><th><div class="course-h">Main Course');
+    expect(courseGrid(many.slice(0, 3), false)).toContain('<table class="course"><thead>');
+  });
+  it('numbers two choices with the same title and says when a pick changes the price', () => {
+    const a = { id: 'a', label: 'Punjabi Sabji', pick: 1 }, b = { id: 'b', label: 'Punjabi Sabji', pick: 1 };
+    const list = [d('Paneer', 'Main Course', 'Punjabi Sabji', { choice: a, amount: 40 }), d('Kofta', 'Main Course', 'Punjabi Sabji', { choice: a, amount: 60 }),
+      d('Mix Veg', 'Main Course', 'Punjabi Sabji', { choice: b }), d('Bhindi', 'Main Course', 'Punjabi Sabji', { choice: b })];
+    const html = courseGrid(list, false);
+    expect(html).toContain('Punjabi Sabji 1 · choose 1 of 2');
+    expect(html).toContain('Punjabi Sabji 2 · choose 1 of 2');
+    expect(html.match(/Your pick changes the plate price\./g)).toHaveLength(1);
   });
   it('recognises roles and accompaniments', () => {
     expect(roleOf(d('x', 'Delicious Dal', ''))).toBe('main');

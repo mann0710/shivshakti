@@ -77,7 +77,8 @@ function priceSection(q: Quotation, itemPrices: PriceShow, title = 'Price'): str
   const sums: SumRow[] = [first, ...adj, ...charges(q.extra_charges), ...charges(q.transportation_charges, 'Transportation'),
     ...(q.gst_rate > 0 && q.gst_amount > 0 ? [{ label: `GST @${q.gst_rate}%`, value: q.gst_amount }] : [])];
   const head = `<th>${multi ? 'Meal' : 'Description'}</th><th class="r">Guests</th><th class="r">${multi ? 'Rate' : 'Per plate'}</th><th class="r">Amount</th>`;
-  return `<section>${sectionHead(title)}
+  // A short price table stays with its totals; a long multi-meal one may break between rows.
+  return `<section${rows.length <= 6 ? ' class="keep"' : ''}>${sectionHead(title)}
   <div class="box"><table class="t"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>
   <div class="keep"><div style="display:flex;justify-content:flex-end;margin-top:10px"><div class="sum" style="width:340px">${sumRows(sums)}</div></div>
   ${banner(q.gst_amount > 0 ? 'Total payable · incl. GST' : 'Total payable', detail, isRange(q) ? rangeText(q.total_amount, q.total_max ?? 0) : q.total_amount, saved > 0 ? `You save ${money(saved)}` : '')}</div>
@@ -124,12 +125,14 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
     ? options.map(o => `${menuSection(o, prices(o), `${optionTitle(o)} — the menu`)}${priceSection(o, prices(o), `${optionTitle(o)} — price`)}`).join('')
     : `${menuSection(q, prices(q), 'The menu')}${q.notes ? `<section>${sectionHead('Notes')}<div style="white-space:pre-line;font-size:13px">${esc(q.notes)}</div></section>` : ''}${priceSection(q, prices(q))}`;
 
-  const body = `${header(ctx, kind, number, `Issued ${day(issued)}${validTill ? ` · Valid till ${day(validTill)}` : ''}`)}
+  // The total sits on page 1 too: a WhatsApp preview shows only the first page.
+  const total: [string, string] | null = grouped ? null : isRange(q) ? ['Estimated total', rangeText(q.total_amount, q.total_max ?? 0)] : q.total_amount > 0 ? ['Total', money(q.total_amount)] : null;
+  const body = `${header(ctx, kind, number, `Issued ${day(issued)}${validTill ? `\nValid till ${day(validTill)}` : ''}`)}
 <div class="wrap">
   <div class="intro">
     <div class="fact"><span class="lbl">Prepared for</span><span class="big">${esc(q.customer?.name || 'Customer')}</span>
       ${q.customer?.phone ? `<span class="muted num">+91 ${esc(q.customer.phone)}</span>` : ''}</div>
-    ${facts([['Event', b?.event_type], ['Date & time', whenText(q)], ['Venue', b?.venue], ['Guests · food', [guests && `${guests} guests`, q.food_type].filter(Boolean).join(' · ')]])}
+    ${facts([['Event', b?.event_type], ['Date & time', whenText(q)], ['Venue', b?.venue], ['Guests · food', [guests && `${guests} guests`, q.food_type].filter(Boolean).join(' · ')], ...(total ? [total] : [])])}
   </div>
   ${grouped ? compareSection(options) : ''}
   ${details}
@@ -137,9 +140,9 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   ${s.extras.length ? `<section class="keep">${sectionHead('On request, charged extra')}${chips(s.extras)}</section>` : ''}
   <div class="keep"><section>${sectionHead('Terms')}${terms([...s.terms, ...(validTill ? [`This quotation is valid till ${day(validTill)}.`] : [])])}</section>
   <div class="close">${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', `For ${ctx.settings.catering_name}`)}
-    ${s.quote_qr ? upiBox(ctx, firstStep, firstStep ? `Confirm with ${money(firstStep)}` : 'Pay the booking amount', `Booking ${q.quotation_number}`) : ''}</div></div>
-</div>
-${endLine(ctx, `Thank you for considering ${ctx.settings.catering_name}`)}`;
+    ${s.quote_qr ? upiBox(ctx, firstStep, firstStep ? `Confirm with ${money(firstStep)}` : 'Pay the booking amount', `Booking ${q.quotation_number}`) : ''}</div>
+  ${endLine(ctx, `Thank you for considering ${ctx.settings.catering_name}`)}</div>
+</div>`;
 
   return {
     html: page(`Quotation ${number}`, s.accent, body),
