@@ -26,12 +26,16 @@ export function prepByDate(preorders: SeasonalPreorder[]) {
 // "1 kg × 20", "500 g × 1": pack size times how many, biggest pack first.
 export const packSizes = (s: SweetSizes) => s.sizes.map(([w, q]) => `${formatSize(w, s.unit)} × ${q}`);
 
+// Same column widths for every day, so Packs and Total line up down the page.
+const WIDTHS = ['36%', '46%', '18%'];
+const COL_CSS = `<style>.t { table-layout: fixed; }${WIDTHS.map((w, i) => ` .t th:nth-child(${i + 1}) { width: ${w}; }`).join('')}</style>`;
+
 // Printable prep list in the document style; `dates` is the pickup filter ('' for all).
 function prepHtml(days: ReturnType<typeof prepByDate>, dates: string): string {
   const ctx = docContext();
   const body = days.map(d => `<section>${sectionHead(d.date ? formatDay(d.date) : 'No date', `${d.orders} order${d.orders === 1 ? '' : 's'}`)}${
     docTable(['Item', 'Packs', 'Total'], d.items.map(i => [`<b>${esc(i.name)}</b>`, packSizes(i).map(x => `<b>${esc(x)}</b>`).join(' + '), formatSize(i.amount, i.unit)]), undefined, 2)}</section>`).join('');
-  return page('Kitchen prep list', ctx.settings.accent, `${slimHeader(ctx, 'Kitchen', 'Prep list', `${dates ? `Pickup ${esc(dates)}` : 'Open pre-bookings'}<br>Printed ${esc(printedNow())}`)}<div class="wrap">${body}</div>`);
+  return page('Kitchen prep list', ctx.settings.accent, `${slimHeader(ctx, 'Kitchen', 'Prep list', `${dates ? `Pickup ${esc(dates)}` : 'Open pre-bookings'}<br>Printed ${esc(printedNow())}`)}<div class="wrap">${COL_CSS}${body}</div>`);
 }
 
 export const prepDoc = (days: ReturnType<typeof prepByDate>, dates: string): Doc => ({
@@ -68,14 +72,15 @@ const PrepList: React.FC<{ preorders: SeasonalPreorder[] }> = ({ preorders }) =>
             {d.date ? formatDay(d.date) : 'No delivery date'} · {d.orders} order{d.orders === 1 ? '' : 's'}
           </div>
           <div className="table-wrap">
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed' }}>
+              <colgroup>{WIDTHS.map(w => <col key={w} style={{ width: w }} />)}</colgroup>
               <thead><tr style={{ background: '#F5F5F2' }}><th style={th}>Item</th><th style={th}>Packs</th><th style={th}>Total</th></tr></thead>
               <tbody>
                 {d.items.map(i => (
                   <tr key={i.key} style={{ borderBottom: '0.5px solid #F0F0EC' }}>
                     <td style={td}>{i.name}</td>
                     <td style={{ ...td, fontWeight: 700 }}>
-                      {packSizes(i).map((x, k) => <span key={x} style={{ whiteSpace: 'nowrap' }}>{k > 0 && <span style={{ fontWeight: 400 }}> + </span>}{x}</span>)}
+                      {packSizes(i).map((x, k) => <React.Fragment key={x}>{k > 0 && <span style={{ fontWeight: 400 }}> + </span>}<span style={{ whiteSpace: 'nowrap' }}>{x}</span></React.Fragment>)}
                     </td>
                     <td style={td}>{formatSize(i.amount, i.unit)}</td>
                   </tr>
