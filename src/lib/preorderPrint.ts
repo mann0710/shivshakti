@@ -40,23 +40,30 @@ export function buildPlan(preorders: SeasonalPreorder[]): PrintPlan {
   };
 }
 
-// Each sweet: packs by size (biggest first), total weight and the box numbers that get it.
-export function packLines(rows: PrintRow[]): PackLine[] {
+type Line = SeasonalPreorder['items'][number];
+export interface SweetSizes { key: string; name: string; unit: PriceUnit; amount: number; sizes: [number, number][]; boxes: number[] }
+
+// Each sweet by name and unit: total, [pack size, count] biggest first, and the box numbers that get it.
+export function sweetSizes(lines: { l: Line; box?: number }[]): SweetSizes[] {
   const by = new Map<string, { name: string; unit: PriceUnit; amount: number; sizes: Map<number, number>; boxes: Set<number> }>();
-  rows.forEach(r => r.p.items.forEach(l => {
+  lines.forEach(({ l, box }) => {
     const unit = unitFromLine(l.weight_unit);
     const key = `${nameKey(l.item_name)}|${unit}`;
     const s = by.get(key) ?? { name: baseName(l.item_name), unit, amount: 0, sizes: new Map(), boxes: new Set() };
     s.amount += l.weight * l.qty;
     s.sizes.set(l.weight, (s.sizes.get(l.weight) ?? 0) + l.qty);
-    s.boxes.add(r.n);
+    if (box !== undefined) s.boxes.add(box);
     by.set(key, s);
-  }));
-  return Array.from(by.values()).sort((a, b) => a.name.localeCompare(b.name)).map(s => ({
-    name: s.name, total: formatSize(s.amount, s.unit), boxes: Array.from(s.boxes),
-    packs: Array.from(s.sizes).sort((a, b) => b[0] - a[0]).map(([w, q]) => `${q} × ${formatSize(w, s.unit)}`).join(' + '),
-  }));
+  });
+  return Array.from(by, ([key, s]) => ({ key, name: s.name, unit: s.unit, amount: s.amount, sizes: Array.from(s.sizes).sort((a, b) => b[0] - a[0]), boxes: Array.from(s.boxes) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+export const packLines = (rows: PrintRow[]): PackLine[] =>
+  sweetSizes(rows.flatMap(r => r.p.items.map(l => ({ l, box: r.n })))).map(s => ({
+    name: s.name, total: formatSize(s.amount, s.unit), boxes: s.boxes,
+    packs: s.sizes.map(([w, q]) => `${q} × ${formatSize(w, s.unit)}`).join(' + '),
+  }));
 
 export const titleCase = (s: string) => s.replace(/(^|[\s.(-])(\p{Ll})/gu, (_, a: string, c: string) => a + c.toUpperCase());
 export const phoneText = (p?: string) => { const d = (p ?? '').replace(/\D/g, '').slice(-10); return d.length === 10 ? `${d.slice(0, 5)} ${d.slice(5)}` : p || 'No phone'; };
@@ -72,7 +79,8 @@ export function datesSpan(days: string[]): string {
   return a.split(' ')[2] === b.split(' ')[2] ? `${a.replace(/ \S+$/, '')} – ${b}` : `${a} – ${b}`;
 }
 
-export interface PrintInfo { scope: string; occasion?: string; printedAt: string }
+// `hideMoney` prints an items-only copy: no amounts, no To collect or Received ₹ columns.
+export interface PrintInfo { scope: string; occasion?: string; printedAt: string; hideMoney?: boolean }
 
 // "Thu 5 Nov", "Tue 3 – Thu 5 Nov", "from …", "until …", or '' for all dates.
 export const spanLabel = (s: DateSpan) =>
@@ -83,12 +91,18 @@ export const printedNow = (now = new Date()) =>
   `${dayName(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }))}, ${now.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' })}`;
 
 const BLANK_ROWS = 2;
-const COLS = '<colgroup><col style="width:38px"><col style="width:58px"><col style="width:230px"><col><col style="width:64px"><col style="width:116px"><col style="width:100px"><col style="width:52px"></colgroup>';
+// The money pair (To collect, Received ₹) drops out of an items-only copy.
+const cols = (cash: boolean) => `<colgroup><col style="width:38px"><col style="width:58px"><col style="width:230px"><col><col style="width:64px">${cash ? '<col style="width:116px"><col style="width:100px">' : ''}<col style="width:52px"></colgroup>`;
+const head = (cash: boolean) => `<tr><th class="c">#</th><th>Day</th><th>Customer</th><th>Sweets</th><th class="c">Packed</th>${cash ? '<th class="r">To collect</th><th>Received ₹</th>' : ''}<th class="c">Given</th></tr>`;
+const NOTE = {
+  cash: "Write each box's # on it. Tick Packed when it is ready. At hand-over write what you received, cash or UPI, and tick Given. Enter changes in the app after the rush.",
+  items: "Write each box's # on it. Tick Packed when it is ready and Given at hand-over. Enter changes in the app after the rush.",
+};
 const box = '<span class="box"></span>';
 const line = '<span class="ln"></span>';
 const tag = (t: string, solid = false) => `<b class="tag${solid ? ' on' : ''}">${t}</b>`;
 
-function rowHtml({ n, p, items, due }: PrintRow): string {
+function rowHtml({ n, p, items, due }: PrintRow, cash: boolean): string {
   const live = isLive(p);
   const given = p.status === 'delivered';
   const paid = p.advance_paid;
@@ -97,24 +111,25 @@ function rowHtml({ n, p, items, due }: PrintRow): string {
   const sweets = `<div class="its">${items.map(i => `<span><span>${esc(i.name)}</span><span class="q">${esc(i.size)} × <b>${i.qty}</b></span></span>`).join('')}</div>${note}`;
   const collect = !live ? '<b>Cancelled</b>'
     : `<b class="amt">${due > 0 ? money(due) : 'Paid'}</b>${paid > 0 ? `<div class="sm mut">${money(paid)} ${given ? 'paid' : 'advance'}</div>` : ''}`;
+  const pay = cash ? `<td class="r">${collect}</td><td>${live && due > 0 ? line : '<span class="mut">—</span>'}</td>` : '';
   return `<tr class="${n % 2 ? '' : 'z'}${live ? '' : ' x'}"><td class="c n">${n}</td><td>${esc(shortDay(p.delivery_date ?? ''))}</td>
-<td><b class="nm">${esc(titleCase(p.customer_name))}</b>&nbsp; <span class="mut">${esc(phoneText(p.phone))}</span>${addr}</td><td>${sweets}</td>
-<td class="c">${live ? (isPacked(p) ? tag('Packed', true) : box) : ''}</td><td class="r">${collect}</td>
-<td>${live && due > 0 ? line : '<span class="mut">—</span>'}</td><td class="c">${live ? (given ? tag('Given', true) : box) : ''}</td></tr>`;
+<td><b class="nm">${esc(titleCase(p.customer_name))}</b>${!live && !cash ? ` ${tag('Cancelled')}` : ''}&nbsp; <span class="mut">${esc(phoneText(p.phone))}</span>${addr}</td><td>${sweets}</td>
+<td class="c">${live ? (isPacked(p) ? tag('Packed', true) : box) : ''}</td>${pay}<td class="c">${live ? (given ? tag('Given', true) : box) : ''}</td></tr>`;
 }
 
-const sumRow = (label: string, due: number, cls: string) =>
-  `<tr class="${cls}"><td colspan="5">${label}</td><td class="r"><b>${money(due)}</b></td><td>${line}</td><td></td></tr>`;
+const sumRow = (label: string, due: number, cls: string, cash: boolean) => cash
+  ? `<tr class="${cls}"><td colspan="5">${label}</td><td class="r"><b>${money(due)}</b></td><td>${line}</td><td></td></tr>`
+  : `<tr class="${cls}"><td colspan="6">${label}</td></tr>`;
 
 // A CSS string; "<" escaped so a search term can't close the <style> tag.
 const cssText = (s: string) => `"${s.replace(/["\\]/g, '\\$&').replace(/</g, '\\3C ')}"`;
 
 // Running title and print time sit in the page margins from page 2 on.
-const css = (run: string, printed: string) => `
+const css = (run: string, printed: string, note: string) => `
 @page { size: A4 landscape; margin: 11mm 10mm 12mm;
   @top-left { content: ${cssText(run)}; font: 600 10pt Inter, Arial, sans-serif; color: #1A1A18; }
   @top-right { content: ${cssText(printed)}; font: 9pt Inter, Arial, sans-serif; color: #4A4A45; }
-  @bottom-left { content: "Write each box's # on it. Tick Packed when it is ready. At hand-over write what you received, cash or UPI, and tick Given. Enter changes in the app after the rush."; font: 9pt Inter, Arial, sans-serif; color: #4A4A45; }
+  @bottom-left { content: ${cssText(note)}; font: 9pt Inter, Arial, sans-serif; color: #4A4A45; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 700 9.5pt Inter, Arial, sans-serif; color: #1A1A18; } }
 @page :first { margin-top: 8mm; @top-left { content: none; } @top-right { content: none; } }
 * { box-sizing: border-box; margin: 0; }
@@ -146,6 +161,7 @@ tr.tot td { border-top: 1.5px solid #1A1A18; font-weight: 700; padding-top: 7px;
 
 // Landscape A4: the header row repeats on every page; Chrome adds the running title and page numbers.
 export function registerHtml(plan: PrintPlan, info: PrintInfo): string {
+  const cash = !info.hideMoney;
   const days = plan.days.map(d => d.day);
   const span = datesSpan(days);
   const where = plan.deliveries ? `${plan.deliveries} home ${plan.deliveries === 1 ? 'delivery' : 'deliveries'}` : 'all pickup';
@@ -154,25 +170,27 @@ export function registerHtml(plan: PrintPlan, info: PrintInfo): string {
   const last = plan.days.reduce((n, d) => n + d.rows.length, 0);
   const pack = plan.pack.length ? `<div class="ph"><b>To make and pack</b><span>${esc(plan.days.length > 1 ? `All ${plan.days.length} days` : span)} · packs × size · which boxes (#) get it · boxes already packed are left out</span></div>
 <div class="pk">${plan.pack.map(s => `<div><p><span>${esc(s.name)}</span><span>${esc(s.total)}</span></p>${s.packs.split(' + ').map(x => `<span class="q">${esc(x)}</span>`).join(' + ')}<br><span class="mut">boxes ${s.boxes.join(', ')}</span></div>`).join('')}${'<div></div>'.repeat((5 - (plan.pack.length % 5)) % 5)}</div>` : '';
-  const body = plan.days.map(d => d.rows.map(rowHtml).join('')
-    + (d.rows.length > 1 ? sumRow(`<b>${esc(d.day ? dayName(d.day) : 'No date')}</b> · ${plural(d.count, 'booking')} · ${plural(d.packs, 'pack')}`, d.due, 'sub') : '')).join('');
-  const blanks = Array.from({ length: BLANK_ROWS }, (_, i) => `<tr class="blank"><td class="c">${last + i + 1}</td><td></td><td>${i ? '' : 'Walk-in or change: write it here'}</td><td></td><td class="c">${box}</td><td></td><td>${line}</td><td class="c">${box}</td></tr>`).join('');
-  const totLabel = `All days · ${plural(plan.count, 'booking')} printed · ${plural(plan.packs, 'pack')}${plan.advance ? ` · advance taken ${money(plan.advance)}` : ''}`;
+  const body = plan.days.map(d => d.rows.map(r => rowHtml(r, cash)).join('')
+    + (d.rows.length > 1 ? sumRow(`<b>${esc(d.day ? dayName(d.day) : 'No date')}</b> · ${plural(d.count, 'booking')} · ${plural(d.packs, 'pack')}`, d.due, 'sub', cash) : '')).join('');
+  const blanks = Array.from({ length: BLANK_ROWS }, (_, i) => `<tr class="blank"><td class="c">${last + i + 1}</td><td></td><td>${i ? '' : 'Walk-in or change: write it here'}</td><td></td><td class="c">${box}</td>${cash ? `<td></td><td>${line}</td>` : ''}<td class="c">${box}</td></tr>`).join('');
+  const totLabel = `All days · ${plural(plan.count, 'booking')} printed · ${plural(plan.packs, 'pack')}${cash && plan.advance ? ` · advance taken ${money(plan.advance)}` : ''}`;
+  const totals = cash ? `<b>${plural(plan.count, 'booking')} · ${plural(plan.packs, 'pack')} · To collect ${money(plan.due)}</b><br>Advance taken ${money(plan.advance)} · Printed ${esc(info.printedAt)}`
+    : `<b>${plural(plan.count, 'booking')} · ${plural(plan.packs, 'pack')}</b><br>Printed ${esc(info.printedAt)}`;
   const run = [title, info.occasion, info.scope].filter(Boolean).join(' · ');
   const docTitle = ['Pre-bookings', info.occasion, info.printedAt.replace(/,.*$/, '')].filter(Boolean).join(' ');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(docTitle)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-<style>${css(run, `Printed ${info.printedAt}`)}</style></head><body>
+<style>${css(run, `Printed ${info.printedAt}`, cash ? NOTE.cash : NOTE.items)}</style></head><body>
 <header class="hd"><div><h1>${title}</h1><p>${esc(sub)}</p></div>
-<div class="r"><b>${plural(plan.count, 'booking')} · ${plural(plan.packs, 'pack')} · To collect ${money(plan.due)}</b><br>Advance taken ${money(plan.advance)} · Printed ${esc(info.printedAt)}</div></header>
-${pack}<table>${COLS}<thead><tr><th class="c">#</th><th>Day</th><th>Customer</th><th>Sweets</th><th class="c">Packed</th><th class="r">To collect</th><th>Received ₹</th><th class="c">Given</th></tr></thead>
-<tbody>${body}${blanks}${sumRow(totLabel, plan.due, 'tot')}</tbody></table></body></html>`;
+<div class="r">${totals}</div></header>
+${pack}<table>${cols(cash)}<thead>${head(cash)}</thead>
+<tbody>${body}${blanks}${sumRow(totLabel, plan.due, 'tot', cash)}</tbody></table></body></html>`;
 }
 
 // The register as a PDF file; it prints its own page numbers, so the PDF service adds no footer.
 export const registerDoc = (plan: PrintPlan, info: PrintInfo, dates = ''): Doc => ({
   html: registerHtml(plan, info),
-  fileName: `${fileSafe(['Pre-bookings', info.occasion, dates || info.printedAt.replace(/,.*$/, '')].filter(Boolean).join(' '))}.pdf`,
+  fileName: `${fileSafe(['Pre-bookings', info.occasion, dates || info.printedAt.replace(/,.*$/, ''), info.hideMoney && 'items only'].filter(Boolean).join(' '))}.pdf`,
   footer: '',
 });

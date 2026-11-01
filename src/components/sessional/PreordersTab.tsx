@@ -37,7 +37,7 @@ const dueBy = (p: SeasonalPreorder, day: string) => isOpen(p) && !!p.delivery_da
 const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, search, openId: startId }) => {
   const { data: items = [] } = useSeasonalItems();
   const actions = usePreorderActions();
-  const [prefs, setPrefs] = useStoredState<{ view: View }>('shivshakti.preorderView', () => ({ view: 'sheet' }));
+  const [prefs, setPrefs] = useStoredState<{ view: View; hideMoney: boolean }>('shivshakti.preorderView', () => ({ view: 'sheet', hideMoney: false }));
   const view = prefs.view;
   const [show, setShow] = useState<Show>(search ? 'all' : 'open');
   const [q, setQ] = useState(search ?? '');
@@ -64,13 +64,13 @@ const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, sear
   const sheetDoc = () => {
     const ids = new Set(shown.map(p => p.occasion_id));
     const scope = [PRINT_SCOPE[show], q.trim() && `matching “${q.trim()}”`].filter(Boolean).join(' · ');
-    return registerDoc(buildPlan(shown), { scope, occasion: ids.size === 1 ? occName(Array.from(ids)[0]) : undefined, printedAt: printedNow() }, dates);
+    return registerDoc(buildPlan(shown), { scope, occasion: ids.size === 1 ? occName(Array.from(ids)[0]) : undefined, printedAt: printedNow(), hideMoney: prefs.hideMoney }, dates);
   };
   const opened = openId ? preorders.find(p => p.id === openId) : undefined;
 
   return (
     <div>
-      <PrepList preorders={preorders.filter(p => inDateSpan(p, span))} dates={dates} />
+      <PrepList preorders={preorders} />
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
         <div style={{ ...segWrap, minWidth: 300 }}>
@@ -82,10 +82,14 @@ const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, sear
         <input style={{ ...inp, flex: '1 1 200px', width: 'auto', minHeight: 44 }} value={q} onChange={e => setQ(e.target.value)} placeholder="Search name or mobile" />
         <div style={segWrap} role="group" aria-label="View">
           {([['sheet', 'Sheet'], ['list', 'List']] as [View, string][]).map(([k, label]) => (
-            <button key={k} type="button" style={{ ...segBtn(view === k), minHeight: 44 }} aria-pressed={view === k} onClick={() => setPrefs({ view: k })}>{label}</button>
+            <button key={k} type="button" style={{ ...segBtn(view === k), minHeight: 44 }} aria-pressed={view === k} onClick={() => setPrefs(p => ({ ...p, view: k }))}>{label}</button>
           ))}
         </div>
         {view === 'sheet' && shown.length > 0 && <>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, minHeight: 44 }} title="Download and print the sheet with items only: no amounts, no To collect or Received columns">
+            <input type="checkbox" style={{ width: 20, height: 20 }} checked={prefs.hideMoney} onChange={e => setPrefs(p => ({ ...p, hideMoney: e.target.checked }))} />
+            Hide money
+          </label>
           <button type="button" className="ui-btn primary" onClick={() => downloadDoc(sheetDoc)}>Download PDF</button>
           <button type="button" className="ui-btn" onClick={() => printHtml(sheetDoc().html)}>Print sheet</button>
         </>}

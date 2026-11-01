@@ -137,7 +137,7 @@ The grid-and-bill layout follows NodeDR POS.
   - **List view**: cards with Confirm, Mark packed, Hand over & collect, Print slip, WhatsApp, Edit, Cancel, Delete;
   - status flow: Pending → Confirmed → Packed → Handed over (or Cancelled);
   - Open / Due by tomorrow / Done / All filters, search, overdue highlighting;
-  - a **kitchen prep list** (total kg of each sweet still to make per date, printable).
+  - a **kitchen prep list** (each sweet still to make per date: packs as size × count, e.g. *1 kg × 20 + 500 g × 1*, and the total; printable).
 - **Reports tab:** pick a period (Today, Yesterday, Last 7 days, This month, Last month, This FY, This year or any from–to dates) and an occasion. Every report has headline numbers, tables with totals, an empty state, **Print / PDF** (A4, the print dialog saves as PDF) and **CSV / Excel**.
   - **Sales:** counter bills + pre-bookings handed over, day by day (month by month for long periods), by occasion, unpaid bills;
   - **Items:** item-wise packs, quantity (kg / ltr / pcs) and revenue with share, plus sales by pack size;
@@ -266,7 +266,8 @@ A quote whose Main Course held several "choose any" boxes printed an almost empt
 - **Bookings by day:** a numbered row each (write the # on the box), day, customer and phone (names title-cased), sweets in two neat columns with the count in bold, a **DELIVERY** tag with the address, notes, **Packed**, **To collect** (with the advance under it), a **Received ₹** line to write on and **Given**. Already packed or given rows print the word, not a tick.
 - **Totals:** a subtotal for each day with more than one booking, two blank rows for walk-ins and changes, then the grand total, each with a line for the cash counted.
 - **Pages:** the column header repeats on every page; from page 2 the page margin carries the title and print time, and every page says *Page X of Y* (Chrome `@page` margin boxes).
-- **Pickup dates and PDF files** (POS › Pre-bookings): a *Pickup dates* filter (All dates, Today, Tomorrow, Next 3 days, Next 7 days or Pick dates… from–to; `components/sessional/PickupDates.tsx`, `inDateSpan` in `lib/preorders.ts`) narrows the list, the kitchen prep list and both printouts. The kitchen prep list and the sheet each have **Download PDF**, which saves the file straight away through the PDF service (*Kitchen_prep_Tue_3_Thu_5_Nov.pdf*, *Pre_bookings_Diwali_Tue_3_Thu_5_Nov.pdf*), next to **Print**.
+- **Pickup dates and PDF files** (POS › Pre-bookings): a *Pickup dates* filter (All dates, Today, Tomorrow, Next 3 days, Next 7 days or Pick dates… from–to; `components/sessional/PickupDates.tsx`, `inDateSpan` in `lib/preorders.ts`) narrows the list and the sheet printout; the kitchen prep list has its own *Kitchen prep dates* filter for its screen, Print and PDF. Both have **Download PDF**, which saves the file straight away through the PDF service (*Kitchen_prep_Tue_3_Thu_5_Nov.pdf*, *Pre_bookings_Diwali_Tue_3_Thu_5_Nov.pdf*), next to **Print**. The kitchen prep list shows packs as size × count (`sweetSizes` in `lib/preorderPrint.ts`, shared with the sheet's *To make and pack* box).
+- **Hide money** (sheet view): a remembered tick box next to Download PDF prints and downloads an items-only sheet: no amounts, no *To collect* or *Received ₹* columns, cancelled bookings tagged by name (`hideMoney` in `PrintInfo`; file ends *_items_only.pdf*).
 - **Printing** (`printHtml`, all prints): waits for the page, logo and fonts before opening the print dialog, and the saved PDF is named after the document (e.g. *Pre-bookings Diwali Sat 31 Oct.pdf*) instead of *Shiv_Shakti.pdf*.
 
 ## Settings, team and data (Nov 2026)

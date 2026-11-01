@@ -99,4 +99,14 @@ describe('pickup dates and PDF files', () => {
     expect(doc.footer).toBe('');
     expect(registerDoc(buildPlan(week()), { scope: 'Open', printedAt: 'Sat 31 Oct, 6:24 pm' }).fileName).toBe('Pre_bookings_Sat_31_Oct.pdf');
   });
+  it('prints an items-only copy with no money anywhere', () => {
+    const doc = registerDoc(buildPlan(week()), { scope: 'Open', occasion: 'Diwali', printedAt: 'Sat 31 Oct, 6:24 pm', hideMoney: true }, 'Tue 3 – Thu 5 Nov');
+    expect(doc.fileName).toBe('Pre_bookings_Diwali_Tue_3_Thu_5_Nov_items_only.pdf');
+    expect(doc.html).not.toMatch(/₹|To collect|Received|advance/i);
+    expect(doc.html).toContain('<b>4 bookings · 10 packs</b>');
+    expect(doc.html).toContain('<span>Kaju Katli</span><span class="q">1 kg × <b>2</b></span>');
+    expect(doc.html).toContain('<b class="tag">Cancelled</b>');
+    expect(doc.html.match(/<col[ >]/g)).toHaveLength(6);
+    expect(doc.html).toContain('<tr class="tot"><td colspan="6">');
+  });
 });
