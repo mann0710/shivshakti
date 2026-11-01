@@ -3,6 +3,7 @@ import type { QuoteForm } from '../../hooks/useQuoteForm';
 import { genId, Charge } from '../../lib/quoteLines';
 import { parseAmount, range } from '../../lib/quoteSummary';
 import { openPicks } from '../../lib/quoteBoard';
+import { onePickPrice, pickRange } from '../../lib/quoteChoices';
 import { inr } from '../../lib/money';
 import { Tick } from './EventSection';
 import type { PackagePrice } from './usePackagePrice';
@@ -23,11 +24,13 @@ const AmountInput: React.FC<{ value: number; base: number; label: string; onChan
   );
 };
 
-// Plate price (from dish prices or your own), then transport, discounts, extras and GST.
+// Plate price (from dish prices or your own), whether picks move it, then transport, discounts, extras and GST.
 const PriceSection: React.FC<Props> = ({ f, pkg }) => {
   const dishMode = f.showPrices && f.autoPrice;
   const r = f.range;
   const picks = openPicks({ is_multi_day: false, event_days: [], items: f.selectedItems }).map(p => p.label.toLowerCase());
+  const gap = f.isMultiDay ? null : pickRange(f.selectedItems);
+  const fixed = onePickPrice(f.selectedItems);
   const list: Record<Kind, { rows: Charge[]; set: (fn: (prev: any[]) => any[]) => void; name: string }> = {
     transport: { rows: f.transportationCharges, set: f.setTransportationCharges as any, name: 'Transport' },
     discount: { rows: f.additionalDiscounts, set: f.setAdditionalDiscounts as any, name: 'Discount' },
@@ -71,6 +74,20 @@ const PriceSection: React.FC<Props> = ({ f, pkg }) => {
                 </span>
               )}</span>
           </div>
+        </div>
+      )}
+      {gap && (
+        <div className="q-radio2 q-picks" role="radiogroup" aria-label="When the customer picks">
+          <button type="button" role="radio" aria-checked={!fixed} className={`q-rcard${!fixed ? ' on' : ''}`} onClick={() => fixed && f.letPicksPrice()}>
+            <span className="dot" aria-hidden="true" />
+            <span><b>The pick changes the price</b>
+              <span>{fixed ? 'Cheaper or dearer dishes move the plate price' : `${range(f.plateLow, f.perPlateMax ?? f.plateLow)} a plate, final once they choose`}</span></span>
+          </button>
+          <button type="button" role="radio" aria-checked={fixed} className={`q-rcard${fixed ? ' on' : ''}`} onClick={() => !fixed && f.chargeHighest()}>
+            <span className="dot" aria-hidden="true" />
+            <span><b>One price for any pick</b>
+              <span>{fixed ? `${inr(f.plateLow)} a plate whatever they pick; change it in My own price` : `${inr(f.perPlateMax ?? f.plateLow)} a plate, the highest`}</span></span>
+          </button>
         </div>
       )}
       {pkg?.hint && (

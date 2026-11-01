@@ -248,6 +248,7 @@ A quote whose Main Course held several "choose any" boxes printed an almost empt
 - **"Choose" boxes** read "Punjabi Sabji · choose 1 of 2"; two boxes with the same title are numbered (Punjabi Sabji 1, Punjabi Sabji 2); the hint line shows only when the pick changes the plate price ("Your pick changes the plate price." even with dish prices hidden). Tick boxes are 17px.
 - **Page 1 shows the total** (or *Estimated total* for a range) next to the event facts, since a WhatsApp preview shows only the first page. Issued and Valid till sit on two lines.
 - **Pages:** a short price table stays with its subtotal and total; meal boxes may break across pages (`overflow: clip`); the closing "Thank you" line stays with the terms and signatures.
+- **One price for any pick** (quote editor › Price, shown when the choices make a range): one click charges the top of the range as a fixed plate price (for example ₹440 instead of ₹400 – ₹440), so whatever the customer ticks the total stays the same; the PDF shows one total and the "choose" boxes no price hint. It sets *My own price* to the top and marks every choice "same price" (`setPickPrices` in `lib/quoteChoices.ts`); type a different own price if you like. **The pick changes the price** brings the range back.
 
 ### Quote courses, text size and Menu Builder (Nov 2026)
 

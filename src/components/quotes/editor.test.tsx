@@ -82,6 +82,28 @@ describe('quote editor', () => {
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: 'k', notes: 'Live counter on request' })));
   });
 
+  it('one price for any pick charges the top of the choice range, and can go back', async () => {
+    const q = mockQuotes[0] as any;
+    const before = { items: q.items, per_plate_amount: q.per_plate_amount };
+    const g = { id: 'g', label: 'Sabji', pick: 1 };
+    const sabji = (id: string, amount: number) => ({ item_id: id, item_name: id, category_name: 'Main Course', subcategory_name: 'Punjabi Sabji', amount, choice: g });
+    Object.assign(q, { items: [{ ...before.items[0], amount: 20 }, sabji('Paneer', 45), sabji('Kofta', 55)], per_plate_amount: 65, per_plate_max: 75 });
+    try {
+      render(<Quotations />);
+      fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
+      await settle();
+      const price = screen.getByRole('region', { name: 'Price' });
+      fireEvent.click(within(price).getByRole('radio', { name: /One price for any pick/ }));
+      expect((screen.getByLabelText('Own price a plate') as HTMLInputElement).value).toBe('75');
+      expect(within(price).getByText('₹75 a plate whatever they pick; change it in My own price')).toBeInTheDocument();
+      fireEvent.click(within(price).getByRole('radio', { name: /The pick changes the price/ }));
+      expect(within(price).getByText('₹65 – ₹75 a plate, final once they choose')).toBeInTheDocument();
+    } finally {
+      Object.assign(q, before);
+      delete q.per_plate_max;
+    }
+  });
+
   it('a package price follows the guest count until a price is typed', async () => {
     render(<Quotations />);
     fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));

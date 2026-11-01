@@ -70,6 +70,19 @@ export const servedItems = (items: QuotationLineItem[] | undefined) => {
 };
 
 // ── editing helpers (return new arrays) ──
+// "One price for any pick": every choice stops moving the plate price (fixed) or starts again.
+export const setPickPrices = (items: QuotationLineItem[], fixed: boolean) =>
+  items.map(i => (i.choice ? { ...i, choice: { ...i.choice, included: fixed || undefined } } : i));
+// The plate range the choices would make if picks moved the price; null when they never would.
+export function pickRange(items: QuotationLineItem[] | undefined): { min: number; max: number } | null {
+  const r = plateRange(setPickPrices(items ?? [], false));
+  return r.max > r.min ? r : null;
+}
+// True when every choice keeps one price (set by "One price for any pick" or per choice).
+export const onePickPrice = (items: QuotationLineItem[] | undefined) => {
+  const groups = choiceGroups(items);
+  return groups.length > 0 && groups.every(g => g.meta.included);
+};
 export const setGroupMeta = (items: QuotationLineItem[], id: string, patch: Partial<ChoiceMeta>) =>
   items.map(i => (i.choice?.id === id ? { ...i, choice: { ...i.choice, ...patch } } : i));
 export const assignGroup = (items: QuotationLineItem[], itemId: string, meta: ChoiceMeta | null) =>

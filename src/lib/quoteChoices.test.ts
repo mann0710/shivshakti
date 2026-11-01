@@ -1,4 +1,4 @@
-import { plateRange, servedItems, acceptPatch, pickKey, choiceGroups, setGroupMeta, ungroup, atMaxPrices, addAlternative, togglePicked, tidyGroups } from './quoteChoices';
+import { plateRange, servedItems, acceptPatch, pickKey, choiceGroups, setGroupMeta, ungroup, atMaxPrices, addAlternative, togglePicked, tidyGroups, setPickPrices, pickRange, onePickPrice, ownRange } from './quoteChoices';
 import { quoteTotals } from './quoteMath';
 import { nextLabel, sameDayNote, statusText, totalText, quoteDays, siblingsOf } from './quoteOptions';
 
@@ -108,5 +108,24 @@ describe('options', () => {
     expect(note).toContain('1 other quote: Rajesh (accepted, Plot)');
     expect(note).toContain('plot is already booked');
     expect(sameDayNote('2026-12-21', 'plot', others, booked, {})).toBe('');
+  });
+});
+
+describe('one price for any pick', () => {
+  const sabji = { id: 'g2', label: 'Sabji', pick: 1 };
+  const menu = [dish('roti', 20), dish('paneer', 45, sabji), dish('kofta', 55, sabji), dish('mixveg', 30, { id: 'g3', label: 'Sabji', pick: 1 }), dish('bhindi', 30, { id: 'g3', label: 'Sabji', pick: 1 })];
+  it('knows the range picks would make, and when every choice keeps one price', () => {
+    expect(pickRange(menu)).toEqual({ min: 95, max: 105 });
+    expect(onePickPrice(menu)).toBe(false);
+    const fixed = setPickPrices(menu, true);
+    expect(onePickPrice(fixed)).toBe(true);
+    expect(pickRange(fixed)).toEqual({ min: 95, max: 105 });
+    expect(pickRange([dish('roti', 20)])).toBeNull();
+  });
+  it('a typed price stays put whatever the customer picks once every choice keeps one price', () => {
+    const fixed = setPickPrices(menu, true);
+    expect(ownRange(105, fixed)).toEqual({ low: 105, high: null });
+    expect(ownRange(105, togglePicked(fixed, 'paneer'))).toEqual({ low: 105, high: null });
+    expect(onePickPrice(setPickPrices(fixed, false))).toBe(false);
   });
 });

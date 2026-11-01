@@ -377,3 +377,6 @@
 .q-newcourse:hover { background: #FFF8EC; }
 .q-newcourse-in { align-self: flex-start; }
 @media (max-width: 768px) { .q-sub { grid-template-columns: 1fr; gap: 2px; } .q-sub-l { padding-top: 4px; } }
+
+/* Price: whether the customer's pick moves the plate price */
+.q-picks { margin-top: 10px; }
