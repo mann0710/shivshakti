@@ -12,7 +12,7 @@ import { addDays } from '../reports/model';
 export interface Doc { html: string; fileName: string; footer: string }
 
 const day = (d?: string) => (d ? formatDateIST(d, 'dd MMM yyyy') : '');
-const fileSafe = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'Customer';
+export const fileSafe = (s: string) => s.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'Customer';
 export const docFileName = (name: string | undefined, number: string) => `${fileSafe(name || 'Customer')}_${number}.pdf`;
 
 const charges = (list?: { description: string; amount: number }[], fallback = 'Extra charge'): SumRow[] =>

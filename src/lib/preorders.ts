@@ -1,5 +1,6 @@
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
 import { roundMoney } from './units';
+import { addDays } from './reports/model';
 
 export type PreStatus = SeasonalPreorder['status'];
 export type Fulfillment = 'pickup' | 'delivery';
@@ -31,3 +32,15 @@ export const istDay = (iso: string) => new Date(iso).toLocaleDateString('en-CA',
 
 export const modeLabel = (m?: string | null) =>
   !m ? 'Not recorded' : m === 'upi' ? 'UPI' : m === 'bank_transfer' ? 'Bank transfer' : m.charAt(0).toUpperCase() + m.slice(1);
+
+// Pickup-date filter: '' means no limit; a booking without a date only shows with no limit.
+export interface DateSpan { from: string; to: string }
+export type Preset = 'all' | 'today' | 'tomorrow' | 'next3' | 'week' | 'custom';
+export const ALL_DATES: DateSpan = { from: '', to: '' };
+export const inDateSpan = (p: Pick<SeasonalPreorder, 'delivery_date'>, s: DateSpan) =>
+  (!s.from && !s.to) || (!!p.delivery_date && (!s.from || p.delivery_date >= s.from) && (!s.to || p.delivery_date <= s.to));
+export const presetSpan = (k: Preset, today: string): DateSpan =>
+  k === 'today' ? { from: today, to: today }
+    : k === 'tomorrow' ? { from: addDays(today, 1), to: addDays(today, 1) }
+      : k === 'next3' ? { from: today, to: addDays(today, 2) }
+        : k === 'week' ? { from: today, to: addDays(today, 6) } : ALL_DATES;

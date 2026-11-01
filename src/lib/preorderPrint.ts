@@ -1,9 +1,10 @@
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
 import { nameKey, baseName } from './itemCatalog';
 import { PriceUnit, formatSize, formatLineSize, unitFromLine } from './units';
-import { balanceOf, fulfillmentOf, isOpenPreorder, isPacked } from './preorders';
+import { balanceOf, fulfillmentOf, isOpenPreorder, isPacked, DateSpan } from './preorders';
 import { dayName } from './occasions';
 import { esc, money } from './docs/theme';
+import { fileSafe, Doc } from './docs/quotationDoc';
 
 // The paper pre-booking register: what to make and pack, then numbered bookings by day with the money to collect.
 export interface PrintItem { name: string; size: string; qty: number }
@@ -72,6 +73,10 @@ export function datesSpan(days: string[]): string {
 }
 
 export interface PrintInfo { scope: string; occasion?: string; printedAt: string }
+
+// "Thu 5 Nov", "Tue 3 – Thu 5 Nov", "from …", "until …", or '' for all dates.
+export const spanLabel = (s: DateSpan) =>
+  !s.from && !s.to ? '' : s.from && s.to ? datesSpan([s.from, s.to]) : s.from ? `from ${dayName(s.from)}` : `until ${dayName(s.to)}`;
 
 // "Sat 31 Oct, 6:24 pm" in IST.
 export const printedNow = (now = new Date()) =>
@@ -164,3 +169,10 @@ export function registerHtml(plan: PrintPlan, info: PrintInfo): string {
 ${pack}<table>${COLS}<thead><tr><th class="c">#</th><th>Day</th><th>Customer</th><th>Sweets</th><th class="c">Packed</th><th class="r">To collect</th><th>Received ₹</th><th class="c">Given</th></tr></thead>
 <tbody>${body}${blanks}${sumRow(totLabel, plan.due, 'tot')}</tbody></table></body></html>`;
 }
+
+// The register as a PDF file; it prints its own page numbers, so the PDF service adds no footer.
+export const registerDoc = (plan: PrintPlan, info: PrintInfo, dates = ''): Doc => ({
+  html: registerHtml(plan, info),
+  fileName: `${fileSafe(['Pre-bookings', info.occasion, dates || info.printedAt.replace(/,.*$/, '')].filter(Boolean).join(' '))}.pdf`,
+  footer: '',
+});

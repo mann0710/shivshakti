@@ -5,10 +5,13 @@ import { nameKey } from '../../lib/itemCatalog';
 import { formatSize } from '../../lib/units';
 import { formatDay } from '../../lib/sessionalReceipts';
 import { printHtml } from '../../lib/receipt';
+import { downloadDoc } from '../../lib/docs/output';
+import { fileSafe, Doc } from '../../lib/docs/quotationDoc';
+import { printedNow } from '../../lib/preorderPrint';
 import { page, esc } from '../../lib/docs/theme';
 import { slimHeader, sectionHead, docTable } from '../../lib/docs/parts';
 import { docContext } from '../../lib/docs/context';
-import { card, btnSm, th, td, NAVY } from '../ui/styles';
+import { card, th, td, NAVY } from '../ui/styles';
 
 // Kitchen prep sheet: how much of each sweet to make for open pre-bookings, by delivery date.
 export function prepByDate(preorders: SeasonalPreorder[]) {
@@ -20,24 +23,34 @@ export function prepByDate(preorders: SeasonalPreorder[]) {
   });
 }
 
-// Printable prep list in the document style.
-function prepHtml(days: ReturnType<typeof prepByDate>): string {
+// Printable prep list in the document style; `dates` is the pickup filter ('' for all).
+function prepHtml(days: ReturnType<typeof prepByDate>, dates: string): string {
   const ctx = docContext();
   const body = days.map(d => `<section>${sectionHead(d.date ? formatDay(d.date) : 'No date', `${d.orders} order${d.orders === 1 ? '' : 's'}`)}${
     docTable(['Item', 'Make', 'Packs'], d.items.map(i => [`<b>${esc(i.name)}</b>`, `<b>${formatSize(i.amount, i.unit)}</b>`, String(i.packs)]), undefined, 2)}</section>`).join('');
-  return page('Kitchen prep list', ctx.settings.accent, `${slimHeader(ctx, 'Kitchen', 'Prep list', `Open pre-bookings<br>Printed ${esc(new Date().toLocaleString('en-IN'))}`)}<div class="wrap">${body}</div>`);
+  return page('Kitchen prep list', ctx.settings.accent, `${slimHeader(ctx, 'Kitchen', 'Prep list', `${dates ? `Pickup ${esc(dates)}` : 'Open pre-bookings'}<br>Printed ${esc(printedNow())}`)}<div class="wrap">${body}</div>`);
 }
 
-const PrepList: React.FC<{ preorders: SeasonalPreorder[] }> = ({ preorders }) => {
+export const prepDoc = (days: ReturnType<typeof prepByDate>, dates: string): Doc => ({
+  html: prepHtml(days, dates),
+  fileName: `${fileSafe(`Kitchen prep ${dates || 'all dates'}`)}.pdf`,
+  footer: `Kitchen prep list${dates ? ` · ${dates}` : ''}`,
+});
+
+// `preorders` come already filtered to the pickup dates; `dates` names them.
+const PrepList: React.FC<{ preorders: SeasonalPreorder[]; dates: string }> = ({ preorders, dates }) => {
   const days = useMemo(() => prepByDate(preorders), [preorders]);
   if (!days.length) return null;
 
-  const print = () => printHtml(prepHtml(days));
+  const make = () => prepDoc(days, dates);
   return (
     <div style={card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>👩‍🍳 Kitchen prep list (open pre-bookings)</div>
-        <button style={btnSm} onClick={print}>🖨 Print</button>
+        <div style={{ fontSize: 13, fontWeight: 600, color: NAVY }}>👩‍🍳 Kitchen prep list · {dates || 'all open pre-bookings'}</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button type="button" className="ui-btn primary" onClick={() => downloadDoc(make)}>Download PDF</button>
+          <button type="button" className="ui-btn" onClick={() => printHtml(make().html)}>Print</button>
+        </div>
       </div>
       {days.map(d => (
         <div key={d.date} style={{ marginBottom: 10 }}>

@@ -1,5 +1,6 @@
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
-import { buildPlan, datesSpan, phoneText, printedNow, registerHtml, titleCase } from './preorderPrint';
+import { buildPlan, datesSpan, phoneText, printedNow, registerDoc, registerHtml, spanLabel, titleCase } from './preorderPrint';
+import { ALL_DATES, inDateSpan, presetSpan } from './preorders';
 
 const line = (item_name: string, weight: number, qty: number, rate = 1000) =>
   ({ item_id: item_name, item_name, weight, weight_unit: 'gm' as const, qty, price: (rate * weight) / 1000, line_total: (rate * weight * qty) / 1000 });
@@ -72,5 +73,30 @@ describe('pre-booking register print', () => {
     expect(datesSpan(['2026-10-31', '2026-11-03'])).toBe('Sat 31 Oct – Tue 3 Nov');
     expect(datesSpan(['2026-11-05'])).toBe('Thu 5 Nov');
     expect(printedNow(new Date('2026-10-31T12:54:00Z'))).toBe('Sat 31 Oct, 6:24 pm');
+  });
+});
+
+describe('pickup dates and PDF files', () => {
+  it('filters by pickup date and names the span', () => {
+    const today = '2026-11-03';
+    expect(presetSpan('today', today)).toEqual({ from: today, to: today });
+    expect(presetSpan('tomorrow', today)).toEqual({ from: '2026-11-04', to: '2026-11-04' });
+    expect(presetSpan('next3', today)).toEqual({ from: today, to: '2026-11-05' });
+    expect(presetSpan('week', today)).toEqual({ from: today, to: '2026-11-09' });
+    const span = presetSpan('next3', today);
+    expect(week().filter(p => inDateSpan(p, span)).map(p => p.customer_name)).toEqual(['vipul prajapati', 'Kiran Solanki', 'Harsh Patel', 'Gone Away', 'Gaurav Shah']);
+    expect(inDateSpan({ delivery_date: '2026-11-06' }, span)).toBe(false);
+    expect(inDateSpan({ delivery_date: undefined }, span)).toBe(false);
+    expect(inDateSpan({ delivery_date: undefined }, ALL_DATES)).toBe(true);
+    expect(spanLabel(span)).toBe('Tue 3 – Thu 5 Nov');
+    expect(spanLabel(presetSpan('today', today))).toBe('Tue 3 Nov');
+    expect(spanLabel({ from: today, to: '' })).toBe('from Tue 3 Nov');
+    expect(spanLabel(ALL_DATES)).toBe('');
+  });
+  it('downloads the register as a named PDF that keeps its own page numbers', () => {
+    const doc = registerDoc(buildPlan(week()), { scope: 'Open', occasion: 'Diwali', printedAt: 'Sat 31 Oct, 6:24 pm' }, 'Tue 3 – Thu 5 Nov');
+    expect(doc.fileName).toBe('Pre_bookings_Diwali_Tue_3_Thu_5_Nov.pdf');
+    expect(doc.footer).toBe('');
+    expect(registerDoc(buildPlan(week()), { scope: 'Open', printedAt: 'Sat 31 Oct, 6:24 pm' }).fileName).toBe('Pre_bookings_Sat_31_Oct.pdf');
   });
 });

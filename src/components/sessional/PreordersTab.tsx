@@ -5,8 +5,10 @@ import { useSeasonalItems } from '../../hooks/useSeasonalItems';
 import { usePreorderActions } from '../../hooks/usePreorderActions';
 import { useStoredState } from '../../hooks/useStoredState';
 import { preorderReceipt, printReceipt, shareReceipt, formatDay } from '../../lib/sessionalReceipts';
-import { buildPlan, registerHtml, printedNow } from '../../lib/preorderPrint';
-import { isOpenPreorder as isOpen, isPacked, balanceOf, STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf } from '../../lib/preorders';
+import { buildPlan, registerDoc, printedNow, spanLabel } from '../../lib/preorderPrint';
+import { downloadDoc } from '../../lib/docs/output';
+import PickupDates from './PickupDates';
+import { isOpenPreorder as isOpen, isPacked, balanceOf, STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf, ALL_DATES, DateSpan, inDateSpan } from '../../lib/preorders';
 import { printHtml } from '../../lib/receipt';
 import { formatLineSize } from '../../lib/units';
 import { inr, cleanPhone } from '../../lib/money';
@@ -39,6 +41,8 @@ const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, sear
   const view = prefs.view;
   const [show, setShow] = useState<Show>(search ? 'all' : 'open');
   const [q, setQ] = useState(search ?? '');
+  const [span, setSpan] = useState<DateSpan>(ALL_DATES);
+  const dates = spanLabel(span);
   const [openId, setOpenId] = useState<string | null>(startId ?? null);
   const today = todayIST();
   const tomorrow = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -49,22 +53,24 @@ const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, sear
     const digits = cleanPhone(q);
     return preorders
       .filter(p => (show === 'all' ? true : show === 'done' ? !isOpen(p) : show === 'due' ? dueBy(p, tomorrow) : isOpen(p)))
+      .filter(p => inDateSpan(p, span))
       .filter(p => !term || p.customer_name.toLowerCase().includes(term) || (digits.length >= 3 && (p.phone ?? '').includes(digits)))
       .sort((a, b) => (a.delivery_date || '9').localeCompare(b.delivery_date || '9'));
-  }, [preorders, show, q, tomorrow]);
+  }, [preorders, show, q, tomorrow, span]);
 
   const dueCount = preorders.filter(p => dueBy(p, tomorrow)).length;
   const receipt = (p: SeasonalPreorder) => preorderReceipt(p, occName(p.occasion_id), gst);
-  const printSheet = () => {
+  // The pick list (register) for what is shown: Download PDF saves a file, Print opens the print dialog.
+  const sheetDoc = () => {
     const ids = new Set(shown.map(p => p.occasion_id));
-    const scope = q.trim() ? `${PRINT_SCOPE[show]} · matching “${q.trim()}”` : PRINT_SCOPE[show];
-    printHtml(registerHtml(buildPlan(shown), { scope, occasion: ids.size === 1 ? occName(Array.from(ids)[0]) : undefined, printedAt: printedNow() }));
+    const scope = [PRINT_SCOPE[show], q.trim() && `matching “${q.trim()}”`].filter(Boolean).join(' · ');
+    return registerDoc(buildPlan(shown), { scope, occasion: ids.size === 1 ? occName(Array.from(ids)[0]) : undefined, printedAt: printedNow() }, dates);
   };
   const opened = openId ? preorders.find(p => p.id === openId) : undefined;
 
   return (
     <div>
-      <PrepList preorders={preorders} />
+      <PrepList preorders={preorders.filter(p => inDateSpan(p, span))} dates={dates} />
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
         <div style={{ ...segWrap, minWidth: 300 }}>
@@ -72,13 +78,17 @@ const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, sear
             <button key={k} type="button" style={{ ...segBtn(show === k), minHeight: 44 }} aria-pressed={show === k} onClick={() => setShow(k)}>{label}</button>
           ))}
         </div>
+        <PickupDates value={span} onChange={setSpan} />
         <input style={{ ...inp, flex: '1 1 200px', width: 'auto', minHeight: 44 }} value={q} onChange={e => setQ(e.target.value)} placeholder="Search name or mobile" />
         <div style={segWrap} role="group" aria-label="View">
           {([['sheet', 'Sheet'], ['list', 'List']] as [View, string][]).map(([k, label]) => (
             <button key={k} type="button" style={{ ...segBtn(view === k), minHeight: 44 }} aria-pressed={view === k} onClick={() => setPrefs({ view: k })}>{label}</button>
           ))}
         </div>
-        {view === 'sheet' && shown.length > 0 && <button type="button" className="ui-btn" onClick={printSheet}>Print sheet</button>}
+        {view === 'sheet' && shown.length > 0 && <>
+          <button type="button" className="ui-btn primary" onClick={() => downloadDoc(sheetDoc)}>Download PDF</button>
+          <button type="button" className="ui-btn" onClick={() => printHtml(sheetDoc().html)}>Print sheet</button>
+        </>}
       </div>
 
       {view === 'sheet' ? (
