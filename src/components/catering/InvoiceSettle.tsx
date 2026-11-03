@@ -8,6 +8,7 @@ import { Ready } from '../../lib/cateringTodo';
 import { invoiceFromQuote } from '../../lib/invoiceEdit';
 import { formatDateIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
+import { errorText } from '../../lib/errors';
 
 export const SETTLED_NOTE = 'Settled outside the app';
 
@@ -39,7 +40,7 @@ const InvoiceSettle: React.FC<Props> = ({ item, booking, quote, onInvoice, onClo
   const go = async () => {
     if (choice === 'invoice') { onInvoice(booking.id); return; }
     try { const id = await settle(booking, quote); toast.success(`${booking.customer?.name ?? 'Event'} marked as settled outside`); onDone(id); }
-    catch (e) { toast.error(e instanceof Error ? e.message : 'Could not save'); }
+    catch (e) { toast.error(errorText(e)); }
   };
   const cards: ['invoice' | 'settle', string, string][] = [
     ['settle', 'Paid outside the app', `Saves a paid invoice for ${inr(value)} dated ${day}, so Money adds up`],

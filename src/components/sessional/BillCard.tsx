@@ -16,6 +16,7 @@ interface Props {
   onCollect: () => void;
   onRemind: () => void;
   onPrint: () => void;
+  onPdf: () => void;
   onShare: () => void;
 }
 
@@ -29,7 +30,7 @@ function payState(o: SeasonalOrder): { text: string; color: string } {
 }
 
 // One bill: who, what, paid or due, and its actions (rarer ones under ⋯ More).
-const BillCard: React.FC<Props> = ({ order: o, occasion, menu, onCollect, onRemind, onPrint, onShare }) => {
+const BillCard: React.FC<Props> = ({ order: o, occasion, menu, onCollect, onRemind, onPrint, onPdf, onShare }) => {
   const due = billDue(o);
   const state = payState(o);
   return (
@@ -55,6 +56,7 @@ const BillCard: React.FC<Props> = ({ order: o, occasion, menu, onCollect, onRemi
         {due > 0 && <button type="button" className="ui-btn primary" onClick={onCollect}>Collect {inr(due)}</button>}
         {due > 0 && o.phone && <button type="button" className="ui-btn" onClick={onRemind}>Remind</button>}
         <button type="button" className="ui-btn" onClick={onPrint}>Print</button>
+        <button type="button" className="ui-btn" onClick={onPdf}>Download PDF</button>
         {o.phone && !o.cancelled_at && <button type="button" className="ui-btn" onClick={onShare}>WhatsApp</button>}
         <MoreMenu items={menu} />
       </div>

@@ -13,13 +13,13 @@ import { dayCloseSlipHtml } from '../../lib/thermalSlips';
 import { printHtml } from '../../lib/receipt';
 import { inr } from '../../lib/money';
 import { roundMoney } from '../../lib/units';
+import { errorText } from '../../lib/errors';
 import { inp, DANGER, SUCCESS } from '../ui/styles';
 
 interface Draft { day: string; opening: string; cashOut: string; cashOutNote: string; notes: NoteCounts; keep: string; note: string }
 const emptyDraft = (day = ''): Draft => ({ day, opening: '', cashOut: '', cashOutNote: '', notes: {}, keep: '', note: '' });
 const cell: React.CSSProperties = { ...inp, width: 130, minHeight: 44, textAlign: 'right' };
 const num = (v: string) => Math.max(0, roundMoney(Number(v) || 0));
-const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Could not save');
 
 const Line: React.FC<{ label: string; value: string; strong?: boolean; children?: React.ReactNode }> = ({ label, value, strong, children }) => (
   <div className={`dc-row${strong ? ' total' : ''}`}><span>{label}</span>{children ?? <span>{value}</span>}</div>

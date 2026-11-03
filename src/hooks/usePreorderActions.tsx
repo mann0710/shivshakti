@@ -3,7 +3,8 @@ import toast from 'react-hot-toast';
 import {
   SeasonalPreorder, useUpdateSeasonalPreorder, useUpdateSeasonalPreorderStatus, useDeleteSeasonalPreorder,
 } from './useSeasonalPreorders';
-import { useHasPreorderColumns } from './useSchemaStatus';
+import { useHasPreorderColumns, PACKED_STATUS_MIGRATION_FILE } from './useSchemaStatus';
+import { errorText, isStatusCheck } from '../lib/errors';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import CollectModal from '../components/pos/CollectModal';
 import { balanceOf, STATUS_LABEL, PreStatus, packedToggle, istDay } from '../lib/preorders';
@@ -14,7 +15,10 @@ import { inr } from '../lib/money';
 import { roundMoney } from '../lib/units';
 
 type Taking = { p: SeasonalPreorder; kind: Extract<PayKind, 'handover' | 'due'> };
-const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Could not save');
+// An older database rejects the Packed status until its one-time update is run.
+const statusError = (e: unknown) => (isStatusCheck(e)
+  ? `Packed is not saved yet: the database needs a one-time update. Run ${PACKED_STATUS_MIGRATION_FILE} in Supabase → SQL Editor.`
+  : errorText(e));
 
 // Packed / cancelled, hand-over (a shortfall stays due), collecting that due later, reminders and delete.
 export const usePreorderActions = () => {
@@ -27,7 +31,7 @@ export const usePreorderActions = () => {
 
   const changeStatus = async (p: SeasonalPreorder, status: PreStatus) => {
     if (status === 'cancelled' && !(await confirm({ title: 'Cancel pre-booking?', message: `${p.customer_name}'s booking of ${inr(p.total_amount)} will be marked cancelled.`, confirmLabel: 'Cancel booking', danger: true }))) return;
-    try { await setStatus.mutateAsync({ id: p.id, status }); toast.success(`${p.customer_name}: ${STATUS_LABEL[status]}`); } catch (e) { toast.error(errorText(e)); }
+    try { await setStatus.mutateAsync({ id: p.id, status }); toast.success(`${p.customer_name}: ${STATUS_LABEL[status]}`); } catch (e) { toast.error(statusError(e), { duration: 10000 }); }
   };
 
   const togglePacked = (p: SeasonalPreorder) => changeStatus(p, packedToggle(p));

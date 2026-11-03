@@ -1,10 +1,11 @@
 import {
   billPayments, preorderPayments, billLedger, preorderLedger, splitPay, payEntries, refundEntries, withAdvance, cashChips, modeOf, dueOf, Payment,
 } from './payments';
-import { emptyForm, totalsOf, toOrderPayload, toPreorderPayload, validate, formFromOrder } from './posForm';
+import { WALK_IN, emptyForm, totalsOf, toOrderPayload, toPreorderPayload, validate, formFromOrder } from './posForm';
 import { owedBy, billDue, bookingDue, isTestBill } from './dues';
 import { holdBill, takeHeld, heldSummary } from './heldBills';
-import { orderReceipt, payLines, reminderText } from './sessionalReceipts';
+import { orderReceipt, payLines, reminderText, receiptDoc } from './sessionalReceipts';
+import { errorText, isStatusCheck } from './errors';
 import { posBillHtml } from './thermalSlips';
 import { DEFAULT_DOC_SETTINGS } from './docs/settings';
 
@@ -115,5 +116,22 @@ describe('dues, held bills and receipts', () => {
     expect(posBillHtml(orderReceipt(bill({ cancelled_at: AT, cancel_reason: 'Wrong item' })), ctx)).toContain('CANCELLED · Wrong item');
     expect(payLines([{ amount: -100, mode: 'cash', at: AT, kind: 'refund' }]).refunded).toBe(100);
     expect(reminderText('Ramesh', 480, 'bill #7')).toContain('₹480');
+  });
+  it('downloads a bill as a receipt-sized PDF named after it', () => {
+    const doc = receiptDoc(orderReceipt(bill()));
+    expect(doc.fileName).toBe('Bill_7_Ramesh.pdf');
+    expect(doc.html).toContain('data-pdf-width="80mm"');
+    expect(receiptDoc(orderReceipt(bill({ customer_name: WALK_IN }))).fileName).toBe('Bill_7.pdf');
+  });
+});
+
+describe('save errors', () => {
+  it('shows the database message and spots an old status rule', () => {
+    const check = { code: '23514', message: 'new row for relation "seasonal_preorders" violates check constraint "seasonal_preorders_status_check"' };
+    expect(errorText(check)).toBe(check.message);
+    expect(errorText(new Error('Offline'))).toBe('Offline');
+    expect(errorText(null, 'Could not save the payment')).toBe('Could not save the payment');
+    expect(isStatusCheck(check)).toBe(true);
+    expect(isStatusCheck({ code: '23514', message: 'discount_type_check' })).toBe(false);
   });
 });

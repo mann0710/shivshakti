@@ -9,6 +9,7 @@ import { formatDateIST, todayIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
 import { DialogFoot, Picks } from './MoneyUi';
 import { grouped } from '../catering/PaymentFields';
+import { errorText } from '../../lib/errors';
 import { useAddSpends } from './useMoneyData';
 
 const KINDS = SPEND_KINDS.map(k => [k, k] as [string, string]);
@@ -37,7 +38,6 @@ const ForFields: React.FC<{ scope: SpendScope; onScope: (s: SpendScope) => void;
 );
 
 const firstPast = (events: Booking[]) => (events.find(b => b.event_date <= todayIST()) ?? events[0])?.id ?? '';
-const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Could not save');
 
 // DlgExtras "Add a spend".
 export const SpendModal: React.FC<{ bookings: Booking[]; onClose: () => void }> = ({ bookings, onClose }) => {

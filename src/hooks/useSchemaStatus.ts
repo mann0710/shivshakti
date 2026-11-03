@@ -9,6 +9,7 @@ export const PREORDER_MIGRATION_FILE = 'supabase/migrations/20261104_preorder_fu
 export const DOC_SETTINGS_MIGRATION_FILE = 'supabase/migrations/20261105_doc_settings.sql';
 export const QUOTE_OPTIONS_MIGRATION_FILE = 'supabase/migrations/20261106_quote_options.sql';
 export const TEAM_BIN_MIGRATION_FILE = 'supabase/migrations/20261110_team_bin_tiers.sql';
+export const PACKED_STATUS_MIGRATION_FILE = 'supabase/migrations/20261111_preorder_packed_status.sql';
 
 const missingColumn = (e: { code?: string; message?: string }) =>
   e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find/i.test(e.message ?? '');

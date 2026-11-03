@@ -4,7 +4,7 @@ import { SeasonalOccasion } from '../../hooks/useSeasonalOccasions';
 import { useSeasonalItems } from '../../hooks/useSeasonalItems';
 import { usePreorderActions } from '../../hooks/usePreorderActions';
 import { useStoredState } from '../../hooks/useStoredState';
-import { preorderReceipt, printReceipt, shareReceipt, formatDay } from '../../lib/sessionalReceipts';
+import { preorderReceipt, printReceipt, shareReceipt, receiptDoc, formatDay } from '../../lib/sessionalReceipts';
 import { buildPlan, registerDoc, printedNow, spanLabel } from '../../lib/preorderPrint';
 import { downloadDoc } from '../../lib/docs/output';
 import PickupDates from './PickupDates';
@@ -140,7 +140,7 @@ const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, sear
 
       {opened && (
         <PreorderDetail p={opened} occasion={occName(opened.occasion_id)} actions={actions} onClose={() => setOpenId(null)}
-          onEdit={() => onEdit(opened)} onPrint={() => printReceipt(receipt(opened))} onShare={() => shareReceipt(receipt(opened))} />
+          onEdit={() => onEdit(opened)} onPrint={() => printReceipt(receipt(opened))} onPdf={() => downloadDoc(() => receiptDoc(receipt(opened)))} onShare={() => shareReceipt(receipt(opened))} />
       )}
       {actions.ui}
     </div>

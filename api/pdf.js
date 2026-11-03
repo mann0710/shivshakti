@@ -40,6 +40,15 @@ function browser() {
 const footerTemplate = text => `<div style="font-family:Arial,sans-serif;font-size:8px;color:#5C5C6B;width:100%;padding:0 13mm;display:flex;justify-content:space-between">
 <span>${esc(text)}</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`;
 
+// Slips (data-pdf-width="80mm") get one page as wide as the paper roll and as tall as the slip.
+async function fitSlip(page) {
+  const width = await page.evaluate(() => document.querySelector('[data-pdf-width]')?.getAttribute('data-pdf-width'));
+  if (!/^\d{2,3}mm$/.test(width || '')) return;
+  await page.emulateMediaType('print');
+  const height = await page.evaluate(() => Math.ceil(document.querySelector('[data-pdf-width]').getBoundingClientRect().bottom));
+  await page.addStyleTag({ content: `@page { size: ${width} ${height + 48}px; }` });
+}
+
 async function render(html, footer) {
   const page = await (await browser()).newPage();
   try {
@@ -47,6 +56,7 @@ async function render(html, footer) {
     page.on('request', r => (ALLOWED.some(rx => rx.test(r.url())) ? r.continue() : r.abort()));
     await page.setContent(html, { waitUntil: 'networkidle0', timeout: 20000 });
     await page.evaluate(() => document.fonts.ready);
+    await fitSlip(page);
     return await page.pdf({
       printBackground: true,
       preferCSSPageSize: true,

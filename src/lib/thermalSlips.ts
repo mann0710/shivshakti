@@ -39,7 +39,8 @@ const foot = (...lines: (string | undefined)[]) => {
   return shown.length ? `<footer>${shown.map((l, i) => (i ? `<span>${esc(l)}</span>` : `<b>${esc(l)}</b>`)).join('')}</footer>` : '';
 };
 
-const slip = (title: string, ctx: DocContext, inner: string) => page(title, ctx.settings.accent, `<div class="bill">${inner}</div>`, CSS);
+// data-pdf-width: the PDF service makes one page this wide and as tall as the slip.
+const slip = (title: string, ctx: DocContext, inner: string) => page(title, ctx.settings.accent, `<div class="bill" data-pdf-width="80mm">${inner}</div>`, CSS);
 
 // Registered shops show the GST already inside sweets prices.
 const gstRow = (r: SweetReceipt, ctx: DocContext) => {

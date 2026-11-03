@@ -1,5 +1,6 @@
 import React from 'react';
-import { printReceipt, shareReceipt } from '../../lib/sessionalReceipts';
+import { printReceipt, shareReceipt, receiptDoc } from '../../lib/sessionalReceipts';
+import { downloadDoc } from '../../lib/docs/output';
 import { SweetReceipt } from '../../lib/thermalSlips';
 import { inr } from '../../lib/money';
 import { SUCCESS, NAVY } from '../ui/styles';
@@ -11,7 +12,7 @@ interface Props {
   onNext: () => void;
 }
 
-// Shown after a bill is saved: change to give, print, share and start the next customer.
+// Shown after a bill is saved: change to give, print, PDF, share and start the next customer.
 const SaleDone: React.FC<Props> = ({ receipt, change, next, onNext }) => {
   const p = receipt.pay;
   const paid = [p?.cash ? `Cash ${inr(p.cash)}` : '', p?.upi ? `UPI ${inr(p.upi)}` : ''].filter(Boolean).join(' · ');
@@ -23,6 +24,7 @@ const SaleDone: React.FC<Props> = ({ receipt, change, next, onNext }) => {
       {change > 0 && <div className="pos-change" role="status" style={{ justifyContent: 'center', gap: 8 }}>Give back {inr(change)}</div>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 6 }}>
         <button type="button" className="ui-btn" onClick={() => printReceipt(receipt)}>Print</button>
+        <button type="button" className="ui-btn" onClick={() => downloadDoc(() => receiptDoc(receipt))}>Download PDF</button>
         {receipt.phone && <button type="button" className="ui-btn" onClick={() => shareReceipt(receipt)}>WhatsApp</button>}
       </div>
       <button type="button" className="pos-charge" style={{ marginTop: 8 }} onClick={onNext} autoFocus>{next}</button>

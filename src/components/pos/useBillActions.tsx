@@ -9,8 +9,8 @@ import { billDue, billPaid } from '../../lib/dues';
 import { billNumber } from '../../lib/receipt';
 import { sendReminder } from '../../lib/sessionalReceipts';
 import { inr } from '../../lib/money';
+import { errorText } from '../../lib/errors';
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Could not save');
 
 // Collect (part) payments, remind on WhatsApp, cancel with a reason, and delete test bills.
 export const useBillActions = () => {

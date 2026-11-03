@@ -16,6 +16,7 @@ interface Props {
   actions: ReturnType<typeof usePreorderActions>;
   onEdit: () => void;
   onPrint: () => void;
+  onPdf: () => void;
   onShare: () => void;
   onClose: () => void;
 }
@@ -23,7 +24,7 @@ interface Props {
 const KIND: Record<string, string> = { advance: 'Advance', handover: 'At hand-over', due: 'Collected later', sale: 'Paid', refund: 'Given back' };
 
 // One booking with everything you can do to it; opened by tapping a name.
-const PreorderDetail: React.FC<Props> = ({ p, occasion, actions, onEdit, onPrint, onShare, onClose }) => {
+const PreorderDetail: React.FC<Props> = ({ p, occasion, actions, onEdit, onPrint, onPdf, onShare, onClose }) => {
   const open = isOpenPreorder(p);
   const due = balanceOf(p);
   const then = (fn: () => void) => () => { onClose(); fn(); };
@@ -55,6 +56,7 @@ const PreorderDetail: React.FC<Props> = ({ p, occasion, actions, onEdit, onPrint
           {open && <button type="button" className="ui-btn" onClick={then(() => actions.togglePacked(p))}>{isPacked(p) ? 'Not packed yet' : 'Mark packed'}</button>}
           {open && <button type="button" className="ui-btn" onClick={then(onEdit)}>Edit</button>}
           <button type="button" className="ui-btn" onClick={onPrint}>Print slip</button>
+          <button type="button" className="ui-btn" onClick={onPdf}>Download PDF</button>
           <MoreMenu items={[
             ...(p.phone ? [{ label: 'Send slip on WhatsApp', onClick: onShare }] : []),
             ...(p.phone && due > 0 ? [{ label: 'Remind about balance', onClick: () => actions.remind(p) }] : []),

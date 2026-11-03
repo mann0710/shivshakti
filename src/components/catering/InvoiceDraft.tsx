@@ -4,6 +4,7 @@ import { Invoice } from '../../types';
 import { useRecalculateTotals, useUpdateEventDays } from '../../hooks/useInvoices';
 import { useUpdateBooking } from '../../hooks/useBookings';
 import { daysSubtotal, offerSavings, parseDiscount } from '../../lib/invoiceEdit';
+import { errorText } from '../../lib/errors';
 import { ChargeRow } from './InvoiceChargeList';
 
 export interface InvoiceDraft { days: any[]; guests: number | null; extras: ChargeRow[]; transport: ChargeRow[]; discount: string; gst: number }
@@ -66,7 +67,7 @@ export function useInvoiceDraft(inv: Invoice, plateRate: number) {
     const snap = latest.current;
     chain.current = chain.current.then(() => save(snap)).then(
       () => { if (!pending.current) setStatus('saved'); },
-      (e: unknown) => { setStatus('error'); toast.error(e instanceof Error ? e.message : 'Could not save the invoice'); },
+      (e: unknown) => { setStatus('error'); toast.error(errorText(e, 'Could not save the invoice')); },
     );
     return chain.current;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

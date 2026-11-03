@@ -11,6 +11,8 @@ import { billDue } from './dues';
 import { SweetReceipt, PayLines, posBillHtml } from './thermalSlips';
 import { SHOP } from './shop';
 import { formatDateIST } from './ist';
+import { WALK_IN } from './posForm';
+import { fileSafe, Doc } from './docs/quotationDoc';
 
 const day = (iso: string) =>
   new Date(iso.includes('T') ? iso : `${iso}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -96,8 +98,14 @@ export const shareReceipt = (r: ReceiptData) => {
   return true;
 };
 
-// Bills print as 80 mm receipts; pre-bookings as a full A4 slip.
-export const printReceipt = (r: SweetReceipt) => printHtml(r.booking ? preorderSlipHtml(r) : posBillHtml(r));
+// Bills are 80 mm receipts (a receipt-sized PDF page); pre-bookings a full A4 slip.
+export const receiptDoc = (r: SweetReceipt): Doc => ({
+  html: r.booking ? preorderSlipHtml(r) : posBillHtml(r),
+  fileName: `${fileSafe([r.kind, r.number, r.customer_name === WALK_IN ? '' : r.customer_name].filter(Boolean).join(' '))}.pdf`,
+  footer: '',
+});
+
+export const printReceipt = (r: SweetReceipt) => printHtml(receiptDoc(r).html);
 
 // Polite WhatsApp nudge with the amount due (and the UPI ID when one is saved).
 export function reminderText(name: string, due: number, what: string): string {

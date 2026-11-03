@@ -64,7 +64,4 @@ export function useSaveImport(keys: string[][]) {
   return { save, canUndo, saved: canUndo ? `Saved · ${UNDO_HINT}` : 'Saved' };
 }
 
-export function errorText(e: unknown, fallback = 'Could not save'): string {
-  const message = typeof e === 'object' && e !== null ? (e as { message?: unknown }).message : undefined;
-  return typeof message === 'string' && message ? message : fallback;
-}
+export { errorText } from '../../lib/errors';

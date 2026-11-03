@@ -9,11 +9,12 @@ import { inr } from '../../lib/money';
 import { afterThis, amountOf } from '../../lib/invoiceEdit';
 import { openWhatsApp } from '../../lib/receipt';
 import { SHOP } from '../../lib/shop';
+import { errorText } from '../../lib/errors';
 import PaymentFields, { blankPay, modeLabel, PayDraft } from './PaymentFields';
 
 interface Props { invoice: Invoice; onClose: () => void; payment?: Payment }
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Could not save the payment');
+const failText = (e: unknown) => errorText(e, 'Could not save the payment');
 
 // Receipt text sent after a payment is saved.
 const receiptText = (inv: Invoice, amount: number, mode: string, day: string, left: number) => [
@@ -54,7 +55,7 @@ const PaymentFormModal: React.FC<Props> = ({ invoice, onClose, payment }) => {
       toast.success(left > 0 ? `${inr(amount)} saved · ${inr(left)} still due` : `${name} has paid in full`);
       if (receipt && !openWhatsApp(phone, receiptText(invoice, amount, draft.payment_mode, day, left))) toast.error('WhatsApp did not open. Allow pop-ups and try again.');
       onClose();
-    } catch (e) { toast.error(errorText(e)); }
+    } catch (e) { toast.error(failText(e)); }
   };
 
   const del = async () => {
@@ -62,7 +63,7 @@ const PaymentFormModal: React.FC<Props> = ({ invoice, onClose, payment }) => {
     const ok = await confirm({ title: 'Delete this payment?', message: `${inr(payment.amount)} (${modeLabel(payment.payment_mode)}, ${formatDateIST(payment.payment_date, 'd MMM yyyy')}) will be removed and the balance goes up by the same amount.`, confirmLabel: 'Delete payment', danger: true });
     if (!ok) return;
     try { await remove.mutateAsync({ id: payment.id, invoiceId: invoice.id }); toast.success('Payment deleted'); onClose(); }
-    catch (e) { toast.error(errorText(e)); }
+    catch (e) { toast.error(failText(e)); }
   };
 
   const dirty = payment ? amount !== payment.amount || draft.payment_mode !== payment.payment_mode || draft.notes !== (payment.notes ?? '') || draft.payment_date !== payment.payment_date : amount !== invoice.balance_due || !!draft.notes;

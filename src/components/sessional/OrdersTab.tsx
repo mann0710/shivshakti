@@ -6,7 +6,8 @@ import { SeasonalOrder } from '../../hooks/useSeasonalOrders';
 import { SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
 import { SeasonalOccasion } from '../../hooks/useSeasonalOccasions';
 import { usePreorderActions } from '../../hooks/usePreorderActions';
-import { orderReceipt, printReceipt, shareReceipt, formatDay } from '../../lib/sessionalReceipts';
+import { orderReceipt, printReceipt, shareReceipt, receiptDoc, formatDay } from '../../lib/sessionalReceipts';
+import { downloadDoc } from '../../lib/docs/output';
 import { billNumber } from '../../lib/receipt';
 import { billDue, bookingDue, isTestBill } from '../../lib/dues';
 import { summarize, dayStart } from '../../lib/dayClose';
@@ -107,7 +108,7 @@ const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit,
           {shown.map(o => (
             <BillCard key={o.id} order={o} occasion={occName(o.occasion_id)} menu={menuFor(o)}
               onCollect={() => bills.startCollect(o)} onRemind={() => bills.remind(o)}
-              onPrint={() => printReceipt(receipt(o))} onShare={() => shareReceipt(receipt(o))} />
+              onPrint={() => printReceipt(receipt(o))} onPdf={() => downloadDoc(() => receiptDoc(receipt(o)))} onShare={() => shareReceipt(receipt(o))} />
           ))}
         </div>
       )}
