@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import BillCard from './BillCard';
 import BillFilters from './BillFilters';
 import { MenuItem } from '../pos/MoreMenu';
@@ -10,13 +10,14 @@ import { usePreorderActions } from '../../hooks/usePreorderActions';
 import { orderReceipt, preorderReceipt, printReceipt, shareReceipt, receiptDoc } from '../../lib/sessionalReceipts';
 import { sweetsInvoiceDoc } from '../../lib/docs/sweetsInvoice';
 import { downloadDoc, printDoc } from '../../lib/docs/output';
-import { BillRow, BillFilter, NO_FILTER, billRows, filterBills, billTotals } from '../../lib/billList';
+import { BillRow, BillFilter, NO_FILTER, billRows, filterBills, billTotals, stageCounts, freshFilter, isOverdue } from '../../lib/billList';
+import { useStoredState } from '../../hooks/useStoredState';
 import { billDue, bookingDue, isTestBill } from '../../lib/dues';
 import { summarize, dayStart } from '../../lib/dayClose';
 import { istDay } from '../../lib/preorders';
 import { inr } from '../../lib/money';
 import { todayIST } from '../../lib/ist';
-import { empty, NAVY, DANGER, SUCCESS } from '../ui/styles';
+import { empty, NAVY, NAVY_SOFT, DANGER, SUCCESS } from '../ui/styles';
 
 interface Props {
   orders: SeasonalOrder[];
@@ -27,18 +28,23 @@ interface Props {
   search?: string;
 }
 
+const FILTER_KEY = 'shivshakti.billFilters';
+
 // Today's money, then every sale (counter bills and pre-bookings) with filters, totals and an A4 invoice each.
 const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit, search }) => {
   const bills = useBillActions();
   const bookings = usePreorderActions();
-  const [f, setF] = useState<BillFilter>(() => ({ ...NO_FILTER, q: search ?? '' }));
-  const occName = (id?: string) => occasions.find(o => o.id === id)?.name;
   const today = todayIST();
+  // Remembered on this device; opened for one customer, it shows all their sales without saving that.
+  const [kept, setF] = useStoredState<BillFilter>(search ? null : FILTER_KEY, () => (search ? { ...NO_FILTER, stage: 'all', q: search } : NO_FILTER));
+  const f = useMemo(() => freshFilter(kept, today), [kept, today]);
+  const occName = (id?: string) => occasions.find(o => o.id === id)?.name;
 
   const day = useMemo(() => summarize(orders, preorders, dayStart(today), new Date().toISOString()), [orders, preorders, today]);
   const todays = useMemo(() => orders.filter(o => istDay(o.created_at) === today && !o.cancelled_at), [orders, today]);
   const rows = useMemo(() => billRows(orders, preorders), [orders, preorders]);
   const shown = useMemo(() => filterBills(rows, f), [rows, f]);
+  const counts = useMemo(() => stageCounts(filterBills(rows, f, true)), [rows, f]);
   const sum = billTotals(shown);
   const dueTotal = orders.reduce((s, o) => s + billDue(o), 0) + preorders.reduce((s, p) => s + bookingDue(p), 0);
   const dueCount = orders.filter(o => billDue(o) > 0).length + preorders.filter(p => bookingDue(p) > 0).length;
@@ -74,12 +80,12 @@ const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit,
         <Stat label="Unpaid" value={inr(dueTotal)} sub={dueCount ? `${dueCount} to collect` : 'Nothing due'} color={dueCount ? DANGER : SUCCESS} />
       </div>
 
-      <BillFilters value={f} onChange={setF} occasions={occasions} unpaid={unpaidRows} />
-      <div className="bill-totals" role="status">
-        <span><b>{sum.count}</b> sale{sum.count === 1 ? '' : 's'}{sum.cancelled ? ` (${sum.cancelled} cancelled)` : ''}</span>
-        <span>Billed <b>{inr(sum.billed)}</b></span>
-        <span style={{ color: SUCCESS }}>Received <b>{inr(sum.received)}</b></span>
-        <span style={{ color: sum.due ? DANGER : SUCCESS }}>Due <b>{inr(sum.due)}</b></span>
+      <BillFilters value={f} onChange={setF} occasions={occasions} counts={counts} unpaid={unpaidRows} />
+      <div className="bill-totals" role="status" aria-label="Totals for the sales shown">
+        <div>Sales shown<b>{sum.count}</b>{sum.cancelled ? `${sum.cancelled} cancelled` : ''}</div>
+        <div style={{ '--bg': NAVY_SOFT, '--c': NAVY } as React.CSSProperties}>Billed<b>{inr(sum.billed)}</b></div>
+        <div style={{ '--bg': '#EAF3DE', '--c': SUCCESS } as React.CSSProperties}>Received<b>{inr(sum.received)}</b></div>
+        <div style={sum.due ? { '--bg': '#FEECEC', '--c': DANGER } as React.CSSProperties : undefined}>Due<b>{inr(sum.due)}</b></div>
       </div>
 
       {shown.length === 0 ? (
@@ -87,7 +93,7 @@ const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit,
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {shown.map(r => (
-            <BillCard key={r.id} row={r} occasion={occName(r.occasion_id)} menu={menuFor(r)}
+            <BillCard key={r.id} row={r} occasion={occName(r.occasion_id)} overdue={isOverdue(r, today)} menu={menuFor(r)}
               onCollect={owes(r) ? () => collect(r) : undefined} onRemind={owes(r) && r.phone ? () => remind(r) : undefined}
               onPrint={() => printDoc(invoice(r))} onPdf={() => downloadDoc(invoice(r))}
               onShare={r.phone && !r.cancelled ? () => shareReceipt(slip(r)) : undefined} />

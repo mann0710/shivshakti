@@ -11,14 +11,14 @@ describe('pickup dates', () => {
     const { rerender } = render(<PickupDates value={ALL_DATES} onChange={onChange} />);
     const select = screen.getByLabelText('Pickup dates');
     fireEvent.change(select, { target: { value: 'tomorrow' } });
-    expect(onChange).toHaveBeenLastCalledWith({ from: '2026-11-04', to: '2026-11-04' });
+    expect(onChange).toHaveBeenLastCalledWith({ from: '2026-11-04', to: '2026-11-04' }, 'tomorrow');
     expect(screen.queryByLabelText('Pickup dates from')).toBeNull();
     fireEvent.change(select, { target: { value: 'custom' } });
-    expect(onChange).toHaveBeenLastCalledWith({ from: '2026-11-03', to: '2026-11-05' });
+    expect(onChange).toHaveBeenLastCalledWith({ from: '2026-11-03', to: '2026-11-05' }, 'custom');
     rerender(<PickupDates value={{ from: '2026-11-03', to: '2026-11-05' }} onChange={onChange} />);
     fireEvent.change(screen.getByLabelText('Pickup dates to'), { target: { value: '2026-11-08' } });
-    expect(onChange).toHaveBeenLastCalledWith({ from: '2026-11-03', to: '2026-11-08' });
+    expect(onChange).toHaveBeenLastCalledWith({ from: '2026-11-03', to: '2026-11-08' }, 'custom');
     fireEvent.change(select, { target: { value: 'all' } });
-    expect(onChange).toHaveBeenLastCalledWith(ALL_DATES);
+    expect(onChange).toHaveBeenLastCalledWith(ALL_DATES, 'all');
   });
 });

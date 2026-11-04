@@ -33,3 +33,7 @@ export const PRE_STATUS: Record<string, { bg: string; color: string }> = {
   delivered: { bg: '#EAF3DE', color: SUCCESS },
   cancelled: { bg: '#FEECEC', color: DANGER },
 };
+
+// Sweets sale stages: Booked → Packed → Given (counter bills are given at once).
+export const STAGE_COLOR = { booked: PRE_STATUS.pending, packed: PRE_STATUS.ready, given: PRE_STATUS.delivered, cancelled: PRE_STATUS.cancelled };
+export const AMBER = '#B45309';

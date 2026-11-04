@@ -2,9 +2,15 @@ import type { SeasonalOrder, SeasonalOrderItem } from '../hooks/useSeasonalOrder
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
 import { Payment, PayMode, billPayments, preorderPayments, paidOf, dueOf, modeOf } from './payments';
 import { billNumber } from './receipt';
-import { istDay, DateSpan, STATUS_LABEL } from './preorders';
+import { istDay, DateSpan, Preset, presetSpan } from './preorders';
 import { cleanPhone } from './money';
 import { roundMoney } from './units';
+
+// Booked → Packed → Given; a counter bill is given at the counter.
+export type Stage = 'booked' | 'packed' | 'given' | 'cancelled';
+export const STAGE_LABEL: Record<Stage, string> = { booked: 'Booked', packed: 'Packed', given: 'Given', cancelled: 'Cancelled' };
+const stageOf = (p: SeasonalPreorder): Stage =>
+  p.status === 'cancelled' ? 'cancelled' : p.status === 'delivered' ? 'given' : p.status === 'ready' ? 'packed' : 'booked';
 
 // Counter bills and pre-bookings as one list: each is a sale with its own invoice.
 export interface BillRow {
@@ -28,7 +34,7 @@ export interface BillRow {
   mode: PayMode | 'mixed' | null;
   cancelled: boolean;
   cancelReason?: string;
-  stage?: string;
+  stage: Stage;
   pickup?: string;
   notes?: string;
   order?: SeasonalOrder;
@@ -46,7 +52,7 @@ export function billRow(o: SeasonalOrder): BillRow {
   return {
     ...base, ...money(base), id: o.id, kind: 'bill', number: billNumber(o.bill_no, o.id), name: o.customer_name, phone: o.phone, address: o.address,
     day: istDay(o.created_at), at: o.created_at, occasion_id: o.occasion_id, lines: o.items, subtotal: o.subtotal, discount: o.discount_amount,
-    cancelReason: o.cancel_reason ?? undefined, notes: o.notes, order: o,
+    cancelReason: o.cancel_reason ?? undefined, notes: o.notes, stage: o.cancelled_at ? 'cancelled' : 'given', order: o,
   };
 }
 
@@ -55,7 +61,7 @@ export function bookingRow(p: SeasonalPreorder): BillRow {
   return {
     ...base, ...money(base), id: p.id, kind: 'booking', number: p.id.slice(0, 6).toUpperCase(), name: p.customer_name, phone: p.phone, address: p.address,
     day: p.delivered_at ? istDay(p.delivered_at) : p.delivery_date || istDay(p.created_at), at: p.created_at, occasion_id: p.occasion_id,
-    lines: p.items, subtotal: p.subtotal, discount: p.discount_amount, stage: STATUS_LABEL[p.status], pickup: p.delivery_date, notes: p.notes, booking: p,
+    lines: p.items, subtotal: p.subtotal, discount: p.discount_amount, stage: stageOf(p), pickup: p.delivery_date, notes: p.notes, booking: p,
   };
 }
 
@@ -64,12 +70,21 @@ export const billRows = (orders: SeasonalOrder[], preorders: SeasonalPreorder[])
   [...orders.map(billRow), ...preorders.map(bookingRow)].sort((a, b) => b.day.localeCompare(a.day) || b.at.localeCompare(a.at));
 
 export type BillType = 'all' | 'bill' | 'booking';
-export type BillPay = 'all' | 'paid' | 'unpaid' | 'cancelled';
-export interface BillFilter { span: DateSpan; occasion: string; type: BillType; pay: BillPay; mode: 'all' | PayMode | 'mixed'; q: string }
-export const NO_FILTER: BillFilter = { span: { from: '', to: '' }, occasion: '', type: 'all', pay: 'all', mode: 'all', q: '' };
+export type BillPay = 'all' | 'paid' | 'unpaid';
+export interface BillFilter {
+  stage: 'all' | Stage; preset: Preset; span: DateSpan; occasion: string; type: BillType; pay: BillPay; mode: 'all' | PayMode | 'mixed'; q: string;
+}
+// Given (finished sales) by default.
+export const NO_FILTER: BillFilter = { stage: 'given', preset: 'all', span: { from: '', to: '' }, occasion: '', type: 'all', pay: 'all', mode: 'all', q: '' };
 
-const payOk = (r: BillRow, pay: BillPay) =>
-  pay === 'all' || (pay === 'cancelled' ? r.cancelled : !r.cancelled && (pay === 'paid' ? r.due === 0 : r.due > 0));
+// A remembered quick range (Today, Last 7 days…) is worked out again for today.
+export const freshFilter = (f: BillFilter, today: string): BillFilter =>
+  f.preset === 'custom' || f.preset === 'all' ? f : { ...f, span: presetSpan(f.preset, today) };
+
+const payOk = (r: BillRow, pay: BillPay) => pay === 'all' || (!r.cancelled && (pay === 'paid' ? r.due === 0 : r.due > 0));
+
+// A pre-booking not handed over by its pickup date.
+export const isOverdue = (r: BillRow, today: string) => (r.stage === 'booked' || r.stage === 'packed') && !!r.pickup && r.pickup < today;
 
 // Name or bill number contains the text; 3+ digits also match the mobile.
 export const matchesBill = (r: BillRow, q: string) => {
@@ -78,13 +93,18 @@ export const matchesBill = (r: BillRow, q: string) => {
   return !t || r.name.toLowerCase().includes(t) || r.number.toLowerCase() === t || (digits.length >= 3 && r.phone.includes(digits));
 };
 
-export const filterBills = (rows: BillRow[], f: BillFilter) => rows.filter(r =>
-  (!f.span.from || r.day >= f.span.from) && (!f.span.to || r.day <= f.span.to)
+export const filterBills = (rows: BillRow[], f: BillFilter, skipStage = false) => rows.filter(r =>
+  (skipStage || f.stage === 'all' || r.stage === f.stage)
+  && (!f.span.from || r.day >= f.span.from) && (!f.span.to || r.day <= f.span.to)
   && (!f.occasion || r.occasion_id === f.occasion)
   && (f.type === 'all' || r.kind === f.type)
   && payOk(r, f.pay)
   && (f.mode === 'all' || r.mode === f.mode)
   && matchesBill(r, f.q));
+
+// How many of the rows are at each stage (for the stage chips).
+export const stageCounts = (rows: BillRow[]) => rows.reduce((c, r) => ({ ...c, [r.stage]: c[r.stage] + 1, all: c.all + 1 }),
+  { all: 0, booked: 0, packed: 0, given: 0, cancelled: 0 } as Record<'all' | Stage, number>);
 
 // Cancelled sales count but add no money.
 export function billTotals(rows: BillRow[]) {

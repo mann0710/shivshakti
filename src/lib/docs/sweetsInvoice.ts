@@ -1,5 +1,5 @@
 // A4 invoice for a sweets sale (counter bill or pre-booking): items, tax, payments, bank / UPI and terms.
-import type { BillRow } from '../billList';
+import { BillRow, STAGE_LABEL } from '../billList';
 import type { PayKind } from '../payments';
 import { DocContext, docContext } from './context';
 import { page, esc, money } from './theme';
@@ -54,7 +54,7 @@ export function sweetsInvoiceDoc(r: BillRow, occasion?: string, ctx: DocContext 
   <div class="intro">
     <div class="fact"><span class="lbl">Bill to</span><span class="big">${esc(walkIn ? 'Walk-in customer' : r.name)}</span>
       ${r.phone ? `<span class="muted num">+91 ${esc(r.phone)}</span>` : ''}${r.address ? `<span class="muted">${esc(r.address)}</span>` : ''}</div>
-    ${facts([['For', ref], ['Occasion', occasion], ...(r.kind === 'booking' ? [['Pickup / delivery', day(r.pickup)] as [string, string], ['Status', r.stage] as [string, string | undefined]] : []),
+    ${facts([['For', ref], ['Occasion', occasion], ...(r.kind === 'booking' ? [['Pickup / delivery', day(r.pickup)] as [string, string], ['Status', STAGE_LABEL[r.stage]] as [string, string]] : []),
       ...(r.paid ? [] : [['Payment', 'Not paid yet'] as [string, string]])])}
   </div>
   <section><div class="box"><table class="t"><thead><tr><th style="width:28px">#</th><th>Item</th><th>Pack</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>

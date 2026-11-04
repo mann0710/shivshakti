@@ -1,4 +1,4 @@
-import { billRows, filterBills, billTotals, NO_FILTER, BillFilter } from './billList';
+import { billRows, filterBills, billTotals, stageCounts, freshFilter, isOverdue, NO_FILTER, BillFilter } from './billList';
 import { sweetsInvoiceDoc } from './docs/sweetsInvoice';
 import { DEFAULT_DOC_SETTINGS } from './docs/settings';
 import { presetSpan } from './preorders';
@@ -11,12 +11,12 @@ const booking = (o: object = {}) => ({ id: 'abcdef12', customer_name: 'Sita', ph
   discount_type: 'amount' as const, total_amount: 980, advance_paid: 300, payment_mode: 'upi' as const, status: 'pending' as const, year: 2026,
   created_at: AT, delivery_date: '2026-11-05', occasion_id: 'diwali', ...o }) as any;
 const rows = billRows([bill(), bill({ id: 'b2', bill_no: 8, cancelled_at: AT, occasion_id: 'holi' })], [booking()]);
-const only = (f: Partial<BillFilter>) => filterBills(rows, { ...NO_FILTER, ...f }).map(r => r.number);
+const only = (f: Partial<BillFilter>) => filterBills(rows, { ...NO_FILTER, stage: 'all', ...f }).map(r => r.number);
 
 describe('bills list', () => {
   it('lists counter bills and pre-bookings together, newest first', () => {
     expect(rows.map(r => [r.kind, r.number, r.day])).toEqual([['booking', 'ABCDEF', '2026-11-05'], ['bill', '7', '2026-11-01'], ['bill', '8', '2026-11-01']]);
-    expect(rows[0]).toMatchObject({ paid: 300, due: 680, mode: 'upi', stage: 'Booked' });
+    expect(rows[0]).toMatchObject({ paid: 300, due: 680, mode: 'upi', stage: 'booked' });
   });
   it('filters by date, occasion, kind, paid state, mode and search', () => {
     expect(only({ span: { from: '2026-11-02', to: '' } })).toEqual(['ABCDEF']);
@@ -24,10 +24,24 @@ describe('bills list', () => {
     expect(only({ type: 'bill' })).toEqual(['7', '8']);
     expect(only({ pay: 'unpaid' })).toEqual(['ABCDEF']);
     expect(only({ pay: 'paid' })).toEqual(['7']);
-    expect(only({ pay: 'cancelled' })).toEqual(['8']);
+    expect(only({ stage: 'cancelled' })).toEqual(['8']);
+    expect(only({ stage: 'booked' })).toEqual(['ABCDEF']);
     expect(only({ mode: 'upi' })).toEqual(['ABCDEF']);
     expect(only({ q: '#7' })).toEqual(['7']);
     expect(only({ q: '98989' })).toEqual(['ABCDEF']);
+  });
+  it('shows given sales by default and counts each stage', () => {
+    expect(filterBills(rows, NO_FILTER).map(r => r.number)).toEqual(['7']);
+    const more = billRows([], [booking({ id: 'p2', status: 'ready' }), booking({ id: 'p3', status: 'delivered', delivered_at: AT })]);
+    expect(stageCounts([...rows, ...more])).toEqual({ all: 5, booked: 1, packed: 1, given: 2, cancelled: 1 });
+    expect(isOverdue(more[0], '2026-11-06')).toBe(true);
+    expect(isOverdue(more[1], '2026-11-06')).toBe(false);
+  });
+  it('works a remembered quick range out again for today', () => {
+    const kept = { ...NO_FILTER, preset: 'today' as const, span: { from: '2026-10-01', to: '2026-10-01' } };
+    expect(freshFilter(kept, '2026-11-04').span).toEqual({ from: '2026-11-04', to: '2026-11-04' });
+    const custom = { ...kept, preset: 'custom' as const };
+    expect(freshFilter(custom, '2026-11-04').span).toEqual(kept.span);
   });
   it('adds up what is shown, leaving cancelled bills out of the money', () => {
     expect(billTotals(rows)).toEqual({ count: 3, cancelled: 1, billed: 1960, received: 1280, due: 680 });
