@@ -19,15 +19,16 @@ const CSS = `
 const day = (d?: string) => (d ? formatDateIST(d, 'dd MMM yyyy') : '');
 const PAY_KIND: Record<PayKind, string> = { sale: 'At the counter', due: 'Due collected', advance: 'Advance', handover: 'At hand-over', refund: 'Refund' };
 
-// Bank text (one or more lines) and UPI ID; a QR for the balance when something is due.
-function payTo(ctx: DocContext, due: number, note: string): string {
+// Bank text and UPI ID, with a QR (not on cancelled sales): the balance filled in when something is due, else an open amount.
+function payTo(ctx: DocContext, due: number, note: string, cancelled: boolean): string {
   const { bank, upi_id, invoice_qr } = ctx.settings;
   const upi = upi_id.trim();
   if (!bank && !upi) return '';
-  const qr = upi && due > 0 && invoice_qr ? qrSvg(upiLink(upi, due, note)) : '';
+  const qr = upi && invoice_qr && !cancelled ? qrSvg(upiLink(upi, due, note)) : '';
+  const hint = !qr ? '' : due > 0 ? `Scan to pay ${money(due)}` : 'Scan to pay by UPI';
   return `<div class="upi" style="margin-top:14px">${qr}<div style="display:flex;flex-direction:column;gap:3px"><span class="lbl">Bank details</span>
   ${bank ? `<span style="white-space:pre-line">${esc(bank)}</span>` : ''}${upi ? `<span class="num"><b>UPI</b> ${esc(upi)}</span>` : ''}
-  ${qr ? `<span class="muted">Scan to pay ${money(due)}</span>` : ''}</div></div>`;
+  ${hint ? `<span class="muted">${hint}</span>` : ''}</div></div>`;
 }
 
 export function sweetsInvoiceDoc(r: BillRow, occasion?: string, ctx: DocContext = docContext()): Doc {
@@ -63,7 +64,7 @@ export function sweetsInvoiceDoc(r: BillRow, occasion?: string, ctx: DocContext 
   <section class="split">
     <div><span class="lbl">Amount in words</span><div style="font-weight:600;margin-top:3px">${esc(amountInWords(r.total))}</div>${paid}
       ${r.notes ? `<div style="margin-top:12px"><span class="lbl">Note</span><div>${esc(r.notes)}</div></div>` : ''}
-      ${payTo(ctx, r.due, ref)}</div>
+      ${payTo(ctx, r.due, ref, r.cancelled)}</div>
     <div><div class="sum">${sumRows(totals)}<div class="due"><span>${r.cancelled ? 'Cancelled' : r.due > 0 ? 'Balance due' : 'Fully paid'}</span><b class="num">${money(r.due)}</b></div></div>
       <div class="sw-sign"><div></div><span class="muted">For ${esc(s.sweets_name)} · Authorised signatory</span></div></div>
   </section>

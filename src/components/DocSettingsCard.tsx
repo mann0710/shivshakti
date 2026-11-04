@@ -7,7 +7,7 @@ import { SettingsApi } from './settings/useSettingsSave';
 type Flag = 'invoice_payments' | 'invoice_qr' | 'invoice_menu' | 'quote_qr' | 'slip_stub';
 const FLAGS: { key: Flag; label: string; note?: string }[] = [
   { key: 'invoice_payments', label: 'Invoice: list every payment' },
-  { key: 'invoice_qr', label: 'Invoice: UPI QR for the balance' },
+  { key: 'invoice_qr', label: 'Invoice: UPI QR', note: 'Balance filled in when something is due' },
   { key: 'invoice_menu', label: 'Invoice: menu as the last page' },
   { key: 'quote_qr', label: 'UPI QR on quotes', note: 'For the advance' },
   { key: 'slip_stub', label: 'Pre-booking slip: counter stub', note: 'Tear-off with Packed and Given boxes' },

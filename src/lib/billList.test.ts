@@ -61,10 +61,11 @@ describe('sweets invoice', () => {
       .forEach(t => expect(doc.html).toContain(t));
     expect(doc.fileName).toBe('Invoice_ABCDEF_Sita.pdf');
   });
-  it('marks cancelled bills and leaves tax out without a GSTIN', () => {
+  it('marks cancelled bills without a QR, leaves tax out without a GSTIN, and paid ones get an open-amount QR', () => {
     const doc = sweetsInvoiceDoc(rows[2], undefined, { ...ctx, gstNumber: undefined });
     expect(doc.html).toContain('Cancelled');
     expect(doc.html).not.toContain('Tax invoice');
     expect(doc.html).not.toContain('UPI QR code');
+    expect(sweetsInvoiceDoc(rows[1], undefined, ctx).html).toContain('Scan to pay by UPI');
   });
 });

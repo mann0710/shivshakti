@@ -26,7 +26,8 @@ describe('document settings', () => {
     expect(scheduleAmounts(166001, DEFAULT_DOC_SETTINGS.schedule)).toEqual([16600, 116201, 33200]);
   });
   it('makes a UPI QR', () => {
-    expect(upiLink('shop@bank', 100, 'QTN')).toBe('upi://pay?pa=shop%40bank&pn=Shiv+Shakti&cu=INR&am=100.00&tn=QTN');
+    expect(upiLink('shop@bank', 100, 'QTN')).toBe('upi://pay?pa=shop@bank&pn=Shiv%20Shakti&am=100.00&cu=INR&tn=QTN');
+    expect(upiLink(' shop@bank ', 0, 'Pre-booking #D52374')).toBe('upi://pay?pa=shop@bank&pn=Shiv%20Shakti&cu=INR&tn=Pre-booking%20D52374');
     expect(qrSvg('hello')).toContain('<svg');
   });
 });
