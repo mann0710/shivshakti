@@ -22,6 +22,9 @@ import { owedBy } from '../../lib/dues';
 import { HeldBill, holdBill, takeHeld, dropHeld } from '../../lib/heldBills';
 import { SweetReceipt } from '../../lib/thermalSlips';
 import { orderReceipt, preorderReceipt } from '../../lib/sessionalReceipts';
+import { billRow, bookingRow } from '../../lib/billList';
+import { sweetsInvoiceDoc } from '../../lib/docs/sweetsInvoice';
+import type { Doc } from '../../lib/docs/quotationDoc';
 import {
   PosForm, PosMode, emptyForm, formFromOrder, formFromPreorder, totalsOf, validate, toOrderPayload, toPreorderPayload, WALK_IN,
 } from '../../lib/posForm';
@@ -67,7 +70,7 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone, start }) =>
   const [held, setHeld] = useStoredState<{ list: HeldBill[] }>(HELD_KEY, () => ({ list: [] }));
   const [picking, setPicking] = useState<{ item: SeasonalItem; loose: boolean } | null>(null);
   const [showHeld, setShowHeld] = useState(false);
-  const [done, setDone] = useState<{ receipt: SweetReceipt; change: number } | null>(null);
+  const [done, setDone] = useState<{ receipt: SweetReceipt; change: number; invoice: () => Doc } | null>(null);
   const [formKey, setFormKey] = useState(0);
   const set = useCallback((patch: Partial<PosForm>) => setForm(f => ({ ...f, ...patch })), [setForm]);
 
@@ -148,12 +151,12 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone, start }) =>
         onEditDone('preorder');
       } else if (form.mode === 'preorder') {
         const saved = await createPre.mutateAsync(toPreorderPayload(form, totals, thisYear));
-        setDone({ receipt: preorderReceipt(saved, occName(saved.occasion_id), gst), change: 0 });
+        setDone({ receipt: preorderReceipt(saved, occName(saved.occasion_id), gst), change: 0, invoice: () => sweetsInvoiceDoc(bookingRow(saved), occName(saved.occasion_id)) });
         await rememberCustomer();
         reset('preorder');
       } else {
         const saved = await createOrder.mutateAsync(toOrderPayload(form, totals, thisYear));
-        setDone({ receipt: orderReceipt(saved, occName(saved.occasion_id), gst), change: totals.change });
+        setDone({ receipt: orderReceipt(saved, occName(saved.occasion_id), gst), change: totals.change, invoice: () => sweetsInvoiceDoc(billRow(saved), occName(saved.occasion_id)) });
         await rememberCustomer();
         reset('bill');
       }
@@ -182,7 +185,7 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone, start }) =>
         )}
         {done && !form.lines.length ? (
           <section className="pos-panel pos-ticket" id="pos-ticket">
-            <SaleDone receipt={done.receipt} change={done.change} next={form.mode === 'preorder' ? 'New pre-booking' : 'New bill'} onNext={() => setDone(null)} />
+            <SaleDone receipt={done.receipt} invoice={done.invoice} change={done.change} next={form.mode === 'preorder' ? 'New pre-booking' : 'New bill'} onNext={() => setDone(null)} />
           </section>
         ) : (
           <TicketPanel form={form} totals={totals} customers={customers} owed={owed} busy={busy} held={held.list.length} set={set} onMode={onMode}

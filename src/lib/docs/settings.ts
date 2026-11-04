@@ -16,6 +16,8 @@ export interface DocSettings {
   schedule: PayStep[];
   extras: string[];
   terms: string[];
+  // Printed on sweets invoices.
+  sweets_terms: string[];
   quote_qr: boolean;
   invoice_menu: boolean;
   invoice_payments: boolean;
@@ -56,6 +58,11 @@ export const DEFAULT_DOC_SETTINGS: DocSettings = {
   terms: [
     'No deposit or fixed charge is payable by the caterer; any such charges at the party plot or hall are borne by the party.',
     'Faraskhana, decoration, light connections and kitchen facility are arranged and paid for by the party.',
+  ],
+  sweets_terms: [
+    'Goods once sold will not be taken back or exchanged.',
+    'Please check your sweets at pickup or delivery.',
+    'Keep in a cool, dry place and consume within the shelf life.',
   ],
   quote_qr: true,
   invoice_menu: true,
@@ -108,6 +115,7 @@ export function mergeDocSettings(raw?: Partial<DocSettings> | null): DocSettings
     schedule: steps,
     extras: lines(r.extras, d.extras),
     terms: lines(r.terms, d.terms),
+    sweets_terms: lines(r.sweets_terms, d.sweets_terms),
   } as DocSettings;
 }
 

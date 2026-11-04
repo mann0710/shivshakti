@@ -1,20 +1,22 @@
 import React, { useMemo, useState } from 'react';
 import BillCard from './BillCard';
+import BillFilters from './BillFilters';
 import { MenuItem } from '../pos/MoreMenu';
 import { useBillActions } from '../pos/useBillActions';
 import { SeasonalOrder } from '../../hooks/useSeasonalOrders';
 import { SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
 import { SeasonalOccasion } from '../../hooks/useSeasonalOccasions';
 import { usePreorderActions } from '../../hooks/usePreorderActions';
-import { orderReceipt, printReceipt, shareReceipt, receiptDoc, formatDay } from '../../lib/sessionalReceipts';
-import { downloadDoc } from '../../lib/docs/output';
-import { billNumber } from '../../lib/receipt';
+import { orderReceipt, preorderReceipt, printReceipt, shareReceipt, receiptDoc } from '../../lib/sessionalReceipts';
+import { sweetsInvoiceDoc } from '../../lib/docs/sweetsInvoice';
+import { downloadDoc, printDoc } from '../../lib/docs/output';
+import { BillRow, BillFilter, NO_FILTER, billRows, filterBills, billTotals } from '../../lib/billList';
 import { billDue, bookingDue, isTestBill } from '../../lib/dues';
 import { summarize, dayStart } from '../../lib/dayClose';
 import { istDay } from '../../lib/preorders';
-import { inr, cleanPhone } from '../../lib/money';
+import { inr } from '../../lib/money';
 import { todayIST } from '../../lib/ist';
-import { card, inp, empty, segBtn, segWrap, NAVY, DANGER, SUCCESS } from '../ui/styles';
+import { empty, NAVY, DANGER, SUCCESS } from '../ui/styles';
 
 interface Props {
   orders: SeasonalOrder[];
@@ -25,43 +27,43 @@ interface Props {
   search?: string;
 }
 
-type Show = 'today' | 'unpaid' | 'all';
-
-const matches = (term: string, name: string, phone?: string, no?: string) => {
-  const t = term.trim().toLowerCase();
-  const digits = cleanPhone(term);
-  return !t || name.toLowerCase().includes(t) || (digits.length >= 3 && (phone ?? '').includes(digits)) || (!!no && no.toLowerCase() === t.replace('#', ''));
-};
-
-// Today's money, then bills (and handed-over bookings still owing) with collect, remind and ⋯ More.
+// Today's money, then every sale (counter bills and pre-bookings) with filters, totals and an A4 invoice each.
 const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit, search }) => {
   const bills = useBillActions();
   const bookings = usePreorderActions();
-  // Opened for one customer: all their bills, not just today's.
-  const [show, setShow] = useState<Show>(search ? 'all' : 'today');
-  const [q, setQ] = useState(search ?? '');
+  const [f, setF] = useState<BillFilter>(() => ({ ...NO_FILTER, q: search ?? '' }));
   const occName = (id?: string) => occasions.find(o => o.id === id)?.name;
   const today = todayIST();
 
   const day = useMemo(() => summarize(orders, preorders, dayStart(today), new Date().toISOString()), [orders, preorders, today]);
   const todays = useMemo(() => orders.filter(o => istDay(o.created_at) === today && !o.cancelled_at), [orders, today]);
-  const owing = useMemo(() => ({
-    bills: orders.filter(o => billDue(o) > 0),
-    bookings: preorders.filter(p => bookingDue(p) > 0),
-  }), [orders, preorders]);
-  const dueTotal = owing.bills.reduce((s, o) => s + billDue(o), 0) + owing.bookings.reduce((s, p) => s + bookingDue(p), 0);
-  const dueCount = owing.bills.length + owing.bookings.length;
+  const rows = useMemo(() => billRows(orders, preorders), [orders, preorders]);
+  const shown = useMemo(() => filterBills(rows, f), [rows, f]);
+  const sum = billTotals(shown);
+  const dueTotal = orders.reduce((s, o) => s + billDue(o), 0) + preorders.reduce((s, p) => s + bookingDue(p), 0);
+  const dueCount = orders.filter(o => billDue(o) > 0).length + preorders.filter(p => bookingDue(p) > 0).length;
+  const unpaidRows = useMemo(() => rows.filter(r => r.due > 0).length, [rows]);
 
-  const shown = useMemo(() => (show === 'unpaid' ? owing.bills : show === 'today' ? orders.filter(o => istDay(o.created_at) === today) : orders)
-    .filter(o => matches(q, o.customer_name, o.phone, billNumber(o.bill_no, o.id))), [orders, owing, show, q, today]);
-  const shownBookings = show === 'unpaid' ? owing.bookings.filter(p => matches(q, p.customer_name, p.phone)) : [];
-
-  const receipt = (o: SeasonalOrder) => orderReceipt(o, occName(o.occasion_id), gst);
-  const menuFor = (o: SeasonalOrder): MenuItem[] => [
-    ...(!o.cancelled_at ? [{ label: 'Take back items', onClick: () => onEdit(o) }] : []),
-    ...(!o.cancelled_at && bills.canCancel ? [{ label: 'Cancel bill…', onClick: () => bills.startCancel(o), danger: true }] : []),
-    ...(isTestBill(o) ? [{ label: 'Delete test bill', onClick: () => bills.removeTest(o), danger: true }] : []),
-  ];
+  const invoice = (r: BillRow) => () => sweetsInvoiceDoc(r, occName(r.occasion_id));
+  const slip = (r: BillRow) => (r.order ? orderReceipt(r.order, occName(r.occasion_id), gst) : preorderReceipt(r.booking!, occName(r.occasion_id), gst));
+  const menuFor = (r: BillRow): MenuItem[] => {
+    const o = r.order;
+    const slipMenu = [
+      { label: o ? 'Print 80 mm receipt' : 'Print pre-booking slip', onClick: () => printReceipt(slip(r)) },
+      { label: o ? '80 mm receipt PDF' : 'Pre-booking slip PDF', onClick: () => downloadDoc(() => receiptDoc(slip(r))) },
+    ];
+    if (!o) return slipMenu;
+    return [
+      ...slipMenu,
+      ...(!o.cancelled_at ? [{ label: 'Take back items', onClick: () => onEdit(o) }] : []),
+      ...(!o.cancelled_at && bills.canCancel ? [{ label: 'Cancel bill…', onClick: () => bills.startCancel(o), danger: true }] : []),
+      ...(isTestBill(o) ? [{ label: 'Delete test bill', onClick: () => bills.removeTest(o), danger: true }] : []),
+    ];
+  };
+  // Counter bills collect any due; pre-bookings only once handed over (before that, at pickup).
+  const owes = (r: BillRow) => (r.order ? billDue(r.order) : bookingDue(r.booking!)) > 0;
+  const collect = (r: BillRow) => (r.order ? bills.startCollect(r.order) : bookings.startCollect(r.booking!));
+  const remind = (r: BillRow) => (r.order ? bills.remind(r.order) : bookings.remind(r.booking!));
 
   return (
     <div>
@@ -72,43 +74,23 @@ const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit,
         <Stat label="Unpaid" value={inr(dueTotal)} sub={dueCount ? `${dueCount} to collect` : 'Nothing due'} color={dueCount ? DANGER : SUCCESS} />
       </div>
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <div style={{ ...segWrap, minWidth: 260 }}>
-          {(['today', 'unpaid', 'all'] as Show[]).map(s => (
-            <button key={s} type="button" style={{ ...segBtn(show === s), minHeight: 44 }} aria-pressed={show === s} onClick={() => setShow(s)}>
-              {s === 'today' ? 'Today' : s === 'unpaid' ? `Unpaid (${dueCount})` : 'All year'}
-            </button>
-          ))}
-        </div>
-        <input style={{ ...inp, flex: '1 1 200px', width: 'auto', minHeight: 44 }} value={q} onChange={e => setQ(e.target.value)} placeholder="Search name, mobile or bill #" />
+      <BillFilters value={f} onChange={setF} occasions={occasions} unpaid={unpaidRows} />
+      <div className="bill-totals" role="status">
+        <span><b>{sum.count}</b> sale{sum.count === 1 ? '' : 's'}{sum.cancelled ? ` (${sum.cancelled} cancelled)` : ''}</span>
+        <span>Billed <b>{inr(sum.billed)}</b></span>
+        <span style={{ color: SUCCESS }}>Received <b>{inr(sum.received)}</b></span>
+        <span style={{ color: sum.due ? DANGER : SUCCESS }}>Due <b>{inr(sum.due)}</b></span>
       </div>
 
-      {shown.length + shownBookings.length === 0 ? (
-        <div style={empty}>{q ? `No bills match "${q}".` : show === 'today' ? 'No bills yet today.' : show === 'unpaid' ? 'Nothing to collect.' : 'No bills.'}</div>
+      {shown.length === 0 ? (
+        <div style={empty}>{rows.length ? 'No sales match these filters.' : 'No bills or pre-bookings this year.'}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {shownBookings.map(p => (
-            <div key={p.id} style={{ ...card, padding: 14, marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 600 }}>{p.customer_name}</div>
-                  <div style={{ fontSize: 12, color: '#5A5A55' }}>{[p.phone, `Pre-booking handed over ${formatDay(p.delivered_at ?? p.delivery_date ?? p.created_at)}`].filter(Boolean).join(' · ')}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: NAVY }}>{inr(p.total_amount)}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: DANGER }}>Paid {inr(p.advance_paid)} · {inr(bookingDue(p))} due</div>
-                </div>
-              </div>
-              <div className="pos-tools" style={{ marginTop: 10 }}>
-                <button type="button" className="ui-btn primary" onClick={() => bookings.startCollect(p)}>Collect {inr(bookingDue(p))}</button>
-                {p.phone && <button type="button" className="ui-btn" onClick={() => bookings.remind(p)}>Remind</button>}
-              </div>
-            </div>
-          ))}
-          {shown.map(o => (
-            <BillCard key={o.id} order={o} occasion={occName(o.occasion_id)} menu={menuFor(o)}
-              onCollect={() => bills.startCollect(o)} onRemind={() => bills.remind(o)}
-              onPrint={() => printReceipt(receipt(o))} onPdf={() => downloadDoc(() => receiptDoc(receipt(o)))} onShare={() => shareReceipt(receipt(o))} />
+          {shown.map(r => (
+            <BillCard key={r.id} row={r} occasion={occName(r.occasion_id)} menu={menuFor(r)}
+              onCollect={owes(r) ? () => collect(r) : undefined} onRemind={owes(r) && r.phone ? () => remind(r) : undefined}
+              onPrint={() => printDoc(invoice(r))} onPdf={() => downloadDoc(invoice(r))}
+              onShare={r.phone && !r.cancelled ? () => shareReceipt(slip(r)) : undefined} />
           ))}
         </div>
       )}

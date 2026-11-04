@@ -45,6 +45,7 @@
 /* Bills and held bills */
 .bill-card.void { opacity: 0.6; }
 .bill-card.void .amt { text-decoration: line-through; }
+.bill-totals { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: #4A4A45; background: #F7F7F2; border: 0.5px solid #E5E5E0; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
 .held-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 0.5px solid #F0F0EC; }
 
 /* Pre-booking register: bigger tick boxes */

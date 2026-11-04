@@ -41,9 +41,11 @@ const DocSettingsCard: React.FC<{ api: SettingsApi }> = ({ api }) => {
       <div className="st-grid">
         <Field label="Sweets bill footer" value={docs.bill_footer} placeholder="Thank you! Visit again." disabled={off} onSave={v => saveDoc('Sweets bill footer', 'bill_footer', v.trim())} />
         <Field label="Bank details for transfers" value={docs.bank} placeholder="Bank · A/c 0000 · IFSC XXXX0000" disabled={off} warn={!docs.bank}
-          hint={docs.bank ? 'Printed on invoices under the QR' : 'Printed on invoices once added'} onSave={v => saveDoc('Bank details', 'bank', v.trim())} />
+          hint={docs.bank ? 'Printed on catering and sweets invoices' : 'Printed on invoices once added'} onSave={v => saveDoc('Bank details', 'bank', v.trim())} />
         <Field full multiline label="Terms on quotes" value={docs.terms.join('\n')} disabled={off} hint={`One per line · ${count(docs.terms.length, 'line')} today`}
           onSave={v => saveDoc('Terms on quotes', 'terms', lines(v))} />
+        <Field full multiline label="Terms on sweets invoices" value={docs.sweets_terms.join('\n')} disabled={off} hint={`One per line · ${count(docs.sweets_terms.length, 'line')} today`}
+          onSave={v => saveDoc('Terms on sweets invoices', 'sweets_terms', lines(v))} />
         <Field full multiline label="Charged extra on request" value={docs.extras.join('\n')} disabled={off} hint="One per line · shown under the price, e.g. live counters"
           onSave={v => saveDoc('Charged extra on request', 'extras', lines(v))} />
       </div>

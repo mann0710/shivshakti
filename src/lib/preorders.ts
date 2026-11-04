@@ -35,7 +35,7 @@ export const modeLabel = (m?: string | null) =>
 
 // Pickup-date filter: '' means no limit; a booking without a date only shows with no limit.
 export interface DateSpan { from: string; to: string }
-export type Preset = 'all' | 'today' | 'tomorrow' | 'next3' | 'week' | 'custom';
+export type Preset = 'all' | 'today' | 'tomorrow' | 'next3' | 'week' | 'yesterday' | 'last7' | 'month' | 'custom';
 export const ALL_DATES: DateSpan = { from: '', to: '' };
 export const inDateSpan = (p: Pick<SeasonalPreorder, 'delivery_date'>, s: DateSpan) =>
   (!s.from && !s.to) || (!!p.delivery_date && (!s.from || p.delivery_date >= s.from) && (!s.to || p.delivery_date <= s.to));
@@ -43,4 +43,7 @@ export const presetSpan = (k: Preset, today: string): DateSpan =>
   k === 'today' ? { from: today, to: today }
     : k === 'tomorrow' ? { from: addDays(today, 1), to: addDays(today, 1) }
       : k === 'next3' ? { from: today, to: addDays(today, 2) }
-        : k === 'week' ? { from: today, to: addDays(today, 6) } : ALL_DATES;
+        : k === 'week' ? { from: today, to: addDays(today, 6) }
+          : k === 'yesterday' ? { from: addDays(today, -1), to: addDays(today, -1) }
+            : k === 'last7' ? { from: addDays(today, -6), to: today }
+              : k === 'month' ? { from: `${today.slice(0, 8)}01`, to: today } : ALL_DATES;

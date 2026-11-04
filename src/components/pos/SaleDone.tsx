@@ -1,19 +1,21 @@
 import React from 'react';
 import { printReceipt, shareReceipt, receiptDoc } from '../../lib/sessionalReceipts';
-import { downloadDoc } from '../../lib/docs/output';
+import { downloadDoc, printDoc } from '../../lib/docs/output';
+import type { Doc } from '../../lib/docs/quotationDoc';
 import { SweetReceipt } from '../../lib/thermalSlips';
 import { inr } from '../../lib/money';
 import { SUCCESS, NAVY } from '../ui/styles';
 
 interface Props {
   receipt: SweetReceipt;
+  invoice: () => Doc;
   change: number;
   next: string;
   onNext: () => void;
 }
 
-// Shown after a bill is saved: change to give, print, PDF, share and start the next customer.
-const SaleDone: React.FC<Props> = ({ receipt, change, next, onNext }) => {
+// Shown after a bill is saved: change to give, receipt, A4 invoice, share and start the next customer.
+const SaleDone: React.FC<Props> = ({ receipt, invoice, change, next, onNext }) => {
   const p = receipt.pay;
   const paid = [p?.cash ? `Cash ${inr(p.cash)}` : '', p?.upi ? `UPI ${inr(p.upi)}` : ''].filter(Boolean).join(' · ');
   return (
@@ -23,8 +25,10 @@ const SaleDone: React.FC<Props> = ({ receipt, change, next, onNext }) => {
       <div style={{ fontSize: 12, color: '#5A5A55' }}>{receipt.customer_name} · {paid || receipt.status}</div>
       {change > 0 && <div className="pos-change" role="status" style={{ justifyContent: 'center', gap: 8 }}>Give back {inr(change)}</div>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-        <button type="button" className="ui-btn" onClick={() => printReceipt(receipt)}>Print</button>
-        <button type="button" className="ui-btn" onClick={() => downloadDoc(() => receiptDoc(receipt))}>Download PDF</button>
+        <button type="button" className="ui-btn" onClick={() => printReceipt(receipt)}>{receipt.booking ? 'Print slip' : 'Print receipt'}</button>
+        <button type="button" className="ui-btn" onClick={() => downloadDoc(() => receiptDoc(receipt))}>{receipt.booking ? 'Slip PDF' : 'Receipt PDF'}</button>
+        <button type="button" className="ui-btn" onClick={() => printDoc(invoice)}>Print invoice</button>
+        <button type="button" className="ui-btn" onClick={() => downloadDoc(invoice)}>Invoice PDF</button>
         {receipt.phone && <button type="button" className="ui-btn" onClick={() => shareReceipt(receipt)}>WhatsApp</button>}
       </div>
       <button type="button" className="pos-charge" style={{ marginTop: 8 }} onClick={onNext} autoFocus>{next}</button>
