@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
 import { SeasonalItem } from '../../lib/itemCatalog';
+import MoreMenu, { MenuItem } from '../pos/MoreMenu';
 import { buildSheet, columnTotal, dueLabel } from '../../lib/preorderSheet';
 import { balanceOf, isOpenPreorder, isPacked, STATUS_LABEL } from '../../lib/preorders';
 import { inr } from '../../lib/money';
@@ -13,10 +14,12 @@ interface Props {
   onPacked: (p: SeasonalPreorder) => void;
   onHandover: (p: SeasonalPreorder) => void;
   onOpen: (p: SeasonalPreorder) => void;
+  // Cancel / Delete for a row.
+  menu?: (p: SeasonalPreorder) => MenuItem[];
 }
 
 // The paper register as a to-do list: tick Packed, tick Given (collects the balance), tap a name to open the booking.
-const PreorderSheet: React.FC<Props> = ({ preorders, items, onPacked, onHandover, onOpen }) => {
+const PreorderSheet: React.FC<Props> = ({ preorders, items, onPacked, onHandover, onOpen, menu }) => {
   const sheet = useMemo(() => buildSheet(preorders, items), [preorders, items]);
   const today = todayIST();
   const live = preorders.filter(p => p.status !== 'cancelled');
@@ -57,8 +60,13 @@ const PreorderSheet: React.FC<Props> = ({ preorders, items, onPacked, onHandover
                       disabled={!open} onChange={() => onHandover(p)} />
                   </td>
                   <td className="stick s2">
-                    <button type="button" className="sheet-name" onClick={() => onOpen(p)}>{p.customer_name}</button>
-                    <div style={{ color: MUTED, fontSize: 12 }}>{p.phone}</div>
+                    <div className="sheet-actions">
+                      <div>
+                        <button type="button" className="sheet-name" onClick={() => onOpen(p)}>{p.customer_name}</button>
+                        <div style={{ color: MUTED, fontSize: 12 }}>{p.phone}</div>
+                      </div>
+                      {menu && <MoreMenu items={menu(p)} title={p.customer_name} />}
+                    </div>
                   </td>
                   <td style={{ whiteSpace: 'nowrap', color: late ? DANGER : undefined }}>
                     {late && '⚠ '}{dueLabel(p)}

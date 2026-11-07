@@ -39,7 +39,7 @@ const DueList: React.FC<Props> = ({ list, today, onAll }) => {
           <SweetsMenu label={`More for ${p.customer_name}`} items={[
             { label: p.status === 'ready' ? 'Not packed yet' : 'Mark packed', onClick: () => act.togglePacked(p), strong: true },
             { label: noAdvance ? 'Ask for advance' : 'Send a reminder', onClick: () => (noAdvance ? act.askAdvance(p) : act.remind(p)), disabled: !p.phone, hint: p.phone ? 'WhatsApp' : 'no mobile' },
-            { label: 'Cancel booking…', onClick: () => act.changeStatus(p, 'cancelled'), danger: true, sep: true },
+            ...act.menuFor(p).map((m, i) => ({ ...m, sep: i === 0 })),
           ]} />
         </div>
       </div>

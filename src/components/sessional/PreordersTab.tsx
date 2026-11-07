@@ -96,7 +96,7 @@ const PreordersTab: React.FC<Props> = ({ preorders, occasions, gst, onEdit, sear
       </div>
 
       {view === 'sheet' ? (
-        <PreorderSheet preorders={shown} items={items} onPacked={actions.togglePacked} onHandover={actions.startHandover} onOpen={p => setOpenId(p.id)} />
+        <PreorderSheet preorders={shown} items={items} onPacked={actions.togglePacked} onHandover={actions.startHandover} onOpen={p => setOpenId(p.id)} menu={p => actions.menuFor(p)} />
       ) : shown.length === 0 ? <div style={empty}>No pre-bookings here.</div> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {shown.map(p => {

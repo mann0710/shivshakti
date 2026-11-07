@@ -12,7 +12,7 @@ import { sweetsInvoiceDoc } from '../../lib/docs/sweetsInvoice';
 import { downloadDoc, printDoc } from '../../lib/docs/output';
 import { BillRow, BillFilter, NO_FILTER, billRows, filterBills, billTotals, stageCounts, freshFilter, isOverdue } from '../../lib/billList';
 import { useStoredState } from '../../hooks/useStoredState';
-import { billDue, bookingDue, isTestBill } from '../../lib/dues';
+import { billDue, bookingDue } from '../../lib/dues';
 import { summarize, dayStart } from '../../lib/dayClose';
 import { istDay } from '../../lib/preorders';
 import { inr } from '../../lib/money';
@@ -58,13 +58,8 @@ const OrdersTab: React.FC<Props> = ({ orders, preorders, occasions, gst, onEdit,
       { label: o ? 'Print 80 mm receipt' : 'Print pre-booking slip', onClick: () => printReceipt(slip(r)) },
       { label: o ? '80 mm receipt PDF' : 'Pre-booking slip PDF', onClick: () => downloadDoc(() => receiptDoc(slip(r))) },
     ];
-    if (!o) return slipMenu;
-    return [
-      ...slipMenu,
-      ...(!o.cancelled_at ? [{ label: 'Take back items', onClick: () => onEdit(o) }] : []),
-      ...(!o.cancelled_at && bills.canCancel ? [{ label: 'Cancel bill…', onClick: () => bills.startCancel(o), danger: true }] : []),
-      ...(isTestBill(o) ? [{ label: 'Delete test bill', onClick: () => bills.removeTest(o), danger: true }] : []),
-    ];
+    if (!o) return [...slipMenu, ...bookings.menuFor(r.booking!)];
+    return [...slipMenu, ...(!o.cancelled_at ? [{ label: 'Take back items', onClick: () => onEdit(o) }] : []), ...bills.menuFor(o)];
   };
   // Counter bills collect any due; pre-bookings only once handed over (before that, at pickup).
   const owes = (r: BillRow) => (r.order ? billDue(r.order) : bookingDue(r.booking!)) > 0;

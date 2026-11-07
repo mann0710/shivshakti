@@ -4,6 +4,7 @@ import MoreMenu from '../pos/MoreMenu';
 import { SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
 import { usePreorderActions } from '../../hooks/usePreorderActions';
 import { isOpenPreorder, isPacked, balanceOf, STATUS_LABEL } from '../../lib/preorders';
+import { bookingCancelReason } from '../../lib/cancelSale';
 import { dueLabel } from '../../lib/preorderSheet';
 import { preorderPayments, MODE_LABEL } from '../../lib/payments';
 import { formatDay } from '../../lib/sessionalReceipts';
@@ -26,14 +27,15 @@ const KIND: Record<string, string> = { advance: 'Advance', handover: 'At hand-ov
 // One booking with everything you can do to it; opened by tapping a name.
 const PreorderDetail: React.FC<Props> = ({ p, occasion, actions, onEdit, onPrint, onPdf, onShare, onClose }) => {
   const open = isOpenPreorder(p);
-  const due = balanceOf(p);
+  const due = p.status === 'cancelled' ? 0 : balanceOf(p);
+  const why = bookingCancelReason(p);
   const then = (fn: () => void) => () => { onClose(); fn(); };
   return (
     <Modal title={p.customer_name} onClose={onClose} width={480}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
         <div style={{ color: '#5A5A55' }}>
           {[p.phone, p.address, occasion].filter(Boolean).join(' · ')}
-          <div>{dueLabel(p)} · <b>{STATUS_LABEL[p.status]}</b></div>
+          <div>{dueLabel(p)} · <b>{STATUS_LABEL[p.status]}{why ? ` · ${why}` : ''}</b></div>
         </div>
         <div style={{ lineHeight: 1.7 }}>
           {p.items.map((it, i) => <div key={i}>{it.item_name} · {formatLineSize(it.weight, it.weight_unit)} × {it.qty} <span style={{ float: 'right' }}>{inr(it.line_total)}</span></div>)}
@@ -46,7 +48,7 @@ const PreorderDetail: React.FC<Props> = ({ p, occasion, actions, onEdit, onPrint
             </div>
           ))}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: due ? '#B45309' : '#3B6D11' }}>
-            <span>{due ? 'Balance' : 'Fully paid'}</span><span>{inr(due)}</span>
+            <span>{p.status === 'cancelled' ? 'Cancelled · nothing to collect' : due ? 'Balance' : 'Fully paid'}</span><span>{inr(due)}</span>
           </div>
         </div>
         {p.notes && <div style={{ color: '#5A5A55' }}>Note: {p.notes}</div>}
@@ -60,8 +62,7 @@ const PreorderDetail: React.FC<Props> = ({ p, occasion, actions, onEdit, onPrint
           <MoreMenu items={[
             ...(p.phone ? [{ label: 'Send slip on WhatsApp', onClick: onShare }] : []),
             ...(p.phone && due > 0 ? [{ label: 'Remind about balance', onClick: () => actions.remind(p) }] : []),
-            ...(open ? [{ label: 'Cancel booking…', onClick: then(() => actions.changeStatus(p, 'cancelled')), danger: true }] : []),
-            { label: 'Delete booking', onClick: then(() => actions.remove(p)), danger: true },
+            ...actions.menuFor(p, onClose),
           ]} />
         </div>
       </div>

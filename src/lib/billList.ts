@@ -2,7 +2,8 @@ import type { SeasonalOrder, SeasonalOrderItem } from '../hooks/useSeasonalOrder
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
 import { Payment, PayMode, billPayments, preorderPayments, paidOf, dueOf, modeOf } from './payments';
 import { billNumber } from './receipt';
-import { istDay, DateSpan, Preset, presetSpan } from './preorders';
+import { istDay, DateSpan, Preset, presetSpan, bookingNumber } from './preorders';
+import { bookingCancelReason } from './cancelSale';
 import { cleanPhone } from './money';
 import { roundMoney } from './units';
 
@@ -59,9 +60,9 @@ export function billRow(o: SeasonalOrder): BillRow {
 export function bookingRow(p: SeasonalPreorder): BillRow {
   const base = { total: p.total_amount, payments: preorderPayments(p), cancelled: p.status === 'cancelled' };
   return {
-    ...base, ...money(base), id: p.id, kind: 'booking', number: p.id.slice(0, 6).toUpperCase(), name: p.customer_name, phone: p.phone, address: p.address,
+    ...base, ...money(base), id: p.id, kind: 'booking', number: bookingNumber(p), name: p.customer_name, phone: p.phone, address: p.address,
     day: p.delivered_at ? istDay(p.delivered_at) : p.delivery_date || istDay(p.created_at), at: p.created_at, occasion_id: p.occasion_id,
-    lines: p.items, subtotal: p.subtotal, discount: p.discount_amount, stage: stageOf(p), pickup: p.delivery_date, notes: p.notes, booking: p,
+    lines: p.items, subtotal: p.subtotal, discount: p.discount_amount, cancelReason: bookingCancelReason(p), stage: stageOf(p), pickup: p.delivery_date, notes: p.notes, booking: p,
   };
 }
 

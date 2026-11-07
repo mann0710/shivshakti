@@ -1,22 +1,30 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import CollectModal from './CollectModal';
-import CancelBillModal from './CancelBillModal';
+import CancelSaleModal from './CancelSaleModal';
+import { MenuItem } from './MoreMenu';
 import { SeasonalOrder, useUpdateSeasonalOrder, useDeleteSeasonalOrder, useHasPosPayments } from '../../hooks/useSeasonalOrders';
 import { useConfirm } from '../ui/ConfirmDialog';
-import { PayMode, billPayments, billLedger, refundEntries, paidOf, dueOf } from '../../lib/payments';
-import { billDue, billPaid } from '../../lib/dues';
+import { PayMode, billPayments, billLedger, dueOf } from '../../lib/payments';
+import { Refund, refundStart, cancelBillFields, canCancelSale, canDeleteSale, deleteMessage } from '../../lib/cancelSale';
+import { useHasSaleCancel } from '../../hooks/useSchemaStatus';
+import { useRole } from '../../hooks/useRole';
+import { billDue, billPaid, isTestBill } from '../../lib/dues';
 import { billNumber } from '../../lib/receipt';
 import { sendReminder } from '../../lib/sessionalReceipts';
 import { inr } from '../../lib/money';
 import { errorText } from '../../lib/errors';
 
-
-// Collect (part) payments, remind on WhatsApp, cancel with a reason, and delete test bills.
+// Collect (part) payments, remind on WhatsApp, cancel with a reason and refund, and delete (to the recycle bin once it covers bills).
 export const useBillActions = () => {
   const update = useUpdateSeasonalOrder();
   const del = useDeleteSeasonalOrder();
   const ready = useHasPosPayments();
+  const binned = useHasSaleCancel();
+  const role = useRole();
+  const canCancel = ready && canCancelSale(role);
+  // Test bills may always go; real ones only by owners once the recycle bin keeps bills.
+  const canDelete = (o: SeasonalOrder) => isTestBill(o) || (binned && canDeleteSale(role));
   const { confirm, dialog } = useConfirm();
   const [collecting, setCollecting] = useState<SeasonalOrder | null>(null);
   const [cancelling, setCancelling] = useState<SeasonalOrder | null>(null);
@@ -34,25 +42,30 @@ export const useBillActions = () => {
     } catch (e) { toast.error(errorText(e)); }
   };
 
-  const cancel = async (reason: string, refunded: boolean) => {
+  const cancel = async (reason: string, refund: Refund | null) => {
     const o = cancelling;
     if (!o) return;
-    const at = new Date().toISOString();
-    const list = billPayments(o);
-    const payments = refunded ? [...list, ...refundEntries(list, paidOf(list), at)] : list;
     try {
-      await update.mutateAsync({ id: o.id, cancelled_at: at, cancel_reason: reason, ...billLedger(o.total_amount, payments, true) });
-      toast.success(`Bill #${no(o)} cancelled`);
+      await update.mutateAsync({ id: o.id, ...cancelBillFields(o, { reason, refund, at: new Date().toISOString() }) });
+      toast.success(`Bill #${no(o)} cancelled${refund ? ` · ${inr(refund.amount)} given back` : ''}`);
       setCancelling(null);
     } catch (e) { toast.error(errorText(e)); }
   };
 
   const remind = (o: SeasonalOrder) => sendReminder(o.phone, o.customer_name, billDue(o), `bill #${no(o)}`);
 
-  const removeTest = async (o: SeasonalOrder) => {
-    if (!(await confirm({ title: 'Delete test bill?', message: `Test bill #${no(o)} (${inr(o.total_amount)}) will be removed permanently.`, confirmLabel: 'Delete', danger: true }))) return;
-    try { await del.mutateAsync(o.id); toast.success('Test bill deleted'); } catch (e) { toast.error(errorText(e)); }
+  const remove = async (o: SeasonalOrder) => {
+    const what = `Bill #${no(o)} for ${o.customer_name} (${inr(o.total_amount)})`;
+    const message = binned ? `${deleteMessage(what)} Its number is not reused.` : `${what} will be removed permanently.`;
+    if (!(await confirm({ title: `Delete bill #${no(o)}?`, message, confirmLabel: 'Delete', danger: true }))) return;
+    try { await del.mutateAsync(o.id); toast.success(binned ? 'Bill moved to the recycle bin' : 'Bill deleted'); } catch (e) { toast.error(errorText(e)); }
   };
+
+  // Cancel and Delete for a bill's ⋯ More menu.
+  const menuFor = (o: SeasonalOrder): MenuItem[] => [
+    ...(!o.cancelled_at && canCancel ? [{ label: 'Cancel bill…', onClick: () => setCancelling(o), danger: true }] : []),
+    ...(canDelete(o) ? [{ label: 'Delete bill…', onClick: () => remove(o), danger: true }] : []),
+  ];
 
   const ui = (
     <>
@@ -62,12 +75,12 @@ export const useBillActions = () => {
           info={<>Bill #{no(collecting)} · Total {inr(collecting.total_amount)} · Paid {inr(billPaid(collecting))} · Due <b>{inr(billDue(collecting))}</b></>} />
       )}
       {cancelling && (
-        <CancelBillModal number={no(cancelling)} name={cancelling.customer_name} paid={billPaid(cancelling)} busy={update.isPending}
-          onCancel={cancel} onClose={() => setCancelling(null)} />
+        <CancelSaleModal noun="bill" number={no(cancelling)} name={cancelling.customer_name} refund={refundStart(billPayments(cancelling))}
+          busy={update.isPending} onCancel={cancel} onClose={() => setCancelling(null)} />
       )}
       {dialog}
     </>
   );
 
-  return { canCancel: ready, startCollect: setCollecting, startCancel: setCancelling, remind, removeTest, ui };
+  return { startCollect: setCollecting, remind, menuFor, ui };
 };

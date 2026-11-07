@@ -5,7 +5,7 @@ import { preorderSlipHtml } from './docs/sweetsDocs';
 import { docContext } from './docs/context';
 import { inr } from './money';
 import { roundMoney } from './units';
-import { STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf, advanceAtBooking, balanceOf, modeLabel, isPacked } from './preorders';
+import { STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf, advanceAtBooking, balanceOf, modeLabel, isPacked, bookingNumber } from './preorders';
 import { Payment, billPayments, paidBy, paidOf, modeOf, MODE_LABEL } from './payments';
 import { billDue } from './dues';
 import { SweetReceipt, PayLines, posBillHtml } from './thermalSlips';
@@ -62,7 +62,7 @@ export function orderReceipt(o: SeasonalOrder, occasion?: string, gst?: string):
 
 export const preorderReceipt = (p: SeasonalPreorder, occasion?: string, gst?: string): ReceiptData => ({
   kind: 'Pre-Booking',
-  number: p.id.slice(0, 6).toUpperCase(),
+  number: bookingNumber(p),
   date: day(p.created_at),
   customer_name: p.customer_name,
   phone: p.phone,
@@ -72,7 +72,7 @@ export const preorderReceipt = (p: SeasonalPreorder, occasion?: string, gst?: st
   discount: p.discount_amount,
   total: p.total_amount,
   status: p.advance_paid > 0 ? `Paid ${inr(p.advance_paid)}` : 'No advance paid',
-  balance: balanceOf(p),
+  balance: p.status === 'cancelled' ? 0 : balanceOf(p),
   delivery_date: p.delivery_date ? day(p.delivery_date) : undefined,
   notes: p.notes,
   gst_number: gst,

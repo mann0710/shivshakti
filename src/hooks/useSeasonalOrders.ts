@@ -123,6 +123,6 @@ export const useDeleteSeasonalOrder = () => {
       const { error } = await supabase.from('seasonal_orders').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['seasonal_orders'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['seasonal_orders'] }); qc.invalidateQueries({ queryKey: ['deleted_items'] }); },
   });
 };

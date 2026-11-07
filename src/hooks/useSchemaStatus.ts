@@ -10,6 +10,7 @@ export const DOC_SETTINGS_MIGRATION_FILE = 'supabase/migrations/20261105_doc_set
 export const QUOTE_OPTIONS_MIGRATION_FILE = 'supabase/migrations/20261106_quote_options.sql';
 export const TEAM_BIN_MIGRATION_FILE = 'supabase/migrations/20261110_team_bin_tiers.sql';
 export const PACKED_STATUS_MIGRATION_FILE = 'supabase/migrations/20261111_preorder_packed_status.sql';
+export const SALE_CANCEL_MIGRATION_FILE = 'supabase/migrations/20261112_sale_cancel_bin.sql';
 
 const missingColumn = (e: { code?: string; message?: string }) =>
   e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find/i.test(e.message ?? '');
@@ -65,4 +66,10 @@ export const useHasTeamBin = () => useSchema('team_bin', () => [
   supabase.from('deleted_items').select('id').limit(1),
   supabase.from('menus').select('price_tiers').limit(1),
   supabase.from('menu_items').select('food_styles').limit(1),
+]).data === 'ready';
+
+// Pre-booking cancel reason, and deleted counter bills kept in the recycle bin.
+export const useHasSaleCancel = () => useSchema('sale_cancel', () => [
+  supabase.from('seasonal_preorders').select('cancelled_at, cancel_reason').limit(1),
+  supabase.from('deleted_items').select('id').limit(1),
 ]).data === 'ready';

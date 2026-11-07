@@ -3,11 +3,15 @@ import toast from 'react-hot-toast';
 import {
   SeasonalPreorder, useUpdateSeasonalPreorder, useUpdateSeasonalPreorderStatus, useDeleteSeasonalPreorder,
 } from './useSeasonalPreorders';
-import { useHasPreorderColumns, PACKED_STATUS_MIGRATION_FILE } from './useSchemaStatus';
+import { useHasPreorderColumns, useHasSaleCancel, PACKED_STATUS_MIGRATION_FILE } from './useSchemaStatus';
+import { useRole } from './useRole';
 import { errorText, isStatusCheck } from '../lib/errors';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import CollectModal from '../components/pos/CollectModal';
-import { balanceOf, STATUS_LABEL, PreStatus, packedToggle, istDay } from '../lib/preorders';
+import CancelSaleModal from '../components/pos/CancelSaleModal';
+import { MenuItem } from '../components/pos/MoreMenu';
+import { Refund, refundStart, cancelBookingFields, canCancelSale, canDeleteSale, deleteMessage } from '../lib/cancelSale';
+import { balanceOf, STATUS_LABEL, PreStatus, packedToggle, istDay, bookingNumber } from '../lib/preorders';
 import { PayMode, PayKind, preorderPayments, preorderLedger } from '../lib/payments';
 import { sendReminder, advanceText } from '../lib/sessionalReceipts';
 import { openWhatsApp } from '../lib/receipt';
@@ -20,26 +24,45 @@ const statusError = (e: unknown) => (isStatusCheck(e)
   ? `Packed is not saved yet: the database needs a one-time update. Run ${PACKED_STATUS_MIGRATION_FILE} in Supabase → SQL Editor.`
   : errorText(e));
 
-// Packed / cancelled, hand-over (a shortfall stays due), collecting that due later, reminders and delete.
+// Packed, hand-over (a shortfall stays due), collecting that due later, reminders, cancel (any stage) and delete to the recycle bin.
 export const usePreorderActions = () => {
   const update = useUpdateSeasonalPreorder();
   const setStatus = useUpdateSeasonalPreorderStatus();
   const del = useDeleteSeasonalPreorder();
   const extended = useHasPreorderColumns();
+  const cancelCols = useHasSaleCancel();
+  const role = useRole();
   const { confirm, dialog } = useConfirm();
   const [taking, setTaking] = useState<Taking | null>(null);
+  const [cancelling, setCancelling] = useState<SeasonalPreorder | null>(null);
 
   const changeStatus = async (p: SeasonalPreorder, status: PreStatus) => {
-    if (status === 'cancelled' && !(await confirm({ title: 'Cancel pre-booking?', message: `${p.customer_name}'s booking of ${inr(p.total_amount)} will be marked cancelled.`, confirmLabel: 'Cancel booking', danger: true }))) return;
     try { await setStatus.mutateAsync({ id: p.id, status }); toast.success(`${p.customer_name}: ${STATUS_LABEL[status]}`); } catch (e) { toast.error(statusError(e), { duration: 10000 }); }
   };
 
   const togglePacked = (p: SeasonalPreorder) => changeStatus(p, packedToggle(p));
 
-  const remove = async (p: SeasonalPreorder) => {
-    if (!(await confirm({ title: 'Delete pre-booking?', message: `${p.customer_name} (${inr(p.total_amount)}) will be removed permanently.`, confirmLabel: 'Delete', danger: true }))) return;
-    try { await del.mutateAsync(p.id); toast.success('Deleted'); } catch (e) { toast.error(errorText(e)); }
+  const cancel = async (reason: string, refund: Refund | null) => {
+    const p = cancelling;
+    if (!p) return;
+    try {
+      await update.mutateAsync({ id: p.id, ...cancelBookingFields(p, { reason, refund, at: new Date().toISOString() }, cancelCols) });
+      toast.success(`${p.customer_name}: cancelled${refund ? ` · ${inr(refund.amount)} given back` : ''}`);
+      setCancelling(null);
+    } catch (e) { toast.error(statusError(e)); }
   };
+
+  const remove = async (p: SeasonalPreorder) => {
+    const what = `Pre-booking #${bookingNumber(p)} for ${p.customer_name} (${inr(p.total_amount)})`;
+    if (!(await confirm({ title: `Delete pre-booking #${bookingNumber(p)}?`, message: deleteMessage(what), confirmLabel: 'Delete', danger: true }))) return;
+    try { await del.mutateAsync(p.id); toast.success('Pre-booking moved to the recycle bin'); } catch (e) { toast.error(errorText(e)); }
+  };
+
+  // Cancel and Delete for any stage, as menu items; `first` runs before (e.g. closing the detail).
+  const menuFor = (p: SeasonalPreorder, first: () => void = () => {}): MenuItem[] => [
+    ...(p.status !== 'cancelled' && canCancelSale(role) ? [{ label: 'Cancel booking…', onClick: () => { first(); setCancelling(p); }, danger: true }] : []),
+    ...(canDeleteSale(role) ? [{ label: 'Delete booking…', onClick: () => { first(); remove(p); }, danger: true }] : []),
+  ];
 
   const remind = (p: SeasonalPreorder) => sendReminder(p.phone, p.customer_name, balanceOf(p), 'your sweets pre-booking');
   const askAdvance = (p: SeasonalPreorder) => openWhatsApp(p.phone, advanceText(p.customer_name, p.delivery_date || istDay(p.created_at), p.total_amount));
@@ -71,10 +94,15 @@ export const usePreorderActions = () => {
       onPay={take} onClose={() => setTaking(null)} />
   );
 
+  const cancelModal = cancelling && (
+    <CancelSaleModal key={cancelling.id} noun="pre-booking" number={bookingNumber(cancelling)} name={cancelling.customer_name}
+      refund={refundStart(preorderPayments(cancelling))} busy={update.isPending} onCancel={cancel} onClose={() => setCancelling(null)} />
+  );
+
   return {
-    changeStatus, togglePacked, remove, remind, askAdvance,
+    changeStatus, togglePacked, remind, askAdvance, menuFor,
     startHandover: (p: SeasonalPreorder) => setTaking({ p, kind: 'handover' }),
     startCollect: (p: SeasonalPreorder) => setTaking({ p, kind: 'due' }),
-    ui: <>{modal}{dialog}</>,
+    ui: <>{modal}{cancelModal}{dialog}</>,
   };
 };

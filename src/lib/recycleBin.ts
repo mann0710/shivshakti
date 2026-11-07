@@ -17,7 +17,7 @@ const DAY_MS = 86400000;
 export const KIND_NAME: Record<string, string> = {
   customers: 'Customer', seasonal_customers: 'Sweets customer', bookings: 'Booking', quotations: 'Quotation', menus: 'Package',
   menu_categories: 'Menu category', menu_subcategories: 'Menu subcategory', menu_items: 'Dish', seasonal_items: 'Sweet',
-  seasonal_preorders: 'Pre-booking', import: 'Bulk change',
+  seasonal_preorders: 'Pre-booking', seasonal_orders: 'Sweets bill', import: 'Bulk change',
 };
 
 // [link column, parent table, needed]: a needed parent must exist; an optional one is cleared when it is gone.
@@ -28,6 +28,7 @@ const PARENTS: Record<string, [string, string, boolean][]> = {
   bookings: [['customer_id', 'customers', true], ['menu_id', 'menus', false]],
   seasonal_items: [['occasion_id', 'seasonal_occasions', false]],
   seasonal_preorders: [['occasion_id', 'seasonal_occasions', false]],
+  seasonal_orders: [['occasion_id', 'seasonal_occasions', false]],
 };
 const PARENT_OF = new Map(Object.entries(PARENTS).flatMap(([child, list]) => list.map(([col, parent]) => [`${parent}>${child}`, col] as const)));
 
@@ -76,6 +77,7 @@ export function binText(e: BinEntry): { title: string; line: string } {
     case 'menu_items': return { title: d.name || e.label, line: [kind, Number(d.default_price) > 0 ? `${inr(Number(d.default_price))} a plate` : ''].filter(Boolean).join(' · ') };
     case 'menus': return { title: d.name || e.label, line: [kind, Number(d.price_per_plate) > 0 ? `${inr(Number(d.price_per_plate))} a plate` : ''].filter(Boolean).join(' · ') };
     case 'seasonal_preorders': return { title: d.customer_name || e.label, line: [kind, d.delivery_date ? `for ${day(d.delivery_date)}` : '', d.total_amount ? inr(Number(d.total_amount)) : ''].filter(Boolean).join(' · ') };
+    case 'seasonal_orders': return { title: d.customer_name || e.label, line: [kind, d.bill_no ? `#${d.bill_no}` : '', day(d.created_at), d.total_amount ? inr(Number(d.total_amount)) : ''].filter(Boolean).join(' · ') };
     case 'import': return { title: e.label || 'Bulk change', line: 'Undo puts the old values back' };
     default: return { title: d.name || e.label || kind, line: kind };
   }

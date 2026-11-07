@@ -51,6 +51,12 @@ describe('sweets reports', () => {
     expect(r.tables[0].total).toMatchObject({ bills: 2, given: 1, total: 2200 });
     expect(r.tables[0].rows.map(x => x.day)).toEqual(['20 Oct 2026', '24 Oct 2026']);
   });
+  it('drops a pre-booking cancelled after hand-over from sales, items and dues', () => {
+    const gone = input({ preorders: [pre({ id: 'p2xxxxxx', status: 'cancelled', cancel_reason: 'Returned', advance_paid: 0, delivered_at: '2026-10-24T08:00:00Z' })] as any });
+    expect(salesReport(gone).stats[0].value).toBe(980 + 120);
+    expect(itemsReport(gone).tables[0].rows.map(x => [x.name, x.packs])).toEqual([['Kaju Katli', 2], ['Modak', 1]]);
+    expect(duesReport(gone).stats[0].value).toBe(120);
+  });
   it('totals items by weight and pack, with categories', () => {
     const r = itemsReport(input());
     const k = r.tables[0].rows.find(x => x.name === 'Kaju Katli')!;

@@ -17,6 +17,7 @@ import SeasonalOccasions from './pages/SeasonalOccasions';
 import SeasonalDashboard from './pages/SeasonalDashboard';
 import SeasonalCustomers from './pages/SeasonalCustomers';
 import { Page, Role, canOpen, homeFor, isPage, navPage } from './components/navItems';
+import { RoleContext } from './hooks/useRole';
 import MobileNav from './components/MobileNav';
 import { setNavIntent, NavIntent } from './hooks/useNavIntent';
 import { leaveThen } from './hooks/useLeaveGuard';
@@ -110,18 +111,20 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <DocContextSync />
-      <div className={`app-layout${page === 'seasonal_billing' && posFull ? ' pos-full' : ''}`}>
-        <Sidebar currentPage={navPage(page)} role={role} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
-        <main className="app-main">
-          {renderPage()}
-        </main>
-      </div>
+      <RoleContext.Provider value={role}>
+        <DocContextSync />
+        <div className={`app-layout${page === 'seasonal_billing' && posFull ? ' pos-full' : ''}`}>
+          <Sidebar currentPage={navPage(page)} role={role} onNavigate={navigate} email={auth.email} onSignOut={signOut} />
+          <main className="app-main">
+            {renderPage()}
+          </main>
+        </div>
 
-      <MobileNav current={navPage(page)} role={role} open={showMobileMenu} email={auth.email}
-        onToggle={setShowMobileMenu} onNavigate={navigate} onSignOut={signOut} />
-      {auth.needsPassword && <SetPasswordDialog email={auth.email} onClose={auth.passwordSet} />}
-      {toaster}
+        <MobileNav current={navPage(page)} role={role} open={showMobileMenu} email={auth.email}
+          onToggle={setShowMobileMenu} onNavigate={navigate} onSignOut={signOut} />
+        {auth.needsPassword && <SetPasswordDialog email={auth.email} onClose={auth.passwordSet} />}
+        {toaster}
+      </RoleContext.Provider>
     </QueryClientProvider>
   );
 }

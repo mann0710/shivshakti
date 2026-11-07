@@ -15,6 +15,8 @@ export const isPacked = (p: Pick<SeasonalPreorder, 'status'>) => p.status === 'r
 // Ticking Packed moves a booking to packed; unticking puts it back to booked.
 export const packedToggle = (p: Pick<SeasonalPreorder, 'status'>): PreStatus => (p.status === 'ready' ? 'pending' : 'ready');
 
+// Short number shown on bills and slips.
+export const bookingNumber = (p: Pick<SeasonalPreorder, 'id'>) => p.id.slice(0, 6).toUpperCase();
 export const isOpenPreorder = (p: Pick<SeasonalPreorder, 'status'>) => OPEN_STATUSES.includes(p.status);
 export const balanceOf = (p: Pick<SeasonalPreorder, 'total_amount' | 'advance_paid'>) => Math.max(0, roundMoney(p.total_amount - p.advance_paid));
 
