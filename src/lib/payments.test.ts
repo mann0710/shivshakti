@@ -64,11 +64,16 @@ describe('counter bill form', () => {
     expect(t.change).toBe(20);
     expect(toOrderPayload(f, t, 2026, [], AT)).toMatchObject({ is_paid: true, paid_amount: 980, payment_mode: 'cash', payments: [{ tendered: 1000 }] });
   });
-  it('needs a cash part for Cash + UPI and a name for unpaid', () => {
+  it('needs a cash part for Cash + UPI and a name for credit', () => {
     expect(validate(form({ payment: 'split' }), totalsOf(form({ payment: 'split' })))).toMatch(/cash part/);
-    expect(validate(form({ payment: 'unpaid' }), totalsOf(form({ payment: 'unpaid' })))).toMatch(/name and phone/);
+    expect(validate(form({ payment: 'unpaid' }), totalsOf(form({ payment: 'unpaid' })))).toMatch(/name and mobile/);
     const unpaid = form({ payment: 'unpaid', customer_name: 'Ramesh', phone: '9824012345' });
     expect(toOrderPayload(unpaid, totalsOf(unpaid), 2026, [], AT)).toMatchObject({ is_paid: false, paid_amount: 0, payments: [] });
+    // Part paid now, the rest on credit with a pay-by date and the advance used.
+    const part = form({ payment: 'unpaid', customer_name: 'Ramesh', phone: '9824012345', credit_now: '300', credit_mode: 'upi', pay_by: '2026-11-08', use_advance: 100 });
+    const out = toOrderPayload(part, totalsOf(part), 2026, [], AT);
+    expect((out.payments ?? []).map(p => [p.kind, p.mode, p.amount])).toEqual([['sale', 'upi', 300], ['from_advance', 'cash', 100]]);
+    expect(out).toMatchObject({ is_paid: false, due_date: '2026-11-08', paid_amount: 400 });
   });
   it('taking back items hands back the difference', () => {
     const f = { ...formFromOrder(bill()), lines: [{ ...line, qty: 1, line_total: 490 }] };

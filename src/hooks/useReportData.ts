@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
+import { useCreditEntries } from './useCredit';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
 import { todayIST } from '../lib/ist';
 import { Range, addDays } from '../lib/reports/model';
 import { ReportInput } from '../lib/reports/input';
+import { previousRange, lastYearRange } from '../lib/reports/sales';
 import { SeasonalOrder, useHasPosPayments } from './useSeasonalOrders';
 import { useSeasonalPreorders } from './useSeasonalPreorders';
 import { useSeasonalItems } from './useSeasonalItems';
@@ -56,6 +58,10 @@ export const useReportData = (range: Range, occasionId: string) => {
   const invoices = useInvoices();
   const payments = usePaymentsInRange(range);
   const bookingValue = useBookingValue();
+  const credit = useCreditEntries();
+  // Summary compares with the period just before and the same dates last year.
+  const prev = useOrdersInRange(previousRange(range));
+  const lastYear = useOrdersInRange(lastYearRange(range));
 
   const parts = [orders, unpaid, preorders, items, occasions, bookings, invoices, payments];
   const loading = parts.some(p => p.isLoading);
@@ -65,8 +71,9 @@ export const useReportData = (range: Range, occasionId: string) => {
     range, today: todayIST(), occasionId,
     orders: orders.data ?? [], unpaidOrders: unpaid.data ?? [], preorders: preorders.data ?? [],
     items: items.data ?? [], occasions: occasions.data ?? [], bookings: bookings.data ?? [],
-    invoices: invoices.data ?? [], payments: payments.data ?? [], bookingValue,
-  }), [range, occasionId, orders.data, unpaid.data, preorders.data, items.data, occasions.data, bookings.data, invoices.data, payments.data, bookingValue]);
+    invoices: invoices.data ?? [], payments: payments.data ?? [], bookingValue, credit: credit.data ?? [],
+    compare: prev.data && lastYear.data ? { previous: prev.data, lastYear: lastYear.data } : undefined,
+  }), [prev.data, lastYear.data, range, occasionId, orders.data, unpaid.data, preorders.data, items.data, occasions.data, bookings.data, invoices.data, payments.data, bookingValue, credit.data]);
 
   return { input, loading, error };
 };

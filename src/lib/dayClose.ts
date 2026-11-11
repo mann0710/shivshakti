@@ -1,6 +1,6 @@
 import type { SeasonalOrder } from '../hooks/useSeasonalOrders';
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
-import { moneyIn } from './payments';
+import { moneyIn, AccountMoney } from './payments';
 import { billDue } from './dues';
 import { roundMoney } from './units';
 
@@ -68,14 +68,14 @@ export interface DaySummary {
 }
 
 // Money received between two times, by where it came from; old dues are bills made before the window.
-export function summarize(orders: SeasonalOrder[], preorders: SeasonalPreorder[], from: string, to: string): DaySummary {
+export function summarize(orders: SeasonalOrder[], preorders: SeasonalPreorder[], from: string, to: string, accounts: AccountMoney[] = []): DaySummary {
   const [start, end] = [time(from), time(to)];
   const inside = (iso: string) => time(iso) > start && time(iso) <= end;
   const s = { cash_bills: 0, cash_advances: 0, cash_handover: 0, cash_dues: 0, upi_total: 0, upi_count: 0 };
   const add = (mode: string, amount: number, bucket: 'cash_bills' | 'cash_advances' | 'cash_handover' | 'cash_dues') => {
     if (mode === 'upi') { s.upi_total += amount; s.upi_count += Math.sign(amount); } else s[bucket] += amount; // a refund cancels its payment
   };
-  moneyIn(orders, preorders).filter(p => inside(p.at)).forEach(p => add(p.mode, p.amount,
+  moneyIn(orders, preorders, accounts).filter(p => inside(p.at)).forEach(p => add(p.mode, p.amount,
     p.source === 'bill' ? (inside(p.madeAt) ? 'cash_bills' : 'cash_dues')
       : p.kind === 'advance' ? 'cash_advances' : p.kind === 'handover' ? 'cash_handover' : 'cash_dues'));
   const bills = orders.filter(o => inside(o.created_at) && !o.cancelled_at);

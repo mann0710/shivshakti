@@ -8,6 +8,8 @@ import DocSettingsCard from '../components/DocSettingsCard';
 import CateringGroup from '../components/settings/CateringGroup';
 import SweetsGroup, { useUndatedOccasions } from '../components/settings/SweetsGroup';
 import RemindersGroup from '../components/settings/RemindersGroup';
+import CreditGroup from '../components/settings/CreditGroup';
+import { inr } from '../lib/money';
 import TeamGroup from '../components/settings/TeamGroup';
 import DataGroup, { useDbUpdates } from '../components/settings/DataGroup';
 import DeviceGroup from '../components/settings/DeviceGroup';
@@ -37,7 +39,8 @@ const DataCenter: React.FC = () => {
   const notes = groupNotes({
     gstNumber: api.dc?.gst_number || '', gstRate: Number(api.dc?.gst_rate ?? 18), upiId: api.docs.upi_id, address: api.docs.address,
     fssai: !!api.dc?.fssai_certificate_url, docsReady: api.docsReady, eventTypes: eventTypes.length, teamMembers: team.length, logins: logins.length,
-    undated, updates: db.pending.length, reminders: Object.values(api.docs.reminders).filter(r => r.on).length, backupStale: backupStale(api.docs.last_backup_at),
+    undated, updates: db.pending.length, reminders: Object.values(api.docs.reminders).filter(r => r.on).length,
+    credit: api.docs.credit.on ? `${api.docs.credit.limit ? `Limit ${inr(api.docs.credit.limit)}` : 'No limit'} · ${api.docs.credit.over === 'block' ? 'blocks' : 'warns'} over it` : 'Off at the counter', backupStale: backupStale(api.docs.last_backup_at),
     textSize,
   });
   const hits = useMemo(() => searchSettings(query), [query]);
@@ -54,6 +57,7 @@ const DataCenter: React.FC = () => {
       case 'documents': return <DocSettingsCard api={api} />;
       case 'catering': return <CateringGroup />;
       case 'sweets': return <SweetsGroup />;
+      case 'credit': return <CreditGroup api={api} />;
       case 'reminders': return <RemindersGroup api={api} />;
       case 'team': return <TeamGroup />;
       case 'data': return <DataGroup api={api} onImport={() => setImporting(true)} />;

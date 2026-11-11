@@ -9,7 +9,7 @@ import { undoToast } from '../pos/undoToast';
 import { useSessionRank } from '../pos/useSessionRank';
 import { useSeasonalItems, usePackDefaults, SeasonalItem } from '../../hooks/useSeasonalItems';
 import { useSeasonalOrders, useCreateSeasonalOrder, useUpdateSeasonalOrder, SeasonalOrder } from '../../hooks/useSeasonalOrders';
-import { useSeasonalPreorders, useCreateSeasonalPreorder, useUpdateSeasonalPreorder, SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
+import { useCreateSeasonalPreorder, useUpdateSeasonalPreorder, SeasonalPreorder } from '../../hooks/useSeasonalPreorders';
 import { useSeasonalCustomers, useCreateSeasonalCustomer } from '../../hooks/useSeasonalCustomers';
 import { SeasonalOccasion } from '../../hooks/useSeasonalOccasions';
 import { useStoredState } from '../../hooks/useStoredState';
@@ -18,7 +18,14 @@ import { itemPacks } from '../../lib/itemCatalog';
 import { Pack } from '../../lib/units';
 import { inr, isValidPhone, cleanPhone } from '../../lib/money';
 import { billPayments, preorderPayments } from '../../lib/payments';
-import { owedBy } from '../../lib/dues';
+import { useCreditData } from '../../hooks/useCredit';
+import { useMyRole } from '../../hooks/useMyRole';
+import { useCreditActions } from '../credit/useCreditActions';
+import { PosCredit } from '../credit/CreditCheck';
+import { checkCredit } from '../../lib/credit/checks';
+import { accountFor } from '../../lib/credit/view';
+import { addDays } from '../../lib/credit/dates';
+import { formatDateIST } from '../../lib/ist';
 import { HeldBill, holdBill, takeHeld, dropHeld } from '../../lib/heldBills';
 import { SweetReceipt } from '../../lib/thermalSlips';
 import { orderReceipt, preorderReceipt } from '../../lib/sessionalReceipts';
@@ -56,7 +63,6 @@ const withMode = (f: PosForm, mode: PosMode): PosForm =>
 const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone, start }) => {
   const { data: allItems = [], isLoading } = useSeasonalItems();
   const { data: orders = [], isFetched: ordersFetched } = useSeasonalOrders(thisYear);
-  const { data: preorders = [] } = useSeasonalPreorders(thisYear);
   const { data: customers = [] } = useSeasonalCustomers();
   const defaults = usePackDefaults();
   const createOrder = useCreateSeasonalOrder();
@@ -82,8 +88,19 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone, start }) =>
   const popularity = useSessionRank(orders, ordersFetched);
   const inCart = useMemo(() => packsByItem(form.lines), [form.lines]);
   const editId = edit ? (edit.kind === 'bill' ? edit.order.id : edit.preorder.id) : undefined;
-  const owed = useMemo(() => owedBy(form.phone, orders, preorders, editId), [form.phone, orders, preorders, editId]);
   const totals = totalsOf(form);
+  const creditData = useCreditData();
+  const { isOwner } = useMyRole();
+  const creditActs = useCreditActions();
+  const creditFor = (phone: string) => accountFor(creditData.accounts, phone);
+  // Editing a bill already on the account: only new credit is checked.
+  const credit: PosCredit | null = useMemo(() => {
+    const s = creditData.settings;
+    if (!s.on && form.payment !== 'unpaid') return null;
+    const account = creditFor(form.phone);
+    const amount = editId ? 0 : Math.max(0, totals.due - totals.pay.cash - totals.pay.upi);
+    return { check: checkCredit(account, amount, s, creditData.today), account, owner: isOwner, today: creditData.today, payDays: s.pay_days };
+  }, [creditData, form.phone, form.payment, totals.due, totals.pay.cash, totals.pay.upi, editId, isOwner]); // eslint-disable-line react-hooks/exhaustive-deps
   const busy = createOrder.isPending || updateOrder.isPending || createPre.isPending || updatePre.isPending;
 
   const addPack = useCallback((item: SeasonalItem, pack: Pack, qty = 1) => {
@@ -155,8 +172,18 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone, start }) =>
         await rememberCustomer();
         reset('preorder');
       } else {
-        const saved = await createOrder.mutateAsync(toOrderPayload(form, totals, thisYear));
-        setDone({ receipt: orderReceipt(saved, occName(saved.occasion_id), gst), change: totals.change, invoice: () => sweetsInvoiceDoc(billRow(saved), occName(saved.occasion_id)) });
+        const onCredit = form.payment === 'unpaid' && totals.due > 0;
+        const f = onCredit ? { ...form, pay_by: form.pay_by || addDays(creditData.today, creditData.settings.pay_days) } : form;
+        const saved = await createOrder.mutateAsync(toOrderPayload(f, totals, thisYear));
+        if (onCredit && credit?.check.level === 'block' && form.override?.trim()) {
+          creditActs.note({ phone: cleanPhone(form.phone), name: form.customer_name.trim() }, 'override', form.override.trim(), saved.total_amount);
+        }
+        const receipt = orderReceipt(saved, occName(saved.occasion_id), gst);
+        if (onCredit && receipt.balance) {
+          const earlier = creditFor(form.phone)?.owed ?? 0;
+          receipt.credit = { due: receipt.balance, earlier, payBy: f.pay_by ? formatDateIST(f.pay_by, 'EEE d MMM yyyy') : '', signature: creditData.settings.signature };
+        }
+        setDone({ receipt, change: totals.change, invoice: () => sweetsInvoiceDoc(billRow(saved), occName(saved.occasion_id)) });
         await rememberCustomer();
         reset('bill');
       }
@@ -188,7 +215,7 @@ const PosTab: React.FC<Props> = ({ occasions, edit, gst, onEditDone, start }) =>
             <SaleDone receipt={done.receipt} invoice={done.invoice} change={done.change} next={form.mode === 'preorder' ? 'New pre-booking' : 'New bill'} onNext={() => setDone(null)} />
           </section>
         ) : (
-          <TicketPanel form={form} totals={totals} customers={customers} owed={owed} busy={busy} held={held.list.length} set={set} onMode={onMode}
+          <TicketPanel form={form} totals={totals} customers={customers} credit={credit} busy={busy} held={held.list.length} set={set} onMode={onMode}
             onCharge={charge} onClear={clear} onHold={hold} onShowHeld={() => setShowHeld(true)} formKey={formKey}
             editingLabel={edit ? (edit.kind === 'bill' ? `bill of ${edit.order.customer_name}` : `pre-booking of ${edit.preorder.customer_name}`) : undefined}
             onCancelEdit={() => onEditDone(edit?.kind ?? 'bill')} />

@@ -17,7 +17,7 @@ const CSS = `
 .sw-sign { text-align: right; margin-top: 34px; font-size: 12px; } .sw-sign div { height: 30px; border-bottom: 1px solid #1C1C24; margin-bottom: 4px; }
 .sw-terms { margin-top: 18px; break-inside: avoid; } .sw-terms ol.terms { font-size: 11.5px; gap: 2px; margin-top: 4px; }`;
 const day = (d?: string) => (d ? formatDateIST(d, 'dd MMM yyyy') : '');
-const PAY_KIND: Record<PayKind, string> = { sale: 'At the counter', due: 'Due collected', advance: 'Advance', handover: 'At hand-over', refund: 'Refund' };
+const PAY_KIND: Record<PayKind, string> = { sale: 'At the counter', due: 'Due collected', advance: 'Advance', handover: 'At hand-over', refund: 'Refund', writeoff: 'Let go', from_advance: 'From advance' };
 
 // Bank text and UPI ID, with a QR (not on cancelled sales): the balance filled in when something is due, else an open amount.
 function payTo(ctx: DocContext, due: number, note: string, cancelled: boolean): string {

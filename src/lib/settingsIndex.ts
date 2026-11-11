@@ -1,6 +1,6 @@
 // The Settings groups, every row they show (for search) and the status line under each group.
 
-export type GroupId = 'business' | 'money' | 'documents' | 'catering' | 'sweets' | 'reminders' | 'team' | 'data' | 'device';
+export type GroupId = 'business' | 'money' | 'documents' | 'catering' | 'sweets' | 'credit' | 'reminders' | 'team' | 'data' | 'device';
 
 export const GROUPS: { id: GroupId; title: string; sub: string }[] = [
   { id: 'business', title: 'Business', sub: 'Printed on every quotation, invoice and sweets bill.' },
@@ -8,6 +8,7 @@ export const GROUPS: { id: GroupId; title: string; sub: string }[] = [
   { id: 'documents', title: 'Documents', sub: 'How quotations, invoices and bills look.' },
   { id: 'catering', title: 'Catering', sub: 'Choices offered in bookings and quotes.' },
   { id: 'sweets', title: 'Sweets', sub: 'Counter and seasons.' },
+  { id: 'credit', title: 'Credit (pay later)', sub: 'Sweets given now and paid for later.' },
   { id: 'reminders', title: 'Reminders on Home', sub: 'One tap sends each on WhatsApp.' },
   { id: 'team', title: 'Team & access', sub: 'Who can sign in and what they see.' },
   { id: 'data', title: 'Data', sub: 'Get data in and out, keep it safe.' },
@@ -35,6 +36,8 @@ export const SETTING_ROWS = [
   R('sweets', 'Box sizes', 'pack sizes grams litre piece'), R('sweets', 'Seasons and dates', 'occasions diwali rakhi'),
   R('sweets', 'Print the bill after each sale', 'receipt printer'), R('sweets', 'Quick keys on the counter', 'pos'),
   R('sweets', 'Day close', 'cash drawer'),
+  R('credit', 'Credit at the counter', 'pay later udhar khata unpaid due'), R('credit', 'Credit limit per customer', 'limit block warn'),
+  R('credit', 'Pay by (default)', 'due date'), R('credit', 'Remind again every', 'whatsapp follow up'), R('credit', 'Reminder language', 'hindi english'),
   R('reminders', 'Payment due', 'whatsapp'), R('reminders', 'Quote with no reply', 'whatsapp follow up'),
   R('reminders', 'Pre-booking pickup', 'whatsapp'), R('reminders', 'Unpaid sweets bill', 'whatsapp due'),
   R('team', 'Signed in now', 'login email account role owner counter kitchen'), R('team', 'Add someone', 'invite login staff'), R('team', 'Your password', 'login change'),
@@ -74,6 +77,7 @@ export interface StatusInput {
   undated: string[];
   updates: number;
   reminders: number;
+  credit?: string;
   backupStale: boolean;
   textSize?: number;
 }
@@ -92,6 +96,7 @@ export function groupNotes(i: StatusInput): Record<GroupId, GroupNote> {
     documents: i.docsReady ? { note: 'Colour, terms, what prints', warn: false } : { note: 'Needs a database update to save', warn: true },
     catering: { note: `${plural(i.eventTypes, 'event type')} · 3 food styles`, warn: false },
     sweets: i.undated.length ? { note: `${i.undated[0]} has no dates yet${i.undated.length > 1 ? ` (+${i.undated.length - 1})` : ''}`, warn: true } : { note: 'Box sizes · seasons and dates', warn: false },
+    credit: { note: i.credit ?? 'Limit, pay-by and reminders', warn: false },
     reminders: { note: i.reminders ? `${i.reminders} of 4 on · one tap sends on WhatsApp` : 'All off', warn: false },
     team: { note: [i.logins ? plural(i.logins, 'login') : '', `${plural(i.teamMembers, 'team member')} for events`].filter(Boolean).join(' · '), warn: false },
     data: i.updates ? { note: `${plural(i.updates, 'database update')} to run`, warn: true }

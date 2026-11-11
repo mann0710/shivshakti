@@ -9,6 +9,7 @@ import { useQuotations } from '../../hooks/useQuotations';
 import { useSeasonalOrders } from '../../hooks/useSeasonalOrders';
 import { useSeasonalPreorders } from '../../hooks/useSeasonalPreorders';
 import { MoneyData } from '../../lib/moneyView';
+import { useCreditEntries } from '../../hooks/useCredit';
 import { Spend, SpendDraft } from '../../lib/spends';
 
 export const SPENDS_MIGRATION_FILE = 'supabase/migrations/20261109_spends.sql';
@@ -27,13 +28,14 @@ export function useMoneyData() {
   const quotes = useQuotations();
   const orders = useSeasonalOrders();
   const preorders = useSeasonalPreorders();
-  const parts = [bookings, invoices, payments, quotes, orders, preorders];
+  const credit = useCreditEntries();
+  const parts = [bookings, invoices, payments, quotes, orders, preorders, credit];
   const loading = parts.some(p => p.isLoading);
   const error = parts.find(p => p.error)?.error as Error | undefined;
   const data = useMemo<MoneyData>(() => ({
     bookings: bookings.data ?? [], invoices: invoices.data ?? [], payments: payments.data ?? [], quotes: quotes.data ?? [],
-    orders: orders.data ?? [], preorders: preorders.data ?? [],
-  }), [bookings.data, invoices.data, payments.data, quotes.data, orders.data, preorders.data]);
+    orders: orders.data ?? [], preorders: preorders.data ?? [], credit: credit.data ?? [],
+  }), [bookings.data, invoices.data, payments.data, quotes.data, orders.data, preorders.data, credit.data]);
   return { data, quotes: quotes.data ?? [], loading, error, retry: () => parts.forEach(p => p.refetch()) };
 }
 

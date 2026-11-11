@@ -9,7 +9,9 @@ import { DayClosePayload, NOTES, dayLabel, whenLabel, differenceOf, differenceLa
 
 // 80 mm thermal slips: the counter bill and the day close summary. Black only; empty shop fields are left out.
 export interface PayLines { cash: number; upi: number; returned: number; refunded: number }
-export interface SweetReceipt extends ReceiptData { pay?: PayLines; cancelled?: string }
+// credit: the bill went (partly) on credit; earlier is what they owed before it.
+export interface CreditSlip { due: number; earlier: number; payBy: string; signature: boolean }
+export interface SweetReceipt extends ReceiptData { pay?: PayLines; cancelled?: string; credit?: CreditSlip }
 
 const CSS = `
 @page { size: auto; margin: 4mm; } @page :first { margin-top: 4mm; }
@@ -18,6 +20,8 @@ body { width: 72mm; max-width: 72mm; margin: 0 auto; box-shadow: none; font-size
 .bill header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1px; font-size: 11px; }
 .wm { font-family: ${HEAD_FONT}; font-size: 19px; letter-spacing: 1px; line-height: 1.15; }
 .row { display: flex; justify-content: space-between; gap: 8px; } .rt { text-align: right; }
+.credit { border: 2px solid #000; padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; } .credit .h { text-align: center; font-weight: 700; letter-spacing: 1px; }
+.sign { margin-top: 26px; border-top: 1px solid #000; padding-top: 3px; text-align: center; font-size: 11px; }
 .dash { border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 7px 0; } .no { font-size: 14px; }
 .occ, .void { text-align: center; font-weight: 600; } .void { border: 2px solid #000; padding: 4px; letter-spacing: 1px; }
 .lines { display: flex; flex-direction: column; gap: 7px; }
@@ -62,6 +66,11 @@ function payRows(r: SweetReceipt): string {
   return `${lines}${(r.balance ?? 0) > 0 ? bold('Balance due', money(r.balance ?? 0)) : ''}`;
 }
 
+// Credit box: this bill's due, what was owed before, the total and the pay-by date, with a signature line.
+const creditBox = (c?: CreditSlip) => (!c ? '' : `<div class="credit num"><div class="h">CREDIT · PAY LATER</div>
+  ${row('This bill due', money(c.due))}${c.earlier > 0 ? row('Earlier balance', money(c.earlier)) : ''}${bold('Total on credit', money(c.due + c.earlier))}
+  ${c.payBy ? row('Pay by', esc(c.payBy)) : ''}</div>${c.signature ? '<div class="sign">Customer signature · I agree to pay the balance above</div>' : ''}`);
+
 export function posBillHtml(r: SweetReceipt, ctx: DocContext = docContext()): string {
   const packs = r.lines.reduce((s, l) => s + l.qty, 0);
   const who = [r.customer_name === WALK_IN ? '' : r.customer_name, r.phone].filter(Boolean).map(v => `<br>${esc(v)}`).join('');
@@ -77,6 +86,7 @@ export function posBillHtml(r: SweetReceipt, ctx: DocContext = docContext()): st
     ${gstRow(r, ctx)}
     ${payRows(r)}
   </div>
+  ${creditBox(r.credit)}
   ${r.notes ? `<div class="note">${esc(r.notes)}</div>` : ''}
   ${foot(ctx.settings.bill_footer, SHOP.phone ? `Pre-book festival sweets: ${SHOP.phone}` : '')}`;
   return slip(`${r.kind} ${r.number}`, ctx, inner);

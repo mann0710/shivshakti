@@ -20,6 +20,8 @@ import { useDocSettings } from '../hooks/useDocSettings';
 import { useAcceptFlow, useQuotePdfPref } from '../hooks/useAcceptFlow';
 import { useCollect } from './money/useCollect';
 import { whatsApp } from './catering/InvoiceActions';
+import { useCreditData } from '../hooks/useCredit';
+import { matches } from '../lib/credit/view';
 import '../styles/home.css';
 
 const DOT: Record<Tone, string> = { red: '#C04545', amber: '#C98A1E', purple: '#6B62CF', grey: '#9A9A93' };
@@ -28,6 +30,8 @@ const PHONE_ROWS = 3;
 // Everything that needs the owner today, most urgent first, each with its two buttons.
 export function useHomeNeeds(d: MoneyData, quotes: Quotation[], today: string, hideTidy: boolean): HomeNeed[] {
   const { reminders } = useDocSettings();
+  const { accounts } = useCreditData();
+  const follow = useMemo(() => accounts.filter(a => matches(a, 'today')), [accounts]);
   return useMemo(() => {
     const unpaid = d.orders.filter(o => billDue(o) > 0);
     const base = needsYou({
@@ -36,13 +40,14 @@ export function useHomeNeeds(d: MoneyData, quotes: Quotation[], today: string, h
       unpaidBills: unpaid.map(o => ({ name: o.customer_name, total: billDue(o), at: o.created_at })),
       preorders: d.preorders.map(p => ({ name: p.customer_name, date: p.delivery_date ?? '', total: p.total_amount, advance: p.advance_paid, open: isOpenPreorder(p) })),
       reminders,
+      credit: { count: follow.length, owed: follow.reduce((t, a) => t + a.owed, 0), broken: follow.filter(a => a.promise?.broken).map(a => a.name) },
     });
     const byId = new Map(quotes.map(q => [q.id, q]));
     return homeNeeds(base, {
       hideTidy, choices: id => (byId.get(id) ? openChoicesOf(byId.get(id)!) : []),
       bills: unpaid.map(o => ({ no: billNumber(o.bill_no, o.id), day: istDay(o.created_at), paid: billPaid(o) })),
     });
-  }, [d, quotes, today, hideTidy, reminders]);
+  }, [d, quotes, today, hideTidy, reminders, follow]);
 }
 
 interface Props { items: HomeNeed[]; data: MoneyData; quotes: Quotation[]; today: string; onNavigate: Navigate; onLater: () => void }
@@ -92,6 +97,8 @@ const NeedsYou: React.FC<Props> = ({ items, data, quotes, today, onNavigate, onL
       const list = waiting(ask);
       if (list.length === 1) whatsApp(list[0].phone, message(list[0], ask));
       else setAsking(ask);
+    } else if (i.kind === 'credit') {
+      onNavigate('seasonal_billing', posLink.credit());
     } else if (i.kind === 'quote') {
       const q = quoteOf(i.ref);
       if (!q) return onNavigate('quotations');

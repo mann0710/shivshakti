@@ -13,6 +13,10 @@ describe('posStart', () => {
     expect(posStart(posLink.bill(who))).toEqual({ tab: 'pos', mode: 'bill', who });
   });
 
+  it('opens the credit tab, optionally on one customer', () => {
+    expect(posStart(posLink.credit(who))).toEqual({ tab: 'credit', who });
+  });
+
   it('opens bills and pre-bookings, optionally one pre-booking', () => {
     expect(posStart(posLink.bills(who))).toEqual({ tab: 'orders', who });
     expect(posStart(posLink.preorders())).toEqual({ tab: 'preorders', who: undefined, openId: undefined });

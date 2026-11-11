@@ -82,6 +82,10 @@ Run [`supabase/migrations/20261106_quote_options.sql`](supabase/migrations/20261
 - If the service cannot be reached (local `npm start`, offline), the app opens the print window instead; choose "Save as PDF".
 - To try it locally: `CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"` and call `require('./api/pdf').render(html, footer)` from Node.
 
+### Credit (pay later)
+
+Run [`supabase/migrations/20261112_credit_accounts.sql`](supabase/migrations/20261112_credit_accounts.sql) (adds `credit_accounts`, `credit_entries` and `seasonal_orders.due_date`, staff-only like every table; safe to re-run). Until it is run, the Credit tab works from bills alone and hides limits, promises, call notes and old balances. Applied on the live project on 11 Nov 2026 (checked: both tables with row-level security and one staff policy each, plus the new column).
+
 ### Item prices and customer GSTIN
 
 Run [`supabase/migrations/20261101_prices_gstin.sql`](supabase/migrations/20261101_prices_gstin.sql) (adds `menu_items.default_price` and `customers.gstin`; safe to re-run). Until it is run, the price and GSTIN fields stay hidden. Applied on the live project on 30 Oct 2026, after copying every table into the `backup_20261030` schema (not exposed to the API; drop it once you are happy).
@@ -120,7 +124,7 @@ The grid-and-bill layout follows NodeDR POS.
 - **Tiles:** one tap on a pack button (250 g ₹213) adds it. Tap the name or **Custom** to pick a quantity, sell a loose weight ("300", "1.25 kg") or sell by amount ("₹100 worth").
 - **Bill panel:**
   - +/− steppers plus a typed quantity (tap the number, type 24), discount in ₹ or %;
-  - payment by **Cash / UPI / Unpaid**;
+  - payment by **Cash / UPI / Cash + UPI / Credit** (see *Credit (pay later)* below);
   - cash received shows the change to return;
   - a big **Charge ₹X** button.
 - **Customers:** walk-in by default. Name and mobile are required only for unpaid bills and pre-bookings. Typing a name or number suggests saved customers. New customers with a valid mobile are saved automatically.
@@ -145,6 +149,12 @@ The grid-and-bill layout follows NodeDR POS.
   - Open / Due by tomorrow / Done / All filters, search, overdue highlighting;
   - a **kitchen prep list** (each sweet still to make per date: packs as size × count, e.g. *1 kg × 20 + 500 g × 1*, and the total; printable).
 - **Reports tab:** pick a period (Today, Yesterday, Last 7 days, This month, Last month, This FY, This year or any from–to dates) and an occasion. Every report has headline numbers, tables with totals, an empty state, **Print / PDF** (A4, the print dialog saves as PDF) and **CSV / Excel**.
+  - **Summary:** gross, discounts, net, number of sales, average bill, items a bill, quantity, cancelled bills, take-backs, cash / UPI at the sale and what was left on credit, each **compared with the same number of days just before and the same dates last year** (`lib/reports/sales.ts`, `salesDetail.ts`);
+  - **Bill register:** every bill and handed-over pre-booking, newest first: date, time, bill, customer, items, quantity, discount, total, paid, due, paid by, status (cancelled ones listed with their reason but not added up);
+  - **Item × day:** quantity of each sweet per day (per month for periods over two months), with totals and sales; busiest day, top and slowest item;
+  - **Customers:** every customer (matched by mobile; walk-ins as one row): sales, quantity, amount, average bill, first and last visit, paid, due; how many came back;
+  - **Time of day:** counter bills by IST hour and by weekday (average a day), busiest and quietest hour, average bill after 6 PM (`salesTime.ts`);
+  - **Discounts & cancellations:** every discount (with %), cancelled bill (with reason), refund / take-back and credit let go;
   - **Sales:** counter bills + pre-bookings handed over, day by day (month by month for long periods), by occasion, unpaid bills;
   - **Items:** item-wise packs, quantity (kg / ltr / pcs) and revenue with share, plus sales by pack size;
   - **Categories:** the same by category (set in Sessional Items);
@@ -152,9 +162,33 @@ The grid-and-bill layout follows NodeDR POS.
   - **Pre-bookings:** due in the period by status and date (pickup vs delivery), what is still to make, every booking with paid and balance;
   - **Dues:** everything still to collect as of today: unpaid bills (with age), pre-booking balances, catering invoice balances;
   - **Catering:** events in the period with value, invoiced, paid, balance, by event type and status;
-  - **Top:** top 10 items, sweets customers and catering customers.
+  - **Top:** top 10 items, sweets customers and catering customers;
+  - **Credit:** given on credit vs got back day by day, who owes split by the age of each bill (0–7, 8–30, 31–60, over 60 days), open and missed promises, and what was let go or written off.
 
 The phone bottom bar now has a **POS** button.
+
+## Credit (pay later)
+
+Sweets given now and paid for later, kept as one **credit account per mobile number** across counter bills, pre-bookings handed over with money still due, and **old balances** from the paper register. Built on what Khatabook, OkCredit, Vyapar and Tally do. It is called *Credit* everywhere (never "udhar" or "khata"). Design: master canvas, row *Credit (pay later)*.
+
+- **At the counter** (`components/credit/CreditCheck.tsx`, `lib/credit/checks.ts`): pick **Credit** as the way to pay (name and mobile needed). A box shows what they owe now, after this bill and their limit, and checks:
+  - over the limit (shop default or their own), a bill older than *Stop credit when a bill is this old*, a "No credit" customer, a dispute, a missed or open promise, a pay-by date already passed;
+  - **Warn** lets the counter carry on; **Block** (Settings › Credit) stops it, and only an owner login can allow it, typing why (kept in the account). A "No credit" customer or credit switched off always blocks;
+  - **Paying some now?** (cash or UPI) puts only the rest on credit; **Use ₹X from their advance** when they paid extra before;
+  - **Pay by**: 3 days, 1 week, 15 days, 1 month or a date (default from Settings), saved on the bill (`due_date`);
+  - the 80 mm receipt gets a **CREDIT · PAY LATER** box (this bill, earlier balance, total, pay-by) and a customer signature line (Settings).
+- **POS › Credit tab** (`components/credit/CreditTab.tsx`): tiles for to collect, follow up today, given and got back this month; filters Follow up today · Overdue · Promised · Disputed · All owing · Advance · Settled; search by name, mobile or bill #; sort; what is due split by the age of each bill. Each customer has **Remind** and **Receive**.
+- **One customer's account** (`CreditPanel.tsx`): what they owe with a limit bar, what is still due oldest first (late ones in red), the statement with given / got / running balance, and follow-ups. Actions:
+  - **Receive payment**: goes to the oldest bill first (shown before saving); more than owed is kept as **advance**; a date in the past and a UPI ref under *More options*; an owner can let go of the rest as a discount. Each receipt has **Undo** (toast and in the account), which takes its payments back off the bills;
+  - **Remind on WhatsApp** in English or Hindi (per customer), with the UPI ID, and optionally the statement PDF; **Remind all due today** walks through everyone one WhatsApp at a time (Sent / Skipped / Next);
+  - **Promised to pay…** (date and amount; a missed promise comes back to Follow up today), **Log a call** (No answer, Will pay, Call later, Says not owed → Disputed, Paid elsewhere);
+  - **Statement PDF** (A4, `lib/docs/creditStatement.ts`) with a UPI QR for the amount due;
+  - ⋯ **Credit settings** (owner: own limit / shop default / no limit, allow credit, disputed, reminder language, note), **Let go or write off** (discount or bad debt, with a reason; clears oldest bills first), **Pay from advance**, **New sweets bill**, **Open in Customers**.
+- **Follow up today**: a missed promise, or a promise date that has come, or *Remind again every* N days after the last reminder or call, or the first pay-by date. Disputed accounts are left out.
+- **+ Add old balance**: money owed from before the app; it is never counted as a sale, and money paid against it counts in Day close and Money.
+- **Money rules** (`lib/payments.ts`): write-offs (`writeoff`) and advance used (`from_advance`) settle a bill but are never money in, so Day close, Money and the Payments report only count real cash and UPI. Advances kept and old balances paid back come in through `accountMoney` (`lib/credit/accounts.ts`).
+- **Elsewhere**: Home › Needs you shows one *Follow up on credit* row (replacing one row per unpaid bill); a customer's Owes tile and ⋯ menu open their credit account; Settings › **Credit (pay later)**: credit at the counter on/off, default limit, warn or block, stop when a bill is this old, default pay-by, remind every, reminder language, signature line.
+- Code: `lib/credit/` (types, items, accounts, allocate, ledger, checks, messages, view, dates; tests in `credit.test.ts`), `hooks/useCredit.ts`, `hooks/useMyRole.ts`, `components/credit/`. The Hindi reminder text came from a translation pass; edit it in `lib/credit/messages.ts`.
 
 ## Easier to use, especially on phones
 
@@ -217,7 +251,7 @@ Design: the "Shiv Shakti — Master Design" canvas (its first board maps every s
 ### Sweets POS (redesign)
 
 - **Counter:** "Bill / Pre-booking" toggle; every box size is a one-tap button; **Loose (weight or ₹)** on each sweet; the tile order stays put during the day; 48 px − / + and real buttons for Discount, Note and Clear bill (Clear has an Undo toast instead of a confirm).
-- **Paying:** Cash (quick "cash handed over" amounts and change to give back), UPI (amount + QR from the UPI ID in Settings, then **Received**), **Cash + UPI** (type the cash, UPI fills in the rest) or Unpaid (needs name and phone; warns if the customer already owes).
+- **Paying:** Cash (quick "cash handed over" amounts and change to give back), UPI (amount + QR from the UPI ID in Settings, then **Received**), **Cash + UPI** (type the cash, UPI fills in the rest) or **Credit** (needs name and mobile; checks their limit and dues, see *Credit (pay later)*).
 - **Hold:** park a bill and serve the next customer; **Held bills** brings it back.
 - **Bills:** Collect takes part payments (cash or UPI); what's short stays due. **Remind** on WhatsApp. ⋯ More → Take back items or **Cancel bill** with a reason and refund (the number stays, marked cancelled). Delete: see *Cancel and delete sweets sales*.
 - **UPI links** (`upiLink` in `lib/docs/qr.ts`) follow the NPCI UPI linking spec: `upi://pay?pa=<UPI ID>&pn=Shiv%20Shakti&am=<2 decimals>&cu=INR&tn=<note>`, spaces as `%20` (some apps show a `+` literally), a bare `@` in the UPI ID and a plain-text note (no `#`). Used by the counter QR, quotes and invoices.
@@ -442,7 +476,8 @@ src/
   lib/docs/                         printed documents: theme, parts, menu blocks, quotation, invoice/event menu, sweets, settings, QR, output (PDF service → download/share, print fallback)
   api/pdf.js                        PDF service (Vercel function, headless Chrome)
   components/DocSettingsCard.tsx    Data Center → Documents
-  components/settings/              Settings groups (Business, Money, Reminders, Team & access, Data), team, password, FSSAI and recycle-bin dialogs
+  lib/credit/, components/credit/   Credit (pay later): accounts, oldest-first payments, checks, reminders, the Credit tab and dialogs
+  components/settings/              Settings groups (Business, Money, Credit, Reminders, Team & access, Data), team, password, FSSAI and recycle-bin dialogs
   components/menu/                  Menu Builder "Edit as sheet": grid, toolbar, bulk dialogs, review, food-style chips
   components/data/                  Paste a list of dishes, Import from Excel (dishes, sweets, customers) with a preview
   lib/xlsx.ts                       .xlsx read/write (fflate) and CSV for imports, exports and backups

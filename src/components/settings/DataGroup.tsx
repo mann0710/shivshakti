@@ -5,6 +5,7 @@ import {
   DOC_SETTINGS_MIGRATION_FILE, PACK_MIGRATION_FILE, PREORDER_MIGRATION_FILE, PRICE_MIGRATION_FILE, QUOTE_OPTIONS_MIGRATION_FILE, TEAM_BIN_MIGRATION_FILE,
 } from '../../hooks/useSchemaStatus';
 import { useHasPosPayments, POS_MIGRATION_FILE } from '../../hooks/useSeasonalOrders';
+import { useHasCredit, CREDIT_MIGRATION_FILE } from '../../hooks/useCredit';
 import { useRecycleBin } from '../../hooks/useRecycleBin';
 import { useBackup } from '../../hooks/useBackup';
 import { groupBin } from '../../lib/recycleBin';
@@ -23,6 +24,7 @@ export function useDbUpdates() {
     [useHasQuoteOptions(), QUOTE_OPTIONS_MIGRATION_FILE],
     [useHasPosPayments(), POS_MIGRATION_FILE],
     [useHasTeamBin(), TEAM_BIN_MIGRATION_FILE],
+    [useHasCredit(), CREDIT_MIGRATION_FILE],
   ];
   const checking = useIsFetching({ queryKey: ['schema_status'] }) > 0;
   return { checking, pending: checking ? [] : checks.filter(([ok]) => !ok).map(([, file]) => file) };

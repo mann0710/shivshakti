@@ -6,7 +6,7 @@ import { docContext } from './docs/context';
 import { inr } from './money';
 import { roundMoney } from './units';
 import { STATUS_LABEL, FULFILLMENT_LABEL, fulfillmentOf, advanceAtBooking, balanceOf, modeLabel, isPacked, bookingNumber } from './preorders';
-import { Payment, billPayments, paidBy, paidOf, modeOf, MODE_LABEL } from './payments';
+import { Payment, billPayments, paidBy, paidOf, modeOf, moneyOnly, MODE_LABEL } from './payments';
 import { billDue } from './dues';
 import { SweetReceipt, PayLines, posBillHtml } from './thermalSlips';
 import { SHOP } from './shop';
@@ -20,7 +20,8 @@ const day = (iso: string) =>
 const sumOf = (list: Payment[], pick: (p: Payment) => number) => roundMoney(list.reduce((s, p) => s + pick(p), 0));
 
 // Cash handed over (with the change returned), UPI, and anything refunded.
-export function payLines(list: Payment[]): PayLines {
+export function payLines(all: Payment[]): PayLines {
+  const list = moneyOnly(all);
   const cash = list.filter(p => p.mode === 'cash' && p.amount > 0);
   return {
     cash: sumOf(cash, p => p.tendered ?? p.amount),

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { SeasonalCustomer } from '../../hooks/useSeasonalCustomers';
-import { PosForm, PosMode, Totals } from '../../lib/posForm';
-import { Owed } from '../../lib/dues';
+import { PosForm, PosMode, Totals, creditPart } from '../../lib/posForm';
+import { PosCredit, blockedFor } from '../credit/CreditCheck';
 import { setLineQty } from '../../lib/cart';
 import { inr } from '../../lib/money';
 import TicketLines from './TicketLines';
@@ -13,7 +13,7 @@ interface Props {
   form: PosForm;
   totals: Totals;
   customers: SeasonalCustomer[];
-  owed: Owed;
+  credit: PosCredit | null;
   editingLabel?: string;
   busy: boolean;
   held: number;
@@ -34,18 +34,23 @@ export function chargeLabel(f: PosForm, t: Totals, editing: boolean, busy: boole
   if (t.pay.upi > 0) return `Received ${inr(t.pay.upi)} · save`;
   if (t.refund > 0) return `Save · give back ${inr(t.refund)}`;
   if (t.due === 0) return editing ? `Save changes · ${inr(t.total)}` : `Save · ${inr(t.total)}`;
-  if (f.payment === 'unpaid') return editing ? `Save · ${inr(t.due)} stays due` : `Save unpaid · ${inr(t.total)}`;
+  if (f.payment === 'unpaid') {
+    const later = creditPart(f, t);
+    const now = t.pay.cash + t.pay.upi;
+    return editing ? `Save · ${inr(later)} on credit` : now > 0 ? `Got ${inr(now)} · ${inr(later)} on credit` : `Save on credit · ${inr(later)}`;
+  }
   return t.change > 0 ? `Charge ${inr(t.due)} · return ${inr(t.change)}` : `Charge ${inr(t.due)}`;
 }
 
 // The bill: type, customer, lines, totals, payment and the big save button.
 const TicketPanel: React.FC<Props> = props => {
-  const { form, totals, customers, owed, editingLabel, busy, held, set, onMode, onCharge, onClear, onHold, onShowHeld, onCancelEdit, formKey } = props;
+  const { form, totals, customers, credit, editingLabel, busy, held, set, onMode, onCharge, onClear, onHold, onShowHeld, onCancelEdit, formKey } = props;
   const count = form.lines.reduce((s, l) => s + l.qty, 0);
   const needsCustomer = form.mode === 'preorder' || form.payment === 'unpaid';
+  const blocked = form.mode === 'bill' && form.payment === 'unpaid' && totals.due > 0 && !!credit && blockedFor(credit, form);
   const save = (
-    <button type="button" className="pos-charge" disabled={!form.lines.length || busy} onClick={onCharge}>
-      {chargeLabel(form, totals, !!editingLabel, busy)}
+    <button type="button" className="pos-charge" disabled={!form.lines.length || busy || blocked} onClick={onCharge}>
+      {blocked ? (credit?.owner ? 'Say why to allow credit' : 'Credit not allowed') : chargeLabel(form, totals, !!editingLabel, busy)}
     </button>
   );
   const inPanel = form.mode === 'bill' && totals.pay.upi > 0;
@@ -80,7 +85,7 @@ const TicketPanel: React.FC<Props> = props => {
 
       <TicketLines lines={form.lines} onQty={(key, qty) => set({ lines: setLineQty(form.lines, key, qty) })} />
 
-      <CheckoutFields key={`pay-${formKey}`} form={form} totals={totals} owed={owed} set={set} received={inPanel ? save : null}
+      <CheckoutFields key={`pay-${formKey}`} form={form} totals={totals} credit={credit} set={set} received={inPanel ? save : null}
         upiNote={`${form.customer_name.trim() || 'Sweets'} bill`} />
 
       {!inPanel && save}

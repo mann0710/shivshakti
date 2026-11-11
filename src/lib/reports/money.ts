@@ -1,6 +1,7 @@
 import { billNumber } from '../receipt';
 import { balanceOf, istDay, modeLabel, STATUS_LABEL } from '../preorders';
 import { moneyIn } from '../payments';
+import { accountMoney } from '../credit/accounts';
 import { billDue } from '../dues';
 import { Report, Row, sumBy, share, groupBy, inRange, bucketOf, showDay } from './model';
 import { ReportInput, billsIn, ordersOf, preordersOf, unpaidOf, occasionNote } from './input';
@@ -15,9 +16,9 @@ export function receiptsIn(inp: ReportInput): Receipt[] {
   const r = inp.range;
   const bookings = preordersOf(inp).filter(p => p.status !== 'cancelled');
   return [
-    ...moneyIn(ordersOf(inp), bookings).filter(p => inRange(istDay(p.at), r)).map(p => ({
+    ...moneyIn(ordersOf(inp), bookings, accountMoney(inp.credit ?? [])).filter(p => inRange(istDay(p.at), r)).map(p => ({
       day: istDay(p.at), mode: modeLabel(p.mode), amount: p.amount,
-      source: p.source === 'bill' ? 'bills' as const : p.kind === 'advance' ? 'advance' as const : 'handover' as const,
+      source: p.source !== 'booking' ? 'bills' as const : p.kind === 'advance' ? 'advance' as const : 'handover' as const,
     })),
     ...inp.payments.filter(p => inRange(p.payment_date, r))
       .map(p => ({ day: p.payment_date, source: 'catering' as const, mode: modeLabel(p.payment_mode), amount: Number(p.amount) || 0 })),

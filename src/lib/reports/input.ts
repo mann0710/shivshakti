@@ -7,6 +7,7 @@ import { nameKey } from '../itemCatalog';
 import { handedOverOn, istDay } from '../preorders';
 import { billDue, isCancelled } from '../dues';
 import { Range, inRange } from './model';
+import type { CreditEntry } from '../credit/types';
 
 // Everything a report may need; each builder picks what it uses.
 export interface ReportInput {
@@ -21,6 +22,8 @@ export interface ReportInput {
   bookings: Booking[];
   invoices: Invoice[];
   payments: Payment[];           // catering payments dated in the range
+  credit?: CreditEntry[];        // credit accounts: old balances, receipts, write-offs
+  compare?: { previous: SeasonalOrder[]; lastYear: SeasonalOrder[] }; // bills of the period before and the same dates last year
   bookingValue: (b: Booking) => number;
 }
 

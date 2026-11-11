@@ -111,7 +111,8 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
         {current ? (
           <CustomerDetail p={current} onBack={() => { setView('list'); toTop(top.current); }} onEdit={() => setEditing(current.key)} onDelete={remove}
             onCombine={() => setCombining(current.key)} onNewBooking={newBooking} onSweetsBill={() => onNavigate('seasonal_billing', posLink.bill(who))}
-            onMarkCompleted={markCompleted} onOpen={openItem} />
+            onMarkCompleted={markCompleted} onOpen={openItem}
+            onCredit={() => onNavigate('seasonal_billing', posLink.credit(who))} />
         ) : (
           <section className="pp-detail"><div className="pp-placeholder">{isLoading ? 'Loading…' : 'Pick a customer to see their bookings and bills.'}</div></section>
         )}

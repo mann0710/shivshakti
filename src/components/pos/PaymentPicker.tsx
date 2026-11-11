@@ -2,23 +2,23 @@ import React from 'react';
 import UpiPanel from './UpiPanel';
 import { PosForm, Totals, PayChoice } from '../../lib/posForm';
 import { cashChips } from '../../lib/payments';
-import { Owed } from '../../lib/dues';
+import CreditCheck, { PosCredit } from '../credit/CreditCheck';
 import { inr } from '../../lib/money';
 import { inp, lbl, segBtn } from '../ui/styles';
 
 interface Props {
   form: PosForm;
   totals: Totals;
-  owed: Owed;
+  credit: PosCredit | null; // null: credit is turned off
   upiNote: string;
   received: React.ReactNode; // the save button, shown inside the UPI panel
   set: (patch: Partial<PosForm>) => void;
 }
 
-const CHOICES: [PayChoice, string][] = [['cash', 'Cash'], ['upi', 'UPI'], ['split', 'Cash + UPI'], ['unpaid', 'Unpaid']];
+const CHOICES: [PayChoice, string][] = [['cash', 'Cash'], ['upi', 'UPI'], ['split', 'Cash + UPI'], ['unpaid', 'Credit']];
 
-// Cash (with change), UPI (with QR), Cash + UPI, or Unpaid for a counter bill.
-const PaymentPicker: React.FC<Props> = ({ form, totals: t, owed, upiNote, received, set }) => {
+// Cash (with change), UPI (with QR), Cash + UPI, or Credit (pay later) for a counter bill.
+const PaymentPicker: React.FC<Props> = ({ form, totals: t, credit, upiNote, received, set }) => {
   const chips = cashChips(t.due);
   const handed = Number(form.received) || 0;
   const typed = form.received && !chips.slice(1).includes(handed) ? form.received : '';
@@ -27,7 +27,7 @@ const PaymentPicker: React.FC<Props> = ({ form, totals: t, owed, upiNote, receiv
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div className="pos-seg" role="group" aria-label="Payment">
-        {CHOICES.map(([k, label]) => (
+        {CHOICES.filter(([k]) => k !== 'unpaid' || credit || form.payment === 'unpaid').map(([k, label]) => (
           <button key={k} type="button" style={segBtn(form.payment === k)} aria-pressed={form.payment === k} onClick={() => pick(k)}>{label}</button>
         ))}
       </div>
@@ -59,12 +59,8 @@ const PaymentPicker: React.FC<Props> = ({ form, totals: t, owed, upiNote, receiv
 
       {form.payment === 'unpaid' && t.due > 0 && (
         <>
-          {(!form.customer_name.trim() || !form.phone.trim()) && <div className="pos-note">Add the customer's name and mobile to keep this bill unpaid.</div>}
-          {owed.amount > 0 && (
-            <div className="pos-note bad" role="alert">
-              {form.customer_name.trim() || 'This customer'} already owes {inr(owed.amount)} on {owed.count} bill{owed.count === 1 ? '' : 's'}.
-            </div>
-          )}
+          {(!form.customer_name.trim() || !form.phone.trim()) && <div className="pos-note">Add the customer's name and mobile to give credit.</div>}
+          {credit && form.phone.trim() && <CreditCheck c={credit} form={form} totals={t} set={set} />}
         </>
       )}
     </div>

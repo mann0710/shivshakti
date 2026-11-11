@@ -2,8 +2,10 @@ import { roundMoney } from './units';
 
 export type PayMode = 'cash' | 'upi';
 // sale: at the counter · due: collected later · advance / handover: pre-bookings · refund: handed back (negative).
-export type PayKind = 'sale' | 'due' | 'advance' | 'handover' | 'refund';
-export interface Payment { amount: number; mode: PayMode; at: string; kind: PayKind; tendered?: number }
+// writeoff: credit let go · from_advance: paid from the customer's advance with us. Neither is money coming in.
+export type PayKind = 'sale' | 'due' | 'advance' | 'handover' | 'refund' | 'writeoff' | 'from_advance';
+// ref: the credit entry that wrote it (undo removes it) · note: UPI ref or reason.
+export interface Payment { amount: number; mode: PayMode; at: string; kind: PayKind; tendered?: number; ref?: string; note?: string }
 export type PayChoice = PayMode | 'split' | 'unpaid';
 
 // Fields a bill or pre-booking needs to fall back on before the ledger existed.
@@ -14,14 +16,19 @@ const time = (iso: string) => Date.parse(iso) || 0;
 const asMode = (m?: string | null): PayMode => (m === 'upi' ? 'upi' : 'cash');
 const total = (list: Payment[]) => roundMoney(list.reduce((s, p) => s + (Number(p.amount) || 0), 0));
 
+// Real money only: write-offs and advance used settle a bill but bring no money in.
+export const isMoney = (p: Pick<Payment, 'kind'>) => p.kind !== 'writeoff' && p.kind !== 'from_advance';
+export const moneyOnly = (list: Payment[]) => list.filter(isMoney);
+
 export const paidOf = total;
-export const paidBy = (list: Payment[], mode: PayMode) => total(list.filter(p => p.mode === mode));
+export const receivedOf = (list: Payment[]) => total(moneyOnly(list));
+export const paidBy = (list: Payment[], mode: PayMode) => total(moneyOnly(list).filter(p => p.mode === mode));
 export const dueOf = (amount: number, list: Payment[]) => Math.max(0, roundMoney(amount - paidOf(list)));
 export const lastPaidAt = (list: Payment[]) => (list.length ? list.reduce((a, b) => (time(b.at) > time(a.at) ? b : a)).at : null);
 
 // One mode, both, or none.
 export function modeOf(list: Payment[]): PayMode | 'mixed' | null {
-  const modes = Array.from(new Set(list.filter(p => p.amount > 0).map(p => p.mode)));
+  const modes = Array.from(new Set(moneyOnly(list).filter(p => p.amount > 0).map(p => p.mode)));
   return modes.length > 1 ? 'mixed' : modes[0] ?? null;
 }
 
@@ -49,14 +56,17 @@ export function preorderPayments(p: BookingLike): Payment[] {
   return out;
 }
 
-// One sweets payment as received (refunds negative), with when its bill or booking was made.
-export interface MoneyIn extends Payment { source: 'bill' | 'booking'; madeAt: string }
+// One sweets payment as received (refunds negative), with when its bill, booking or old balance was made.
+export interface MoneyIn extends Payment { source: 'bill' | 'booking' | 'account'; madeAt: string }
+// Credit money on no bill: an old balance paid back, or an advance kept.
+export interface AccountMoney { payments: Payment[]; madeAt: string }
 
-// Every payment on these bills and bookings, timed by when the money came in.
-export const moneyIn = (bills: BillLike[], bookings: BookingLike[]): MoneyIn[] => [
+// Every real payment on these bills, bookings and credit accounts, timed by when the money came in.
+export const moneyIn = (bills: BillLike[], bookings: BookingLike[], accounts: AccountMoney[] = []): MoneyIn[] => [
   ...bills.flatMap(o => billPayments(o).map(p => ({ ...p, source: 'bill' as const, madeAt: o.created_at }))),
   ...bookings.flatMap(b => preorderPayments(b).map(p => ({ ...p, source: 'booking' as const, madeAt: b.created_at }))),
-];
+  ...accounts.flatMap(k => k.payments.map(p => ({ ...p, source: 'account' as const, madeAt: k.madeAt }))),
+].filter(isMoney);
 
 // Columns kept in step with a bill's ledger; a cancelled bill has nothing left to collect.
 export const billLedger = (amount: number, payments: Payment[], cancelled = false) => {
@@ -68,12 +78,13 @@ export const billLedger = (amount: number, payments: Payment[], cancelled = fals
 export const preorderLedger = (payments: Payment[]) => {
   const advances = payments.filter(p => p.kind === 'advance');
   const later = payments.filter(p => p.kind !== 'advance');
+  const laterMoney = moneyOnly(later);
   return {
     payments,
     advance_paid: paidOf(payments),
     payment_mode: advances.length ? advances[advances.length - 1].mode : null,
     balance_paid: paidOf(later),
-    balance_mode: later.length ? later[later.length - 1].mode : null,
+    balance_mode: laterMoney.length ? laterMoney[laterMoney.length - 1].mode : null,
   };
 };
 

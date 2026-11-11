@@ -38,6 +38,8 @@ export interface SeasonalOrder {
   paid_at?: string | null;
   cancelled_at?: string | null;
   cancel_reason?: string | null;
+  // After the credit migration: pay-by date for a bill on credit.
+  due_date?: string | null;
 }
 
 export type SeasonalOrderPayload = Omit<SeasonalOrder, 'id' | 'created_at' | 'bill_no'>;
@@ -66,9 +68,17 @@ export const omitFields = <T extends object>(row: T, fields: readonly string[]):
   return out;
 };
 
+// The credit pay-by column is in place.
+export const useHasDueDate = () => useQuery({
+  queryKey: ['schema_status', 'order_due_date'],
+  staleTime: Infinity,
+  queryFn: async () => !(await supabase.from('seasonal_orders').select('due_date').limit(1)).error,
+}).data === true;
+
 const useFitOrder = () => {
   const ready = useHasPosPayments();
-  return <T extends object>(row: T): T => (ready ? row : omitFields(row, POS_ORDER_FIELDS));
+  const due = useHasDueDate();
+  return <T extends object>(row: T): T => omitFields(row, [...(ready ? [] : POS_ORDER_FIELDS), ...(due ? [] : ['due_date'])]);
 };
 
 export const useSeasonalOrders = (year?: number) =>

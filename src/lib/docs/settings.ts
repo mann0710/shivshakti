@@ -1,4 +1,5 @@
 // What the owner can change on every printed document (Data Center → Documents).
+import { CreditSettings, DEFAULT_CREDIT, mergeCredit } from '../credit/types';
 
 export interface PayStep { pct: number; label: string; when: string }
 
@@ -32,6 +33,8 @@ export interface DocSettings {
   // GST included in sweets prices; 0 when not charged.
   sweets_gst_rate: number;
   reminders: Record<ReminderKey, Reminder>;
+  // Settings › Credit (pay later).
+  credit: CreditSettings;
   last_backup_at: string;
 }
 
@@ -81,6 +84,7 @@ export const DEFAULT_DOC_SETTINGS: DocSettings = {
     pickup: { on: true, days: 1 },
     sweets_unpaid: { on: true, days: 7 },
   },
+  credit: DEFAULT_CREDIT,
   last_backup_at: '',
 };
 
@@ -112,6 +116,7 @@ export function mergeDocSettings(raw?: Partial<DocSettings> | null): DocSettings
     catering_name: String(r.catering_name ?? '').trim() || d.catering_name,
     sweets_name: String(r.sweets_name ?? '').trim() || d.sweets_name,
     reminders: mergeReminders(r.reminders),
+    credit: mergeCredit(r.credit),
     schedule: steps,
     extras: lines(r.extras, d.extras),
     terms: lines(r.terms, d.terms),

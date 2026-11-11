@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import PaymentPicker from './PaymentPicker';
 import BookingFields from './BookingFields';
 import { PosForm, Totals } from '../../lib/posForm';
-import { Owed } from '../../lib/dues';
+import type { PosCredit } from '../credit/CreditCheck';
 import { inr } from '../../lib/money';
 import { inp, segBtn, segWrap, NAVY, SUCCESS } from '../ui/styles';
 
 interface Props {
   form: PosForm;
   totals: Totals;
-  owed: Owed;
+  credit: PosCredit | null;
   upiNote: string;
   received: React.ReactNode;
   set: (patch: Partial<PosForm>) => void;
@@ -22,7 +22,7 @@ const Row: React.FC<{ label: string; value: string; strong?: boolean; color?: st
 );
 
 // Discount and note behind "+" buttons, the totals, then payment (bill) or pickup and advance (pre-booking).
-const CheckoutFields: React.FC<Props> = ({ form, totals, owed, upiNote, received, set }) => {
+const CheckoutFields: React.FC<Props> = ({ form, totals, credit, upiNote, received, set }) => {
   const [showDiscount, setShowDiscount] = useState(!!form.discount);
   const [showNote, setShowNote] = useState(!!form.notes);
   const before = form.paid_before ?? 0;
@@ -61,7 +61,7 @@ const CheckoutFields: React.FC<Props> = ({ form, totals, owed, upiNote, received
       {totals.refund > 0 && <div className="pos-change" role="status"><span>Give back</span><span>{inr(totals.refund)}</span></div>}
 
       {form.mode === 'bill'
-        ? (totals.due > 0 || !before) && <PaymentPicker form={form} totals={totals} owed={owed} upiNote={upiNote} received={received} set={set} />
+        ? (totals.due > 0 || !before) && <PaymentPicker form={form} totals={totals} credit={credit} upiNote={upiNote} received={received} set={set} />
         : <BookingFields form={form} totals={totals} set={set} />}
     </div>
   );

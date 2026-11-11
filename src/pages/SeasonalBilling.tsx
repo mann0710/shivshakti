@@ -8,29 +8,33 @@ import OrdersTab from '../components/sessional/OrdersTab';
 import PreordersTab from '../components/sessional/PreordersTab';
 import ReportsTab from '../components/sessional/ReportsTab';
 import DayCloseTab from '../components/pos/DayCloseTab';
+import CreditTab from '../components/credit/CreditTab';
+import { useCreditData } from '../hooks/useCredit';
+import { matches } from '../lib/credit/view';
 import MigrationBanner from '../components/sessional/MigrationBanner';
 import { isOpenPreorder } from '../lib/preorders';
 import { unpaidCount } from '../lib/dues';
-import type { Page } from '../components/navItems';
-import { useNavIntent, canGoBack } from '../hooks/useNavIntent';
+import { useNavIntent, canGoBack, Navigate } from '../hooks/useNavIntent';
 import { usePosFull } from '../hooks/usePosFull';
-import { posStart, PosTabId as Tab } from '../lib/posIntent';
+import { posStart, posLink, PosStart, PosTabId as Tab } from '../lib/posIntent';
 
 const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
 // Back to the screen that opened the POS, else Sweets today.
-const leavePos = (onNavigate?: (page: Page) => void) => {
+const leavePos = (onNavigate?: Navigate) => {
   if (canGoBack()) window.history.back();
   else if (onNavigate) onNavigate('seasonal_dashboard');
   else window.location.assign('#seasonal_dashboard');
 };
 
-// Sweet-shop billing: counter, bills, pre-bookings, day close and reports.
-const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNavigate }) => {
+// Sweet-shop billing: counter, bills, pre-bookings, credit, day close and reports.
+const SeasonalBilling: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate }) => {
   // Links from other screens pick the tab, mode, customer or report.
   const intent = useNavIntent('seasonal_billing');
-  const [start] = useState(() => posStart(intent));
+  const [start, setStart] = useState<PosStart>(() => posStart(intent));
+  // A new start (e.g. "New sweets bill" from Credit) remounts the counter with it.
+  const [startKey, setStartKey] = useState(0);
   const [tab, setTab] = useState<Tab>(start.tab);
   // Bills and Pre-bookings stay mounted once opened, so filters and search survive an edit.
   const [seen, setSeen] = useState<Tab[]>([start.tab]);
@@ -43,6 +47,9 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
   const { data: dc } = useDataCenter();
 
   const unpaid = unpaidCount(orders, preorders);
+  const credit = useCreditData();
+  const followToday = credit.accounts.filter(a => matches(a, 'today')).length;
+  const billFor = (who: { name: string; phone: string }) => { setStart(posStart(posLink.bill(who))); setStartKey(k => k + 1); open('pos'); };
   const openPre = preorders.filter(isOpenPreorder).length;
 
   const startEdit = (target: EditTarget) => { setEdit(target); open('pos'); };
@@ -53,6 +60,7 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
     ['pos', edit ? 'Editing' : 'Counter', edit ? 'Editing' : 'Counter', 0],
     ['orders', 'Bills', 'Bills', unpaid],
     ['preorders', 'Pre-bookings', 'Pre-book', openPre],
+    ['credit', 'Credit', 'Credit', followToday],
     ['close', 'Day close', 'Close', 0],
     ['reports', 'Reports', 'Reports', 0],
   ];
@@ -92,7 +100,7 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
       <div className="page-content">
         <MigrationBanner />
         {tab === 'pos' && (
-          <PosTab key={edit ? (edit.kind === 'bill' ? edit.order.id : edit.preorder.id) : 'new'}
+          <PosTab key={edit ? (edit.kind === 'bill' ? edit.order.id : edit.preorder.id) : `new-${startKey}`}
             occasions={occasions} edit={edit} gst={dc?.gst_number} onEditDone={endEdit} start={start.tab === 'pos' ? start : undefined} />
         )}
         {seen.includes('orders') && (
@@ -106,6 +114,10 @@ const SeasonalBilling: React.FC<{ onNavigate?: (page: Page) => void }> = ({ onNa
             <PreordersTab preorders={preorders} occasions={occasions} gst={dc?.gst_number} onEdit={preorder => startEdit({ kind: 'preorder', preorder })}
               search={start.tab === 'preorders' ? start.who?.phone || start.who?.name : undefined} openId={start.openId} />
           </div>
+        )}
+        {tab === 'credit' && (
+          <CreditTab search={start.tab === 'credit' ? start.who?.phone : undefined} onBill={billFor}
+            onCustomer={id => onNavigate?.('customers', id ? { action: 'open', id } : undefined)} />
         )}
         {tab === 'close' && <DayCloseTab />}
         {tab === 'reports' && <ReportsTab occasions={occasions} report={start.report} />}

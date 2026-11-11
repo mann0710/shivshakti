@@ -7,7 +7,7 @@ import { formatDateIST } from './ist';
 
 // Home: "Needs you" with two actions per row, the four tiles, next events and sweets this week.
 
-export type NeedKind = 'invoice' | 'preorders' | 'pickup' | 'quote' | 'bill' | 'tidy';
+export type NeedKind = 'invoice' | 'preorders' | 'pickup' | 'quote' | 'bill' | 'credit' | 'tidy';
 export interface HomeNeed extends NeedItem { kind: NeedKind; ref: string; first: string; firstShort: string; second: string; secondShort: string }
 export interface OpenChoice { label: string; options: string[] }
 
@@ -19,13 +19,14 @@ export const openChoicesOf = (q: Pick<Quotation, 'is_multi_day' | 'event_days' |
 
 const isTidy = (i: NeedItem) => i.key.startsWith('tidy');
 const kindOf = (i: NeedItem): NeedKind =>
-  isTidy(i) ? 'tidy' : i.key.startsWith('pre-') ? 'preorders' : i.key.startsWith('pick-') ? 'pickup' : i.key.startsWith('bill-') ? 'bill' : i.page === 'billing' ? 'invoice' : 'quote';
+  isTidy(i) ? 'tidy' : i.key === 'credit' ? 'credit' : i.key.startsWith('pre-') ? 'preorders' : i.key.startsWith('pick-') ? 'pickup' : i.key.startsWith('bill-') ? 'bill' : i.page === 'billing' ? 'invoice' : 'quote';
 
 const ACTIONS: Record<Exclude<NeedKind, 'quote'>, [string, string, string, string]> = {
   invoice: ['Record payment', 'Record payment', 'WhatsApp reminder', 'WhatsApp'],
   preorders: ['Ask for advance', 'Ask for advance', 'Open', 'Open'],
   pickup: ['Send pickup reminder', 'Remind', 'Open', 'Open'],
   bill: ['Record payment', 'Record payment', 'WhatsApp', 'WhatsApp'],
+  credit: ['Open Credit', 'Open', 'Remind all', 'Remind'],
   tidy: ['Tidy up', 'Tidy up', 'Later', 'Later'],
 };
 const RANK: Record<Tone, number> = { red: 0, amber: 1, purple: 2, grey: 3 };

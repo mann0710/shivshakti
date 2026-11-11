@@ -20,6 +20,7 @@ interface Props {
   onSweetsBill: () => void;
   onMarkCompleted: (b: Booking) => void;
   onOpen: (h: HistoryItem) => void;
+  onCredit: () => void;
 }
 
 type Side = 'all' | 'catering' | 'sweets';
@@ -33,7 +34,7 @@ const statement = (p: PersonRow) => [
 ].join('\n');
 
 // One person: contact, quick actions, money tiles and history across catering and sweets.
-const CustomerDetail: React.FC<Props> = ({ p, onBack, onEdit, onDelete, onCombine, onNewBooking, onSweetsBill, onMarkCompleted, onOpen }) => {
+const CustomerDetail: React.FC<Props> = ({ p, onBack, onEdit, onDelete, onCombine, onNewBooking, onSweetsBill, onMarkCompleted, onOpen, onCredit }) => {
   const [side, setSide] = useState<Side>('all');
   const today = todayIST();
   const phone = p.phone.replace(/[^\d+]/g, '');
@@ -46,6 +47,7 @@ const CustomerDetail: React.FC<Props> = ({ p, onBack, onEdit, onDelete, onCombin
     ...(wa ? [{ label: 'WhatsApp', href: wa, strong: true }, { label: 'Call', href: `tel:${phone}` }] : []),
     { label: 'New booking', onClick: onNewBooking, sep: !!wa },
     { label: 'Sweets bill', onClick: onSweetsBill },
+    ...(p.phone ? [{ label: 'Credit account', onClick: onCredit }] : []),
     ...(wa && p.s.owes > 0 ? [{ label: 'Share statement', href: `${wa}?text=${encodeURIComponent(statement(p))}` }] : []),
     { label: 'Edit details', onClick: onEdit, sep: true },
     ...(p.twice ? [{ label: 'Combine with…', onClick: onCombine }] : []),
@@ -85,7 +87,8 @@ const CustomerDetail: React.FC<Props> = ({ p, onBack, onEdit, onDelete, onCombin
         </div>
         <div className="pp-tiles">
           {tiles.map(t => (
-            <div key={t.label} className={`pp-tile${'red' in t ? ' red' : ''}`}><small>{t.label}</small><b>{t.value}</b><span>{t.note}</span></div>
+            <div key={t.label} className={`pp-tile${'red' in t ? ' red' : ''}`}><small>{t.label}</small><b>{t.value}</b><span>{t.note}</span>
+              {'red' in t && p.phone && <button type="button" onClick={onCredit} style={{ border: 'none', background: 'none', padding: 0, minHeight: 32, textAlign: 'left', color: '#8A4B00', fontWeight: 600, fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline' }}>Open credit account ›</button>}</div>
           ))}
         </div>
         {stale && (

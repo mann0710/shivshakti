@@ -1,8 +1,10 @@
 import type { Booking, Invoice, Payment } from '../types';
+import type { CreditEntry } from './credit/types';
+import { accountMoney } from './credit/accounts';
 import type { SeasonalOrder } from '../hooks/useSeasonalOrders';
 import type { SeasonalPreorder } from '../hooks/useSeasonalPreorders';
 import { Range, addDays, inRange } from './reports/model';
-import { billPayments, preorderPayments } from './payments';
+import { billPayments, preorderPayments, isMoney } from './payments';
 import { billDue, bookingDue, isCancelled } from './dues';
 import { handedOverOn, istDay } from './preorders';
 import { billNumber } from './receipt';
@@ -52,6 +54,7 @@ export interface MoneyData {
   quotes: QuoteLite[];
   orders: SeasonalOrder[];
   preorders: SeasonalPreorder[];
+  credit?: CreditEntry[]; // old balances paid back and advances kept
 }
 
 export type Source = 'catering' | 'sweets';
@@ -71,15 +74,18 @@ export function receiptsIn(d: MoneyData, r: Range): Receipt[] {
     return { key: p.id, day: p.payment_date, source: 'catering', mode: MODE[p.payment_mode] ?? 'cash', amount: Number(p.amount) || 0,
       who: inv.booking?.customer?.name ?? 'Customer', what: `${p.payment_type === 'advance' ? 'advance' : 'payment'} for ${inv.booking?.event_type ?? 'event'} (${inv.invoice_number})` };
   });
-  const bills = d.orders.filter(o => !isCancelled(o)).flatMap(o => billPayments(o).map((p, i): Receipt => ({
+  const bills = d.orders.filter(o => !isCancelled(o)).flatMap(o => billPayments(o).filter(isMoney).map((p, i): Receipt => ({
     key: `${o.id}-${i}`, day: istDay(p.at), source: 'sweets', mode: p.mode, amount: p.amount, who: o.customer_name,
     what: `bill #${billNumber(o.bill_no, o.id)}${p.kind === 'refund' ? ' refund' : p.kind === 'due' ? ' (due paid)' : ''}`,
   })));
-  const pre = d.preorders.filter(p => p.status !== 'cancelled' || p.payments?.length).flatMap(p => preorderPayments(p).map((x, i): Receipt => ({
+  const pre = d.preorders.filter(p => p.status !== 'cancelled' || p.payments?.length).flatMap(p => preorderPayments(p).filter(isMoney).map((x, i): Receipt => ({
     key: `${p.id}-${i}`, day: istDay(x.at), source: 'sweets', mode: x.mode, amount: x.amount, who: p.customer_name,
     what: `${firstItem(p.items)} pre-booking${x.kind === 'refund' ? ' refund' : x.kind === 'handover' ? ' at hand-over' : ''}`,
   })));
-  return [...catering, ...bills, ...pre].filter(x => x.amount !== 0 && inRange(x.day, r)).sort((a, b) => b.day.localeCompare(a.day));
+  const kept = accountMoney(d.credit ?? []).flatMap((k, n) => k.payments.map((x, i): Receipt => ({
+    key: `credit-${n}-${i}`, day: istDay(x.at), source: 'sweets', mode: x.mode, amount: x.amount, who: 'Credit', what: 'old balance or advance (credit)',
+  })));
+  return [...catering, ...bills, ...pre, ...kept].filter(x => x.amount !== 0 && inRange(x.day, r)).sort((a, b) => b.day.localeCompare(a.day));
 }
 
 export const sumOf = <T,>(list: T[], f: (x: T) => number) => roundMoney(list.reduce((s, x) => s + (Number(f(x)) || 0), 0));

@@ -51,6 +51,8 @@ export function needsYou(input: {
   preorders: Pre[];
   outOfStep: number; today: string;
   reminders?: DocSettings['reminders'];
+  // Credit customers to follow up today; when given, it replaces the per-bill unpaid rows.
+  credit?: { count: number; owed: number; broken: string[] };
 }): NeedItem[] {
   const { bookings, quotes, invoices, unpaidBills, preorders, today } = input;
   const r = input.reminders ?? DEFAULT_DOC_SETTINGS.reminders;
@@ -82,7 +84,11 @@ export function needsYou(input: {
     if (q.status === 'sent') items.push({ key: q.id, tone: 'purple', page: 'quotations', action: 'Follow up', title: `${nameOf(b)}, ${nice(b.event_date)}: waiting for a reply`, line: `${q.quotation_number} · ${range} · sent` });
     else if (daysBetween(today, b.event_date) <= 45) items.push({ key: q.id, tone: 'amber', page: 'quotations', action: 'Send quote', title: `${nameOf(b)}'s quote is still a draft`, line: `${q.quotation_number} · ${b.event_type} ${nice(b.event_date)}, in ${daysBetween(today, b.event_date)} days · ${range}` });
   });
-  unpaidBills.forEach((u, i) => r.sweets_unpaid.on && daysBetween(u.at.slice(0, 10), today) >= r.sweets_unpaid.days && items.push({ key: `bill-${i}`, tone: 'red', page: 'seasonal_billing', action: 'Collect', title: `${u.name} owes ${inr(u.total)} for sweets`, line: `Unpaid since ${nice(u.at.slice(0, 10))}` }));
+  const c = input.credit;
+  if (c && c.count && r.sweets_unpaid.on) items.push({ key: 'credit', tone: 'red', page: 'seasonal_billing', action: 'Open Credit',
+    title: `Follow up on credit · ${c.count} customer${c.count === 1 ? '' : 's'}`,
+    line: [inr(c.owed), c.broken.length ? `${c.broken[0]} missed a promise${c.broken.length > 1 ? ` (+${c.broken.length - 1})` : ''}` : ''].filter(Boolean).join(' · ') });
+  if (!c) unpaidBills.forEach((u, i) => r.sweets_unpaid.on && daysBetween(u.at.slice(0, 10), today) >= r.sweets_unpaid.days && items.push({ key: `bill-${i}`, tone: 'red', page: 'seasonal_billing', action: 'Collect', title: `${u.name} owes ${inr(u.total)} for sweets`, line: `Unpaid since ${nice(u.at.slice(0, 10))}` }));
   // One tidy-up row per screen that fixes it.
   const n = todo.past.length, odd = input.outOfStep;
   if (n) items.push({ key: 'tidy', tone: 'grey', page: 'billing', action: 'Tidy up', title: `${n} past event${n === 1 ? ' has' : 's have'} no invoice`, line: 'Invoice or settle them so Money adds up' });

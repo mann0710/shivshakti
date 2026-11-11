@@ -30,6 +30,12 @@ export interface PosForm {
   advance_mode: PayMode;
   notes: string;
   lines: CartLine[];
+  // Credit: pay-by date, money paid now and how, advance with us to use, and why the owner allowed it.
+  pay_by?: string;
+  credit_now?: string;
+  credit_mode?: PayMode;
+  use_advance?: number;
+  override?: string;
 }
 
 export const WALK_IN = 'Walk-in';
@@ -68,6 +74,16 @@ export const formFromPreorder = (p: SeasonalPreorder): PosForm => ({
   advance_mode: p.payment_mode ?? 'cash', notes: p.notes ?? '', lines: p.items,
 });
 
+// Credit: whatever is paid now, by cash or UPI; the rest goes on the account.
+function creditNow(due: number, f: PosForm): CounterPay {
+  const now = Math.min(due, Math.max(0, Number(f.credit_now) || 0));
+  return f.credit_mode === 'upi' ? { cash: 0, upi: now, tendered: 0, change: 0 } : { cash: now, upi: 0, tendered: 0, change: 0 };
+}
+
+// What goes on credit once the part paid now and any advance are taken off.
+export const creditPart = (f: PosForm, t: Totals) =>
+  f.mode === 'bill' && f.payment === 'unpaid' ? Math.max(0, roundMoney(t.due - t.pay.cash - t.pay.upi - (f.use_advance ?? 0))) : 0;
+
 export interface Totals {
   subtotal: number; discount: number; total: number; advance: number; balance: number;
   due: number;      // bill: to pay now
@@ -83,7 +99,8 @@ export function totalsOf(f: PosForm): Totals {
   const advance = f.mode === 'preorder' ? Math.max(0, Number(f.advance) || 0) : 0;
   const before = f.mode === 'bill' ? f.paid_before ?? 0 : 0;
   const due = Math.max(0, roundMoney(total - before));
-  const pay = f.mode === 'bill' ? splitPay(f.payment, due, f.cash_part, f.received) : splitPay('unpaid', 0, '', '');
+  const pay = f.mode !== 'bill' ? splitPay('unpaid', 0, '', '')
+    : f.payment === 'unpaid' ? creditNow(due, f) : splitPay(f.payment, due, f.cash_part, f.received);
   return {
     subtotal, discount, total, advance,
     balance: Math.max(0, total - advance),
@@ -96,7 +113,7 @@ export function validate(f: PosForm, t: Totals): string | null {
   if (!f.lines.length) return 'Add at least one item';
   const named = f.customer_name.trim();
   if (f.phone.trim() && !isValidPhone(f.phone)) return 'Phone must be a 10-digit mobile number';
-  if (f.mode === 'bill' && f.payment === 'unpaid' && t.due > 0 && (!named || !f.phone.trim())) return 'Unpaid bills need the customer name and phone';
+  if (f.mode === 'bill' && f.payment === 'unpaid' && t.due > 0 && (!named || !f.phone.trim())) return 'Credit needs the customer name and mobile';
   if (f.mode === 'bill' && f.payment === 'split' && t.due > 0 && t.pay.cash <= 0) return 'Type the cash part, or choose UPI';
   if (f.mode === 'preorder') {
     if (!named || !f.phone.trim()) return 'Pre-bookings need the customer name and phone';
@@ -124,8 +141,11 @@ const nowIso = () => new Date().toISOString();
 
 // New bill, or an edit on top of what was already paid (extra collected or change handed back).
 export function toOrderPayload(f: PosForm, t: Totals, year: number, prior: Payment[] = [], at = nowIso()): SeasonalOrderPayload {
-  const payments = [...prior, ...payEntries(t.pay, at), ...(t.refund > 0 ? refundEntries(prior, t.refund, at) : [])];
-  return { ...common(f, t), ...billLedger(t.total, payments), year };
+  const fromAdvance = f.mode === 'bill' && f.payment === 'unpaid' ? Math.min(f.use_advance ?? 0, Math.max(0, t.due - t.pay.cash - t.pay.upi)) : 0;
+  const payments = [...prior, ...payEntries(t.pay, at), ...(t.refund > 0 ? refundEntries(prior, t.refund, at) : []),
+    ...(fromAdvance > 0 ? [{ amount: fromAdvance, mode: 'cash' as const, at, kind: 'from_advance' as const }] : [])];
+  const ledger = billLedger(t.total, payments);
+  return { ...common(f, t), ...ledger, ...(!ledger.is_paid && f.pay_by ? { due_date: f.pay_by } : {}), year };
 }
 
 export function toPreorderPayload(f: PosForm, t: Totals, year: number, prior: Payment[] = [], at = nowIso()): SeasonalPreorderPayload {

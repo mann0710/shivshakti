@@ -1,4 +1,6 @@
 import React, { useMemo } from 'react';
+import { useCreditEntries } from '../../hooks/useCredit';
+import { accountMoney } from '../../lib/credit/accounts';
 import toast from 'react-hot-toast';
 import NoteCounter from './NoteCounter';
 import { useDayCloses, useCloseDay, useReopenDay } from './useDayCloses';
@@ -31,13 +33,15 @@ const DayCloseTab: React.FC = () => {
   const { data: closes = [], isLoading } = useDayCloses(ready);
   const { data: orders = [] } = useSeasonalOrders();
   const { data: preorders = [] } = useSeasonalPreorders();
+  const { data: credit = [] } = useCreditEntries();
+  const accounts = useMemo(() => accountMoney(credit), [credit]);
   const closeDay = useCloseDay();
   const reopen = useReopenDay();
   const { confirm, dialog } = useConfirm();
   const [stored, setStored] = useStoredState<Draft>('sessional-dayclose-draft', () => emptyDraft());
 
   const win = useMemo(() => openWindow(closes, new Date()), [closes]);
-  const sum = useMemo(() => summarize(orders, preorders, win.from, new Date().toISOString()), [orders, preorders, win.from]);
+  const sum = useMemo(() => summarize(orders, preorders, win.from, new Date().toISOString(), accounts), [orders, preorders, win.from, accounts]);
   const draft = stored.day === win.day ? stored : emptyDraft(win.day);
   const set = (patch: Partial<Draft>) => setStored({ ...draft, ...patch, day: win.day });
 
@@ -56,7 +60,7 @@ const DayCloseTab: React.FC = () => {
   const close = async () => {
     if (!counted && !(await confirm({ title: 'Drawer not counted', message: 'Count the notes first, or close with ₹0 counted?', confirmLabel: 'Close anyway' }))) return;
     const at = new Date().toISOString();
-    const row = buildClose(win, summarize(orders, preorders, win.from, at), { opening, cashOut, cashOutNote: draft.cashOutNote, notes: draft.notes, keep, note: draft.note }, at);
+    const row = buildClose(win, summarize(orders, preorders, win.from, at, accounts), { opening, cashOut, cashOutNote: draft.cashOutNote, notes: draft.notes, keep, note: draft.note }, at);
     try {
       await closeDay.mutateAsync(row);
       printHtml(dayCloseSlipHtml(row));
