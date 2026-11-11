@@ -1,10 +1,10 @@
 import { inr } from '../money';
 import { istDay } from '../preorders';
 import { Report, sumBy, groupBy, share, showDay } from './model';
-import { ReportInput, occasionNote } from './input';
-import { Sale, salesOf, live } from './sales';
+import { ReportInput, occasionNote, leftOut, cancelledBillsIn } from './input';
+import { Sale, salesOf } from './sales';
 
-// When people buy (hour and weekday), and what did not come in (discounts, cancellations, take-backs).
+// When people buy (hour and weekday), and what did not come in (discounts, take-backs, credit let go).
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const istHour = (iso: string) => Number(new Date(iso).toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' })) % 24;
@@ -12,7 +12,7 @@ const hourLabel = (h: number) => { const f = (n: number) => `${n % 12 || 12}${n 
 const weekday = (day: string) => new Date(`${day}T12:00:00Z`).getUTCDay();
 
 export function hoursReport(inp: ReportInput): Report {
-  const bills = live(salesOf(inp, inp.range)).filter(s => s.kind === 'bill');
+  const bills = salesOf(inp, inp.range).filter(s => s.kind === 'bill');
   const total = sumBy(bills, s => s.total);
   const hours = Array.from(groupBy(bills, s => String(istHour(s.at))), ([h, list]) => ({ h: Number(h), bills: list.length, sales: sumBy(list, s => s.total) }))
     .sort((a, b) => a.h - b.h).map(r => ({ hour: hourLabel(r.h), bills: r.bills, sales: r.sales, avg: Math.round(r.sales / r.bills), share: share(r.sales, total), h: r.h }));
@@ -43,33 +43,29 @@ export function hoursReport(inp: ReportInput): Report {
 }
 
 export function discountsReport(inp: ReportInput): Report {
-  const all = salesOf(inp, inp.range);
-  const ok = live(all);
+  const ok = salesOf(inp, inp.range);
   const off = ok.filter(s => s.discount > 0);
-  const gone = all.filter(s => s.cancelled);
-  const back = all.flatMap(s => s.payments.filter(p => p.kind === 'refund').map(p => ({ s, p })));
-  const letGo = all.flatMap(s => s.payments.filter(p => p.kind === 'writeoff').map(p => ({ s, p })));
+  const back = ok.flatMap(s => s.payments.filter(p => p.kind === 'refund').map(p => ({ s, p })));
+  const letGo = ok.flatMap(s => s.payments.filter(p => p.kind === 'writeoff').map(p => ({ s, p })));
   const gross = sumBy(ok, s => s.subtotal);
   const row = (s: Sale, what: string, amount: number, why: string, at = s.at) => ({ day: showDay(istDay(at)), at, no: s.no, name: s.name, what, amount, why });
   const rows = [
-    ...gone.map(s => row(s, 'Cancelled', s.total, s.reason || '—')),
-    ...back.map(({ s, p }) => row(s, s.cancelled ? 'Refund on cancel' : 'Take-back', Math.abs(p.amount), `Handed back by ${p.mode === 'upi' ? 'UPI' : 'cash'}`, p.at)),
+    ...back.map(({ s, p }) => row(s, 'Take-back', Math.abs(p.amount), `Handed back by ${p.mode === 'upi' ? 'UPI' : 'cash'}`, p.at)),
     ...letGo.map(({ s, p }) => row(s, 'Credit let go', p.amount, p.note ?? '—', p.at)),
     ...off.map(s => row(s, `Discount ${s.subtotal ? Math.round((s.discount / s.subtotal) * 1000) / 10 : 0}%`, s.discount, '—')),
   ].sort((a, b) => b.at.localeCompare(a.at));
   return {
-    title: 'Discounts & cancellations',
-    note: `Money that did not come in, and why${occasionNote(inp)}.`,
+    title: 'Discounts & take-backs',
+    note: `Money that did not come in on sales, and why${occasionNote(inp)}${leftOut(cancelledBillsIn(inp))}.`,
     stats: [
       { label: 'Discounts', value: sumBy(off, s => s.discount), fmt: 'money', sub: `${off.length} sales · ${share(sumBy(off, s => s.discount), gross)}% of gross`, tone: off.length ? 'warn' : 'good' },
-      { label: 'Cancelled', value: sumBy(gone, s => s.total), fmt: 'money', sub: `${gone.length} bills`, tone: gone.length ? 'bad' : 'good' },
-      { label: 'Handed back', value: Math.abs(sumBy(back, x => x.p.amount)), fmt: 'money', sub: `${back.length} refunds` },
+      { label: 'Handed back', value: Math.abs(sumBy(back, x => x.p.amount)), fmt: 'money', sub: `${back.length} take-backs` },
       { label: 'Credit let go', value: sumBy(letGo, x => x.p.amount), fmt: 'money', sub: `${letGo.length} entries` },
     ],
     tables: [{
-      title: 'Every discount, cancellation and refund',
+      title: 'Every discount and take-back',
       cols: [{ key: 'day', label: 'Date' }, { key: 'no', label: 'Bill' }, { key: 'name', label: 'Customer' }, { key: 'what', label: 'What' }, { key: 'amount', label: 'Amount', fmt: 'money' }, { key: 'why', label: 'Reason / how' }],
-      rows, empty: 'No discounts, cancellations or refunds in this period.',
+      rows, empty: 'No discounts or take-backs in this period.',
     }],
   };
 }

@@ -103,6 +103,26 @@ describe('pipeline reports', () => {
     expect(r.stats[0].value).toBe(2200);
     expect(r.tables[2].rows).toEqual([{ name: 'Kaju Katli', qty: '1 kg', packs: 2 }, { name: 'Modak', qty: '6 pcs', packs: 1 }]);
   });
+  it('places a booking on its hand-over day first, else its due date', () => {
+    // Due in October but handed over in November: November's, not October's.
+    const late = pre({ id: 'p5xxxxxx', status: 'delivered', delivery_date: '2026-10-30', delivered_at: '2026-11-02T06:00:00Z', advance_paid: 1100 });
+    const open = pre({ id: 'p6xxxxxx', delivery_date: '2026-10-05' });
+    const oct = preorderReport(input({ preorders: [late, open] as any }));
+    expect(oct.tables[3].rows).toEqual([expect.objectContaining({ due: '05 Oct 2026', given: '—' })]);
+    const nov = preorderReport(input({ range: { from: '2026-11-01', to: '2026-11-30' }, preorders: [late, open] as any }));
+    expect(nov.tables[3].rows).toEqual([expect.objectContaining({ due: '30 Oct 2026', given: '02 Nov 2026' })]);
+    expect(nov.tables[1].rows[0].day).toBe('02 Nov 2026');
+  });
+  it('leaves cancelled pre-bookings and events out of every row and total', () => {
+    const p = preorderReport(input({ preorders: [...input().preorders, pre({ id: 'p4xxxxxx', status: 'delivered', cancelled_at: '2026-10-26T06:00:00Z' })] as any }));
+    expect(p.tables[0].total).toMatchObject({ n: 2, value: 2200 });
+    expect(p.tables[3].rows.map(x => x.status)).not.toContain('Cancelled');
+    expect(p.note).toContain('2 cancelled left out');
+    const ev = (id: string, status: string) => ({ id, customer: { name: 'K' }, event_type: 'Wedding', event_date: '2026-10-28', guest_count: 100, status });
+    const c = cateringReport(input({ bookings: [ev('e1', 'confirmed'), ev('e2', 'cancelled')] as any, bookingValue: () => 1000 }));
+    expect(c.tables[0].rows).toHaveLength(1);
+    expect(c.note).toContain('1 cancelled left out');
+  });
   it('values catering events in the period', () => {
     const b = { id: 'e1', customer_id: 'c1', customer: { name: 'Kavit' }, event_type: 'Wedding', event_date: '2026-10-28', guest_count: 200, status: 'confirmed', estimated_cost: 0 };
     const inv = { booking_id: 'e1', total_amount: 50000, advance_paid: 20000, balance_due: 30000 };

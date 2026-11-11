@@ -5,7 +5,7 @@ import type { SeasonalItem } from '../itemCatalog';
 import type { Booking, Invoice, Payment } from '../../types';
 import { nameKey } from '../itemCatalog';
 import { handedOverOn, istDay } from '../preorders';
-import { billDue, isCancelled } from '../dues';
+import { billDue, billPaid, isCancelled, isCancelledBooking } from '../dues';
 import { Range, inRange } from './model';
 import type { CreditEntry } from '../credit/types';
 
@@ -32,11 +32,19 @@ export const UNCATEGORISED = 'Uncategorised';
 const byOccasion = (inp: ReportInput) => <T extends { occasion_id?: string }>(list: T[]) =>
   inp.occasionId ? list.filter(x => x.occasion_id === inp.occasionId) : list;
 
-// Bills made in the range; cancelled ones keep their number but are not sales.
-export const billsIn = (inp: ReportInput) => byOccasion(inp)(inp.orders.filter(o => !isCancelled(o) && inRange(istDay(o.created_at), inp.range)));
-export const preordersOf = (inp: ReportInput) => byOccasion(inp)(inp.preorders);
-export const ordersOf = (inp: ReportInput) => byOccasion(inp)(inp.orders);
+// Reports never show cancelled bills or bookings; deleted ones are already gone (recycle bin).
+export const liveBills = (inp: ReportInput) => byOccasion(inp)(inp.orders.filter(o => !isCancelled(o)));
+export const billsIn = (inp: ReportInput) => liveBills(inp).filter(o => inRange(istDay(o.created_at), inp.range));
+export const preordersOf = (inp: ReportInput) => byOccasion(inp)(inp.preorders.filter(p => !isCancelledBooking(p)));
+export const cancelledBookingsOf = (inp: ReportInput) => byOccasion(inp)(inp.preorders.filter(isCancelledBooking));
+// Money only: a cancelled bill counts just when some of its money was kept.
+export const ordersOf = (inp: ReportInput) => byOccasion(inp)(inp.orders.filter(o => !isCancelled(o) || billPaid(o) > 0));
 export const unpaidOf = (inp: ReportInput) => byOccasion(inp)(inp.unpaidOrders.filter(o => billDue(o) > 0));
+
+// "· 2 cancelled left out" for a report note.
+export const leftOut = (n: number) => (n ? ` · ${n} cancelled left out` : '');
+export const cancelledBillsIn = (inp: ReportInput) =>
+  byOccasion(inp)(inp.orders.filter(o => isCancelled(o) && inRange(istDay(o.created_at), inp.range))).length;
 
 // Pre-bookings count as sales on the day they are handed over.
 export const handedOverIn = (inp: ReportInput) => preordersOf(inp).filter(p => inRange(handedOverOn(p), inp.range));

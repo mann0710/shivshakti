@@ -30,6 +30,9 @@ export const FULFILLMENT_LABEL: Record<Fulfillment, string> = { pickup: 'Pickup'
 export const handedOverOn = (p: SeasonalPreorder): string | null =>
   p.status !== 'delivered' ? null : p.delivered_at ? istDay(p.delivered_at) : p.delivery_date ?? istDay(p.created_at);
 
+// The day a booking belongs to in reports: hand-over day takes precedence, else its due date, else the day it was booked.
+export const bookingDay = (p: SeasonalPreorder): string => handedOverOn(p) ?? p.delivery_date ?? istDay(p.created_at);
+
 export const istDay = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
 export const modeLabel = (m?: string | null) =>

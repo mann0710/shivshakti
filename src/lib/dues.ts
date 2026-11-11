@@ -6,6 +6,7 @@ import { cleanPhone } from './money';
 import { roundMoney } from './units';
 
 export const isCancelled = (o: Pick<SeasonalOrder, 'cancelled_at'>) => !!o.cancelled_at;
+export const isCancelledBooking = (p: Pick<SeasonalPreorder, 'status' | 'cancelled_at'>) => p.status === 'cancelled' || !!p.cancelled_at;
 export const billPaid = (o: SeasonalOrder) => paidOf(billPayments(o));
 export const billDue = (o: SeasonalOrder) => (isCancelled(o) ? 0 : dueOf(o.total_amount, billPayments(o)));
 // A handed-over booking that was not fully paid; open bookings are tracked on the Pre-bookings tab.

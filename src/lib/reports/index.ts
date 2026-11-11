@@ -21,7 +21,7 @@ export const REPORTS: ReportDef[] = [
   { id: 'categories', label: 'Categories', icon: '🗂', build: categoryReport, ranged: true },
   { id: 'customers', label: 'Customers', icon: '👥', build: customersReport, ranged: true },
   { id: 'hours', label: 'Time of day', icon: '🕒', build: hoursReport, ranged: true },
-  { id: 'discounts', label: 'Discounts & cancellations', icon: '✂', build: discountsReport, ranged: true },
+  { id: 'discounts', label: 'Discounts & take-backs', icon: '✂', build: discountsReport, ranged: true },
   { id: 'payments', label: 'Payments', icon: '💳', build: paymentsReport, ranged: true },
   { id: 'preorders', label: 'Pre-bookings', icon: '📋', build: preorderReport, ranged: true },
   { id: 'credit', label: 'Credit', icon: '🧾', build: creditReport, ranged: true },

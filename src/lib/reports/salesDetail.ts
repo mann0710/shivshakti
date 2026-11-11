@@ -2,8 +2,8 @@ import { inr } from '../money';
 import { formatSize } from '../units';
 import { formatPhone } from '../people';
 import { Report, Row, sumBy, groupBy, bucketOf, showDay, rangeLabel } from './model';
-import { ReportInput, occasionNote } from './input';
-import { Sale, salesOf, live, itemTotals, qtyOf, customerKey, totalsOf, Totals, previousRange, lastYearRange, change } from './sales';
+import { ReportInput, occasionNote, leftOut, cancelledBillsIn } from './input';
+import { Sale, salesOf, itemTotals, qtyOf, customerKey, totalsOf, Totals, previousRange, lastYearRange, change } from './sales';
 
 // Detailed sales: summary with comparisons, the bill register and per-customer sales.
 
@@ -16,7 +16,7 @@ type Metric = [label: string, pick: (t: Totals) => number, show: 'money' | 'int'
 const METRICS: Metric[] = [
   ['Gross sales (before discounts)', t => t.gross, 'money'], ['Discounts', t => t.discount, 'money'], ['Net sales', t => t.net, 'money'],
   ['Sales (bills + pre-bookings)', t => t.sales, 'int'], ['Average bill', t => t.avg, 'money'], ['Items a bill', t => t.items, 'int'],
-  ['Quantity sold', () => 0, t => t.qty || '—'], ['Cancelled bills', t => t.cancelledValue, t => `${t.cancelled} · ${inr(t.cancelledValue)}`],
+  ['Quantity sold', () => 0, t => t.qty || '—'],
   ['Handed back (take-backs)', t => t.refunds, 'money'], ['Cash at the sale', t => t.cash, 'money'], ['UPI at the sale', t => t.upi, 'money'],
   ['Left on credit', t => t.credit, 'money'],
 ];
@@ -31,7 +31,7 @@ export function summaryReport(inp: ReportInput): Report {
   const vs = (n: number, t?: Totals, pick?: (t: Totals) => number) => (t && pick ? change(n, pick(t)) : '');
   return {
     title: 'Sales summary',
-    note: `${note(inp)}${prev ? ` · compared with ${rangeLabel(prevR)} and ${rangeLabel(lastR)}` : ''}`,
+    note: `${note(inp)}${leftOut(cancelledBillsIn(inp))}${prev ? ` · compared with ${rangeLabel(prevR)} and ${rangeLabel(lastR)}` : ''}`,
     stats: [
       { label: 'Net sales', value: now.net, fmt: 'money', sub: prev ? `${vs(now.net, prev, t => t.net) || 'no sales'} vs previous period` : undefined, tone: prev && now.net < prev.net ? 'bad' : 'good' },
       { label: 'Sales', value: now.sales, fmt: 'int', sub: `avg bill ${inr(now.avg)}${prev ? ` · ${vs(now.avg, prev, t => t.avg) || '—'}` : ''}` },
@@ -52,16 +52,15 @@ export function summaryReport(inp: ReportInput): Report {
 }
 
 export function registerReport(inp: ReportInput): Report {
-  const list = salesOf(inp, inp.range);
-  const ok = live(list);
+  const ok = salesOf(inp, inp.range);
   const row = (s: Sale): Row => ({
-    day: showDay(s.day), time: s.kind === 'bill' ? time(s.at) : '', no: s.no, name: s.name, items: itemsText(s), qty: qtyOf(itemTotals([s])),
-    discount: s.discount || null, total: s.total, paid: s.paid, due: s.due || null, mode: s.cancelled ? '—' : s.mode,
-    status: s.cancelled ? `Cancelled${s.reason ? ` · ${s.reason}` : ''}` : s.kind === 'booking' ? 'Pre-booking given' : 'Given',
+    day: showDay(s.day), dueDay: s.dueDay ? showDay(s.dueDay) : '', time: s.kind === 'bill' ? time(s.at) : '', no: s.no, name: s.name, items: itemsText(s), qty: qtyOf(itemTotals([s])),
+    discount: s.discount || null, total: s.total, paid: s.paid, due: s.due || null, mode: s.mode,
+    status: s.kind === 'booking' ? 'Pre-booking given' : 'Given',
   });
   return {
     title: 'Bill register',
-    note: `Every sale in the period, newest first. ${note(inp)}; cancelled bills are listed but not added up.`,
+    note: `Every sale in the period, newest first. ${note(inp)}${leftOut(cancelledBillsIn(inp))}`,
     stats: [
       { label: 'Sales', value: ok.length, fmt: 'int', sub: `${ok.filter(s => s.kind === 'bill').length} bills · ${ok.filter(s => s.kind === 'booking').length} pre-bookings` },
       { label: 'Total', value: sumBy(ok, s => s.total), fmt: 'money' },
@@ -70,10 +69,10 @@ export function registerReport(inp: ReportInput): Report {
     ],
     tables: [{
       title: 'Sales',
-      cols: [{ key: 'day', label: 'Date' }, { key: 'time', label: 'Time' }, { key: 'no', label: 'Bill' }, { key: 'name', label: 'Customer' }, { key: 'items', label: 'Items' },
+      cols: [{ key: 'day', label: 'Date' }, { key: 'dueDay', label: 'Due date' }, { key: 'time', label: 'Time' }, { key: 'no', label: 'Bill' }, { key: 'name', label: 'Customer' }, { key: 'items', label: 'Items' },
         { key: 'qty', label: 'Qty' }, { key: 'discount', label: 'Discount', fmt: 'money' }, { key: 'total', label: 'Total', fmt: 'money' }, { key: 'paid', label: 'Paid', fmt: 'money' },
         { key: 'due', label: 'Due', fmt: 'money' }, { key: 'mode', label: 'Paid by' }, { key: 'status', label: 'Status' }],
-      rows: list.map(row),
+      rows: ok.map(row),
       total: { day: `Total · ${ok.length} sales`, qty: qtyOf(itemTotals(ok)), discount: sumBy(ok, s => s.discount), total: sumBy(ok, s => s.total), paid: sumBy(ok, s => s.paid), due: sumBy(ok, s => s.due) },
       empty: 'No sales in this period.',
     }],
@@ -81,7 +80,7 @@ export function registerReport(inp: ReportInput): Report {
 }
 
 export function customersReport(inp: ReportInput): Report {
-  const ok = live(salesOf(inp, inp.range));
+  const ok = salesOf(inp, inp.range);
   const rows = Array.from(groupBy(ok, customerKey), ([key, list]) => {
     const days = list.map(s => s.day).sort();
     const named = list.find(s => s.phone) ?? list[0];
@@ -116,7 +115,7 @@ export function customersReport(inp: ReportInput): Report {
 
 // Quantity of each sweet per day (per month for long periods), with the total and sales.
 export function itemDayReport(inp: ReportInput): Report {
-  const ok = live(salesOf(inp, inp.range));
+  const ok = salesOf(inp, inp.range);
   const b = bucketOf(inp.range);
   const keys = Array.from(new Set(ok.map(s => b.key(s.day)))).sort();
   const items = itemTotals(ok).sort((x, y) => y.revenue - x.revenue);

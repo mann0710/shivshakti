@@ -148,18 +148,18 @@ The grid-and-bill layout follows NodeDR POS.
   - status flow: Pending → Confirmed → Packed → Handed over (or Cancelled);
   - Open / Due by tomorrow / Done / All filters, search, overdue highlighting;
   - a **kitchen prep list** (each sweet still to make per date: packs as size × count, e.g. *1 kg × 20 + 500 g × 1*, and the total; printable).
-- **Reports tab:** pick a period (Today, Yesterday, Last 7 days, This month, Last month, This FY, This year or any from–to dates) and an occasion. Every report has headline numbers, tables with totals, an empty state, **Print / PDF** (A4, the print dialog saves as PDF) and **CSV / Excel**.
-  - **Summary:** gross, discounts, net, number of sales, average bill, items a bill, quantity, cancelled bills, take-backs, cash / UPI at the sale and what was left on credit, each **compared with the same number of days just before and the same dates last year** (`lib/reports/sales.ts`, `salesDetail.ts`);
-  - **Bill register:** every bill and handed-over pre-booking, newest first: date, time, bill, customer, items, quantity, discount, total, paid, due, paid by, status (cancelled ones listed with their reason but not added up);
+- **Reports tab:** pick a period (Today, Yesterday, Last 7 days, This month, Last month, This FY, This year or any from–to dates) and an occasion. Every report has headline numbers, tables with totals, an empty state, **Print / PDF** (A4, the print dialog saves as PDF) and **CSV / Excel**. Cancelled bills, cancelled pre-bookings and cancelled catering events are never in a report's rows or totals (the note says "N cancelled left out"); deleted ones are in the recycle bin, not the tables. One exception: money kept on a cancelled bill (not refunded) still counts in **Payments**, since it was received. A pre-booking belongs to its **hand-over day**; one not handed over yet goes by its due date (`bookingDay` in `lib/preorders.ts`), so Sales and Pre-bookings agree. The Bill register and the bookings list show both dates (`liveBills`, `preordersOf`, `ordersOf` in `lib/reports/input.ts`; `isCancelledBooking` in `lib/dues.ts`).
+  - **Summary:** gross, discounts, net, number of sales, average bill, items a bill, quantity, take-backs, cash / UPI at the sale and what was left on credit, each **compared with the same number of days just before and the same dates last year** (`lib/reports/sales.ts`, `salesDetail.ts`);
+  - **Bill register:** every bill and handed-over pre-booking, newest first: date, time, bill, customer, items, quantity, discount, total, paid, due, paid by, status;
   - **Item × day:** quantity of each sweet per day (per month for periods over two months), with totals and sales; busiest day, top and slowest item;
   - **Customers:** every customer (matched by mobile; walk-ins as one row): sales, quantity, amount, average bill, first and last visit, paid, due; how many came back;
   - **Time of day:** counter bills by IST hour and by weekday (average a day), busiest and quietest hour, average bill after 6 PM (`salesTime.ts`);
-  - **Discounts & cancellations:** every discount (with %), cancelled bill (with reason), refund / take-back and credit let go;
+  - **Discounts & take-backs:** every discount (with %), take-back and credit let go;
   - **Sales:** counter bills + pre-bookings handed over, day by day (month by month for long periods), by occasion, unpaid bills;
   - **Items:** item-wise packs, quantity (kg / ltr / pcs) and revenue with share, plus sales by pack size;
   - **Categories:** the same by category (set in Sessional Items);
   - **Payments:** money received by mode (Cash / UPI / bank / cheque) from counter bills, pre-booking advances, hand-over balances and catering payments, day by day;
-  - **Pre-bookings:** due in the period by status and date (pickup vs delivery), what is still to make, every booking with paid and balance;
+  - **Pre-bookings:** bookings in the period by status and date (pickup vs delivery), what is still to make, every booking with its due date, hand-over date, paid and balance;
   - **Dues:** everything still to collect as of today: unpaid bills (with age), pre-booking balances, catering invoice balances;
   - **Catering:** events in the period with value, invoiced, paid, balance, by event type and status;
   - **Top:** top 10 items, sweets customers and catering customers;

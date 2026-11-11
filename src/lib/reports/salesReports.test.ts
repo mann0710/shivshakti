@@ -26,7 +26,7 @@ const input = (o: Partial<ReportInput> = {}): ReportInput => ({
 describe('sales building blocks', () => {
   it('turns bills into sales and adds up a period', () => {
     const t = totalsOf(salesOf(input(), input().range));
-    expect(t).toMatchObject({ gross: 2080, discount: 80, net: 2000, sales: 3, avg: 667, cancelled: 1, cancelledValue: 980, refunds: 980, cash: 1380, upi: 120, credit: 500 });
+    expect(t).toMatchObject({ gross: 2080, discount: 80, net: 2000, sales: 3, avg: 667, refunds: 0, cash: 1380, upi: 120, credit: 500 });
     expect(t.qty).toBe('2 kg, 6 pcs');
   });
   it('finds the period before and the same dates last year', () => {
@@ -42,10 +42,11 @@ describe('detailed sales reports', () => {
     const net = r.tables[0].rows.find(x => x.m === 'Net sales')!;
     expect(net).toMatchObject({ now: '₹2,000', prev: '₹980', pc: '+104%', last: '₹0', lc: '' });
   });
-  it('lists every bill, cancelled ones without adding them', () => {
+  it('lists every live sale and leaves cancelled bills out', () => {
     const r = registerReport(input());
-    expect(r.tables[0].rows).toHaveLength(4);
-    expect(r.tables[0].rows[0].status).toBe('Cancelled · Wrong item');
+    expect(r.tables[0].rows).toHaveLength(3);
+    expect(r.tables[0].rows.map(x => x.status)).not.toContainEqual(expect.stringMatching(/Cancel/));
+    expect(r.note).toContain('1 cancelled left out');
     expect(r.tables[0].total).toMatchObject({ total: 2000, paid: 1500, due: 500 });
   });
   it('groups customers by mobile with walk-ins as one row', () => {
@@ -62,9 +63,10 @@ describe('detailed sales reports', () => {
     expect(r.tables[0].rows.map(x => x.hour)).toEqual(['10 AM – 11 AM', '6 PM – 7 PM', '7 PM – 8 PM']);
     expect(r.tables[1].rows.map(x => x.day)).toEqual(['Tuesday', 'Wednesday']);
   });
-  it('lists discounts, cancellations and refunds', () => {
-    const r = discountsReport(input());
-    expect(r.tables[0].rows.map(x => [x.what, x.amount])).toEqual([['Refund on cancel', 980], ['Cancelled', 980], ['Discount 8.2%', 80]]);
-    expect(reportCsv(r, input().range)).toContain('Wrong item');
+  it('lists discounts and take-backs, never cancelled bills', () => {
+    const back = bill({ id: 'b5', bill_no: 5, created_at: '2026-10-23T05:00:00Z', payments: [pay(980, 'cash', '2026-10-23T05:00:00Z'), pay(-490, 'cash', '2026-10-23T06:00:00Z', 'refund')] });
+    const r = discountsReport(input({ orders: [...orders, back] }));
+    expect(r.tables[0].rows.map(x => [x.what, x.amount])).toEqual([['Take-back', 490], ['Discount 8.2%', 80]]);
+    expect(reportCsv(r, input().range)).not.toContain('Wrong item');
   });
 });

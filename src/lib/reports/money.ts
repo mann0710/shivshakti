@@ -14,7 +14,7 @@ const MODE_ORDER = ['Cash', 'UPI', 'Bank transfer', 'Cheque', 'Not recorded'];
 // Every rupee received in the period, on the day it came in, tagged by source and mode (refunds net off).
 export function receiptsIn(inp: ReportInput): Receipt[] {
   const r = inp.range;
-  const bookings = preordersOf(inp).filter(p => p.status !== 'cancelled');
+  const bookings = preordersOf(inp);
   return [
     ...moneyIn(ordersOf(inp), bookings, accountMoney(inp.credit ?? [])).filter(p => inRange(istDay(p.at), r)).map(p => ({
       day: istDay(p.at), mode: modeLabel(p.mode), amount: p.amount,
@@ -75,7 +75,7 @@ export function paymentsReport(inp: ReportInput): Report {
 // Money still to come in, as of today (not limited to the date range).
 export function duesReport(inp: ReportInput): Report {
   const bills = unpaidOf(inp).sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const pre = preordersOf(inp).filter(p => p.status !== 'cancelled' && balanceOf(p) > 0)
+  const pre = preordersOf(inp).filter(p => balanceOf(p) > 0)
     .sort((a, b) => (a.delivery_date || '9').localeCompare(b.delivery_date || '9'));
   const inv = inp.invoices.filter(i => Number(i.balance_due) > 0)
     .sort((a, b) => (a.booking?.event_date ?? '').localeCompare(b.booking?.event_date ?? ''));
