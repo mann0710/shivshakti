@@ -7,6 +7,7 @@ import QuoteAcceptDialog from '../catering/QuoteAcceptDialog';
 jest.mock('../../lib/supabase', () => ({ supabase: {} }));
 jest.mock('../../lib/docs/output', () => ({ downloadDoc: jest.fn(), shareDoc: jest.fn(), pdfBlob: jest.fn() }));
 jest.mock('../../hooks/useBookings', () => ({ useBookings: () => ({ data: [] }), useUpdateBooking: () => ({ mutateAsync: jest.fn() }) }));
+jest.mock('../../hooks/useBookingPayments', () => ({ usePaymentRows: () => ({ data: [] }) }));
 jest.mock('../../hooks/useQuotations', () => ({ useUpdateQuotationStatus: () => ({ mutateAsync: jest.fn() }) }));
 jest.mock('../../hooks/useDocSettings', () => ({ useDocSettings: () => ({ ...jest.requireActual('../../lib/docs/settings').DEFAULT_DOC_SETTINGS, schedule: [{ pct: 30, label: 'Advance', when: '' }, { pct: 70, label: 'Balance', when: '' }] }) }));
 
@@ -65,7 +66,7 @@ describe('quote popups', () => {
     const accept = screen.getByRole('button', { name: /^Accept · / });
     expect(accept).toHaveTextContent('Accept · ₹31,600');
     fireEvent.click(accept);
-    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'k' }), new Set([':Mix Bhajiya']), 140, { amount: 9480, mode: 'upi' });
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'k' }), new Set([':Mix Bhajiya']), 140, { draft: expect.objectContaining({ amount: '9480', payment_mode: 'upi' }), receipt: true });
   });
   it('send shows the saved number, the message and mark as sent', () => {
     render(<SendDialog quote={bhavin} options={[bhavin]} all={false} withPrices onClose={jest.fn()} onSent={jest.fn()} />);

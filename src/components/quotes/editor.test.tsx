@@ -37,6 +37,7 @@ jest.mock('../../hooks/useMenuBuilder', () => ({ useMenuItemsFull: () => ({ data
 jest.mock('../../hooks/useItemPrices', () => ({ useItemPrices: () => () => 0 }));
 jest.mock('../../hooks/useDataCenter', () => ({ useDataCenter: () => ({ data: { gst_rate: 5 } }), useEventTypes: () => ({ data: [] }), DEFAULT_EVENTS: ['Wedding'] }));
 jest.mock('../../hooks/useInvoices', () => ({ useInvoices: () => ({ data: [] }) }));
+jest.mock('../../hooks/useBookingPayments', () => ({ usePaymentRows: () => ({ data: [] }), useSavePayment: () => ({ mutateAsync: jest.fn() }) }));
 jest.mock('../../hooks/useSchemaStatus', () => ({ useHasQuoteOptions: () => true }));
 jest.mock('../../hooks/useMenus', () => ({ useMenus: () => ({ data: mockPackages }), useCreateMenu: () => ({ mutateAsync: jest.fn() }) }));
 jest.mock('../../hooks/useDocSettings', () => ({ useDocSettings: () => jest.requireActual('../../lib/docs/settings').DEFAULT_DOC_SETTINGS }));

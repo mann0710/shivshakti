@@ -41,7 +41,7 @@ export interface Booking {
   status: 'inquiry' | 'followup' | 'confirmed' | 'completed' | 'cancelled' | 'pending';
   estimated_cost: number;
   food_type?: string | null;
-  // Advance taken when the quote was accepted, before an invoice exists.
+  // Old single advance; 20261114_booking_payments.sql moves it into payments.
   advance_received?: number;
   advance_mode?: string | null;
   advance_date?: string | null;
@@ -83,10 +83,11 @@ export interface LineItem {
 
 export interface Payment {
   id: string;
-  invoice_id: string;
-  amount: number;
+  invoice_id: string | null; // null until the booking is invoiced
+  booking_id?: string | null;
+  amount: number;            // negative for money given back
   payment_date: string;
-  payment_type: 'advance' | 'partial';
+  payment_type: 'advance' | 'partial' | 'refund';
   payment_mode: 'cash' | 'upi' | 'bank_transfer' | 'cheque';
   notes?: string;
   created_at: string;

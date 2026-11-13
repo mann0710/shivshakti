@@ -66,13 +66,18 @@ export const MODE_NAME: Record<Mode, string> = { cash: 'Cash', upi: 'UPI', bank:
 const live = (inv?: Invoice) => !!inv && inv.booking?.status !== 'cancelled';
 const firstItem = (items?: { item_name: string }[]) => items?.[0]?.item_name ?? 'Sweets';
 
-// Every rupee received in the range by its payment date, newest first; cancelled bookings and bills never count.
+// Every rupee received in the range by its payment date, newest first; cancelled bills never count, refunds net off.
 export function receiptsIn(d: MoneyData, r: Range): Receipt[] {
   const invById = new Map(d.invoices.map(i => [i.id, i]));
-  const catering = d.payments.filter(p => inRange(p.payment_date, r) && live(invById.get(p.invoice_id))).map((p): Receipt => {
-    const inv = invById.get(p.invoice_id)!;
-    return { key: p.id, day: p.payment_date, source: 'catering', mode: MODE[p.payment_mode] ?? 'cash', amount: Number(p.amount) || 0,
-      who: inv.booking?.customer?.name ?? 'Customer', what: `${p.payment_type === 'advance' ? 'advance' : 'payment'} for ${inv.booking?.event_type ?? 'event'} (${inv.invoice_number})` };
+  const bookById = new Map(d.bookings.map(b => [b.id, b]));
+  // Advances before the invoice count too; money given back on a cancelled event is its own (negative) row.
+  const catering = d.payments.filter(p => inRange(p.payment_date, r)).flatMap((p): Receipt[] => {
+    const inv = p.invoice_id ? invById.get(p.invoice_id) : undefined;
+    const b = inv?.booking ?? (p.booking_id ? bookById.get(p.booking_id) : undefined);
+    if (!inv && !b) return [];
+    const kind = p.payment_type === 'refund' ? 'refund' : p.payment_type === 'advance' ? 'advance' : 'payment';
+    return [{ key: p.id, day: p.payment_date, source: 'catering', mode: MODE[p.payment_mode] ?? 'cash', amount: Number(p.amount) || 0,
+      who: b?.customer?.name ?? 'Customer', what: `${kind} for ${b?.event_type ?? 'event'}${inv ? ` (${inv.invoice_number})` : ''}` }];
   });
   const bills = d.orders.filter(o => !isCancelled(o)).flatMap(o => billPayments(o).filter(isMoney).map((p, i): Receipt => ({
     key: `${o.id}-${i}`, day: istDay(p.at), source: 'sweets', mode: p.mode, amount: p.amount, who: o.customer_name,

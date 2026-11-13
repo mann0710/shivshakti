@@ -283,6 +283,9 @@ body.modal-open { overflow: hidden; }
 .bk-row .bk-date { grid-area: date; }
 .bk-row .bk-main { grid-area: main; }
 .bk-row .bk-amt { grid-area: amt; text-align: right; }
+.bk-money { display: block; width: fit-content; margin: 4px 0 0 auto; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 11px; white-space: nowrap; }
+.bk-money.good { background: #EAF3DE; color: #2F5A0E; }
+.bk-money.warn { background: #FBE3C5; color: #7A3A00; }
 .bk-row .bk-stage { grid-area: stage; }
 .bk-row .bk-acts { grid-area: acts; }
 .bk-cal { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; align-items: start; }
@@ -293,6 +296,7 @@ body.modal-open { overflow: hidden; }
 @media (max-width: 1100px) {
   .bk-row { grid-template-columns: 52px minmax(0, 1fr) auto; grid-template-areas: "date main main" "date amt stage" "acts acts acts"; gap: 6px 12px; }
   .bk-row .bk-amt { text-align: left; }
+  .bk-money { margin-left: 0; }
   .bk-cal { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {

@@ -82,6 +82,10 @@ Run [`supabase/migrations/20261106_quote_options.sql`](supabase/migrations/20261
 - If the service cannot be reached (local `npm start`, offline), the app opens the print window instead; choose "Save as PDF".
 - To try it locally: `CHROME_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"` and call `require('./api/pdf').render(html, footer)` from Node.
 
+### Advance and payments on catering bookings
+
+Run [`supabase/migrations/20261114_booking_payments.sql`](supabase/migrations/20261114_booking_payments.sql) (adds `payments.booking_id`, lets a payment exist before its invoice, keeps payments when an invoice is deleted, and turns any old one-number booking advance into a payment row; safe to re-run). Settings › Data lists it until it has run.
+
 ### Credit (pay later)
 
 Run [`supabase/migrations/20261112_credit_accounts.sql`](supabase/migrations/20261112_credit_accounts.sql) (adds `credit_accounts`, `credit_entries` and `seasonal_orders.due_date`, staff-only like every table; safe to re-run). Until it is run, the Credit tab works from bills alone and hides limits, promises, call notes and old balances. Applied on the live project on 11 Nov 2026 (checked: both tables with row-level security and one staff policy each, plus the new column).
@@ -342,16 +346,27 @@ Everything that said "Coming soon" in Settings now works. Database update: [`sup
 - **Save menu as package** (quotation ⋯ menu) opens a dialog with the course summary, name, price and *Keep "choose 1 farsan" as a choice*.
 - **Sweets rate card** (Sweet items → *Rate card*): an A5 card to print or save as PDF with the logo, this season's specials and the all-year sweets at 1 kg / 500 g / 250 g (litre sweets by the litre, piece sweets per piece), only sweets on the POS, and the WhatsApp number (`lib/docs/rateCard.ts`).
 
+## Advance (token) and payments on catering bookings
+
+- **Confirming asks for the advance.** Every way to Confirmed (⋯ → Change status, or accepting a quote) opens one dialog: the amount, quick amounts from **Settings › Money › Payment plan** (e.g. *To confirm 10%*, 25%, Full; worked out on the lower price while quote options are open), Cash / UPI / Bank / Cheque, an optional date and note, and the balance left. **Confirm without advance** stays one tap.
+- **Record payment works before and after the invoice** (⋯ menu, the event page, the row's button). It shows the quote or invoice total, what came in and the balance due, suggests the next step of the payment plan, and warns (but allows) when more than the balance is paid. A booking can take any number of payments; each keeps its own date and mode and can be edited or removed from the event page.
+- **The list shows the money:** "₹20,000 received · ₹55,150 due", "Paid in full", or "No advance yet" on a confirmed booking, whose next step becomes **Record advance** until something comes in.
+- **Create invoice** moves the booking's payments onto the invoice (never twice); deleting an invoice leaves them on the booking.
+- **Money and reports** count an advance on the day it came in, invoice or not.
+- **Cancelling an event with money in** asks to give it back (a refund row, so it leaves the totals) or keep it (stays as income). Moving it back to Inquiry warns that the money stays recorded; a booking with payments can't be deleted, only cancelled.
+- **WhatsApp receipt** after saving, in English or Hindi (`lib/bookingReceipt.ts`), editable before sending; it is off when the customer has no mobile number.
+- Code: `lib/bookingMoney.ts` (totals, quick amounts, list chip), `hooks/useBookingPayments.ts`, `components/catering/PaymentDialog.tsx`, `BookingMoneyDialogs.tsx` (confirm, cancel), `ReceiptDialog.tsx`, `PaymentFields.tsx`. Design: the master canvas, "Advance (token) and payments on catering bookings".
+
 ## Bookings: list, calendar and pipeline
 
 One screen, three views (the switch at the top remembers your choice; on phones it sits under the title):
 
-- **List** (default): **Upcoming** · **Needs attention** · **Past** · **Cancelled** tabs instead of six status chips. Events are grouped by month, soonest first. Each row shows the date, customer · event, time · guests · venue, the value (a quote range while choices are open), one stage chip (Inquiry → Quoted → Confirmed → Invoiced → Paid) and **one next-step button**: Make quotation, Pick farsan & accept, Mark accepted, Create invoice, Record payment, Mark completed or Close as lost. Everything else — open event page, edit, quote, invoice, kitchen menu PDF, WhatsApp, call, Google Calendar, change status, delete — is in the **⋯** menu. Missing guest counts show in amber.
+- **List** (default): **Upcoming** · **Needs attention** · **Past** · **Cancelled** tabs instead of six status chips. Events are grouped by month, soonest first. Each row shows the date, customer · event, time · guests · venue, the value (a quote range while choices are open), one stage chip (Inquiry → Quoted → Confirmed → Invoiced → Paid) and **one next-step button**: Make quotation, Pick farsan & accept, Mark accepted, Record advance, Create invoice, Record payment, Mark completed or Close as lost. Everything else — open event page, edit, quote, invoice, kitchen menu PDF, WhatsApp, call, Google Calendar, change status, delete — is in the **⋯** menu. Missing guest counts show in amber.
 - **Needs attention:** past events still marked Inquiry / Quoted / Confirmed, or invoiced with a balance. A banner on Upcoming counts them; one tap closes each (completed, paid, or closed as lost).
 - **Summary tiles** (desktop): upcoming events and the next one, confirmed value, and how many next steps are waiting (invoices, quotes, decisions, payments, to close).
 - **Calendar:** a month coloured by stage (dots on phones), multi-day events on each of their days, today highlighted. Tap a day to see its events with meals (multi-day quotes), food type, next step, **Menu PDF** and ⋯, plus **+ New booking on that day** (the form opens on that date). The old Calendar page is folded in: the phone bar's **Bookings** button and any "Calendar" link open this view.
 - **Pipeline:** columns Inquiry → Quoted → Confirmed → Invoiced → Paid (last 60 days) with counts and totals; past-dated cards are flagged "Date passed" with the step that closes them.
-- **Delete booking** (⋯ menu): if it has quotations, the dialog names them ("QTN-0024, QTN-0025 will be deleted too") and **Delete all** removes them and the booking. A booking with an invoice is never deleted here (the live database would delete the invoice with it); the dialog offers **Mark cancelled** instead.
+- **Delete booking** (⋯ menu): if it has quotations, the dialog names them ("QTN-0024, QTN-0025 will be deleted too") and **Delete all** removes them and the booking. A booking with an invoice or any payment is never deleted here; the dialog offers to cancel it instead.
 - Search (name, phone, venue, event) works in all three views. Design: the "Shiv Shakti Bookings Redesign" canvas.
 
 ## Quotation options, "choose any" dishes and the quote calendar
@@ -507,4 +522,4 @@ npx eslint src --ext .ts,.tsx                     # lint (the hosted build fails
 
 ## Translations
 
-The app is English only today and has no translation files. If Hindi or other languages are added later, add English and Hindi first. Other languages need to be translated separately by the owner.
+The app is English only today and has no translation files. Customer messages (credit reminders, booking payment receipts) come in English and Hindi; the Hindi text was made with a translation pass, so edit it there. Gujarati or other languages need to be translated separately by the owner. If the app itself gets translations later, add English and Hindi first.

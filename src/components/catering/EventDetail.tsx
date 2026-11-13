@@ -4,7 +4,8 @@ import Modal from '../ui/Modal';
 import EventStepper from './EventStepper';
 import BookingMenu, { BoardActions } from './BookingMenu';
 import { fmtTime } from './BookingCalendar';
-import AdvanceDialog from '../bookings/AdvanceDialog';
+import PaymentDialog from './PaymentDialog';
+import { Payment } from '../../types';
 import { EventInvoice, EventPayments, EventQuotes, MoneySummary, PayLine } from '../bookings/EventSections';
 import { invoiceText, modeText, moneyRows, nextBanner, remindHref, stageRows } from '../bookings/eventFacts';
 import { splitFood } from '../bookings/bookingForm';
@@ -25,7 +26,7 @@ const EventDetail: React.FC<Props> = ({ view: v, actions: a, onClose, onNavigate
   const { data: allQuotes = [] } = useQuotations();
   const { data: payments = [] } = usePaymentHistory(v.invoice?.id);
   const pct = useDocSettings().schedule[0]?.pct ?? 0;
-  const [advance, setAdvance] = useState(false);
+  const [editing, setEditing] = useState<Payment | 'new' | null>(null);
 
   const b = v.b;
   const inv = v.invoice;
@@ -38,11 +39,11 @@ const EventDetail: React.FC<Props> = ({ view: v, actions: a, onClose, onNavigate
   const when = `${formatDateIST(v.start, 'EEE d MMM')}${v.end > v.start ? ` – ${formatDateIST(v.end, 'EEE d MMM')}` : ''}`;
   const sub = [when, fmtTime(b.event_time), b.guest_count > 0 ? `${b.guest_count} guests` : 'Guests not set', food, b.venue].filter(Boolean).join(' · ');
   const go: Navigate = (page, intent) => { onClose(); onNavigate(page, intent); };
-  const adv = Number(b.advance_received) || 0;
-
-  const lines: PayLine[] = inv
-    ? payments.map(p => ({ key: p.id, title: `${formatDateIST(p.payment_date, 'EEE d MMM')} · ${p.payment_type}`, sub: [modeText(p.payment_mode), p.notes].filter(Boolean).join(' · '), amount: Number(p.amount) }))
-    : adv > 0 ? [{ key: 'adv', title: `${b.advance_date ? formatDateIST(b.advance_date, 'EEE d MMM') : 'Taken'} · advance`, sub: modeText(b.advance_mode) || 'Kept on the booking until the invoice', amount: adv }] : [];
+  // Every payment on the booking, before and after the invoice; each can be changed.
+  const lines: PayLine[] = v.payments.map(p => ({
+    key: p.id, title: `${formatDateIST(p.payment_date, 'EEE d MMM')} · ${p.payment_type === 'refund' ? 'given back' : p.payment_type === 'advance' ? 'advance' : 'payment'}`,
+    sub: [modeText(p.payment_mode), p.notes].filter(Boolean).join(' · '), amount: Number(p.amount), onEdit: () => setEditing(p),
+  }));
 
   const sendInvoice = async () => {
     try { await shareDoc(() => invoiceDoc(inv!, allQuotes.find(q => q.id === inv!.quotation_id) ?? v.quote, payments), invoiceText(v), b.customer?.phone); }
@@ -51,7 +52,7 @@ const EventDetail: React.FC<Props> = ({ view: v, actions: a, onClose, onNavigate
 
   const remind = remindHref(v);
   const secondary = remind ? <a className="ui-btn" href={remind} target="_blank" rel="noopener noreferrer">Remind</a>
-    : !inv && (v.stage === 'quoted' || v.stage === 'confirmed') ? <button type="button" className="ui-btn" onClick={() => setAdvance(true)}>{adv ? 'Change advance' : 'Record advance'}</button>
+    : live && v.next?.kind !== 'advance' && v.next?.kind !== 'payment' ? <button type="button" className="ui-btn" onClick={() => setEditing('new')}>Record payment</button>
     : v.stage !== 'cancelled' ? <button type="button" className="ui-btn" onClick={() => a.edit(b)}>Edit details</button> : null;
   const footer = (
     <div className="ev-foot">
@@ -74,7 +75,7 @@ const EventDetail: React.FC<Props> = ({ view: v, actions: a, onClose, onNavigate
         {!inv && money.length > 0 && <MoneySummary rows={money} />}
         {lines.length > 0 && <EventPayments lines={lines} />}
       </div>
-      {advance && <AdvanceDialog booking={b} suggested={v.quote ? Math.round((v.quote.total_amount * pct) / 100) : undefined} onClose={() => setAdvance(false)} />}
+      {editing && <PaymentDialog booking={b} invoice={inv} quote={v.quote} payment={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}
     </Modal>
   );
 };

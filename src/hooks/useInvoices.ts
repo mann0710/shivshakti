@@ -10,9 +10,9 @@ export const invoiceStatus = (total: number, paid: number): Invoice['status'] =>
   paid > 0 && paid >= total ? 'paid' : paid > 0 ? 'sent' : 'draft';
 
 // Older invoices kept the advance only as a total; give it a payment row so recalculation keeps it.
-const ensureAdvanceRow = async (invoiceId: string) => {
+export const ensureAdvanceRow = async (invoiceId: string) => {
   const [{ data: inv, error: invErr }, { count, error: cntErr }] = await Promise.all([
-    supabase.from('invoices').select('advance_paid, issue_date').eq('id', invoiceId).single(),
+    supabase.from('invoices').select('advance_paid, issue_date, booking_id').eq('id', invoiceId).single(),
     supabase.from('payments').select('id', { count: 'exact', head: true }).eq('invoice_id', invoiceId),
   ]);
   if (invErr) throw invErr;
@@ -20,14 +20,14 @@ const ensureAdvanceRow = async (invoiceId: string) => {
   const advance = Number(inv?.advance_paid) || 0;
   if (count || advance <= 0) return;
   const { error } = await supabase.from('payments').insert({
-    invoice_id: invoiceId, amount: advance, payment_type: 'advance', payment_mode: 'cash',
+    invoice_id: invoiceId, booking_id: inv?.booking_id ?? null, amount: advance, payment_type: 'advance', payment_mode: 'cash',
     notes: 'Advance recorded before payment history', payment_date: inv?.issue_date || todayIST(),
   });
   if (error) throw error;
 };
 
 // Recalculate paid/balance/status from payments; completes the booking when paid, reopens it when not.
-const recalculateInvoice = async (invoiceId: string) => {
+export const recalculateInvoice = async (invoiceId: string) => {
   const { data: payments, error: payErr } = await supabase
     .from('payments').select('amount').eq('invoice_id', invoiceId);
   if (payErr) throw payErr;
@@ -96,87 +96,24 @@ export const useCreateInvoice = () => {
         .select('*, booking:bookings(*, customer:customers(*), menu:menus(*))')
         .single();
       if (error) throw error;
-      // The advance becomes a real payment row so later payments don't overwrite it.
+      // Payments taken on the booking move onto the invoice; a typed advance becomes one more payment.
+      if (data.booking_id) {
+        const { error: linkErr } = await supabase.from('payments').update({ invoice_id: data.id }).eq('booking_id', data.booking_id).is('invoice_id', null);
+        if (linkErr) throw linkErr;
+      }
       if (advance > 0) {
         const { error: payErr } = await supabase.from('payments').insert({
-          invoice_id: data.id, amount: advance, payment_type: 'advance', payment_mode: advance_mode,
+          invoice_id: data.id, booking_id: data.booking_id ?? null, amount: advance, payment_type: 'advance', payment_mode: advance_mode,
           notes: 'Advance received before invoice', payment_date: advance_date || todayIST(),
         });
         if (payErr) throw payErr;
-        await recalculateInvoice(data.id);
       }
+      await recalculateInvoice(data.id);
       return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['all_payments'] });
-    },
-  });
-};
-
-export const useRecordPayment = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      invoiceId, amount, payment_type, payment_mode, notes, payment_date,
-    }: {
-      invoiceId: string; amount: number; payment_type: 'advance' | 'partial';
-      payment_mode: string; notes?: string; payment_date?: string;
-    }) => {
-      await ensureAdvanceRow(invoiceId);
-      const { error: payErr } = await supabase.from('payments').insert({
-        invoice_id: invoiceId, amount, payment_type, payment_mode, notes,
-        payment_date: payment_date || todayIST(),
-      });
-      if (payErr) throw payErr;
-      await recalculateInvoice(invoiceId);
-    },
-    onSuccess: (_, { invoiceId }) => {
-      qc.invalidateQueries({ queryKey: ['invoices'] });
-      qc.invalidateQueries({ queryKey: ['payments', invoiceId] });
-      qc.invalidateQueries({ queryKey: ['all_payments'] });
-      qc.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-};
-
-export const useUpdatePayment = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      id, invoiceId, amount, payment_type, payment_mode, notes, payment_date,
-    }: {
-      id: string; invoiceId: string; amount: number; payment_type: 'advance' | 'partial';
-      payment_mode: string; notes?: string; payment_date: string;
-    }) => {
-      const { error } = await supabase.from('payments')
-        .update({ amount, payment_type, payment_mode, notes, payment_date })
-        .eq('id', id);
-      if (error) throw error;
-      await recalculateInvoice(invoiceId);
-    },
-    onSuccess: (_, { invoiceId }) => {
-      qc.invalidateQueries({ queryKey: ['invoices'] });
-      qc.invalidateQueries({ queryKey: ['payments', invoiceId] });
-      qc.invalidateQueries({ queryKey: ['all_payments'] });
-      qc.invalidateQueries({ queryKey: ['bookings'] });
-    },
-  });
-};
-
-export const useDeletePayment = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, invoiceId }: { id: string; invoiceId: string }) => {
-      const { error } = await supabase.from('payments').delete().eq('id', id);
-      if (error) throw error;
-      await recalculateInvoice(invoiceId);
-    },
-    onSuccess: (_, { invoiceId }) => {
-      qc.invalidateQueries({ queryKey: ['invoices'] });
-      qc.invalidateQueries({ queryKey: ['payments', invoiceId] });
-      qc.invalidateQueries({ queryKey: ['all_payments'] });
-      qc.invalidateQueries({ queryKey: ['bookings'] });
     },
   });
 };
@@ -262,7 +199,8 @@ export const useDeleteInvoice = () => {
       const { error } = await supabase.from('invoices').delete().eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invoices'] }),
+    // Its payments stay on the booking.
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); qc.invalidateQueries({ queryKey: ['all_payments'] }); },
   });
 };
 

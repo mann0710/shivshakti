@@ -33,7 +33,10 @@ describe('bookings board', () => {
     expect(of('kavit').next?.label).toBe('Pick farsan & accept');
     expect(of('kavit').valueText).toBe('₹28,800 – ₹31,600');
     expect(of('bhavin').next?.label).toBe('Mark accepted');
-    expect(of('amit').next?.label).toBe('Create invoice');
+    expect(of('amit').next?.label).toBe('Record advance');
+    const paid = bookingView(of('amit').b, { quotes, invoices, today, value: 37000, payments: [{ id: 'p', booking_id: 'amit', amount: 3700, payment_date: '2026-10-30' } as any] });
+    expect(paid.next?.label).toBe('Create invoice');
+    expect(paid.money).toMatchObject({ received: 3700 });
     expect(of('rushi').next?.label).toBe('Make quotation');
     expect(of('rushi').valueText).toBe('No quote yet');
   });
@@ -61,7 +64,7 @@ describe('bookings board', () => {
     expect(groupByMonth(upcoming).map(g => [g.title, g.views.length])).toEqual([['November 2026', 2], ['December 2026', 3]]);
     const s = boardStats(views);
     expect([s.upcoming, s.nextUp?.b.id, s.confirmedValue, s.waiting]).toEqual([5, 'kavit', 37000, 8]);
-    expect(s.waitingNote).toBe('2 invoices · 1 quote · 2 decisions · 1 payment · 2 to close');
+    expect(s.waitingNote).toBe('2 advances · 1 quote · 2 decisions · 1 payment · 2 to close');
   });
   it('builds pipeline columns; a confirmed booking waiting on its sent quote stays quoted', () => {
     const cols = pipelineColumns(views, today);

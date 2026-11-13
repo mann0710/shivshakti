@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../ui/Modal';
-import { useCreateInvoice, useRecordPayment } from '../../hooks/useInvoices';
-import { Booking, Payment } from '../../types';
+import { useCreateInvoice } from '../../hooks/useInvoices';
+import { usePaymentRows, useSavePayment } from '../../hooks/useBookingPayments';
+import { paymentsFor, receivedOf } from '../../lib/bookingMoney';
+import { Booking } from '../../types';
 import { Quotation } from '../../hooks/useQuotations';
 import { Ready } from '../../lib/cateringTodo';
 import { invoiceFromQuote } from '../../lib/invoiceEdit';
@@ -15,15 +17,13 @@ export const SETTLED_NOTE = 'Settled outside the app';
 // A past event paid outside the app: a paid invoice dated on the event day, so Money adds up.
 export const useSettleOutside = () => {
   const create = useCreateInvoice();
-  const record = useRecordPayment();
+  const record = useSavePayment();
+  const { data: rows = [] } = usePaymentRows();
+  // Money already taken on the booking moves onto the invoice; the rest is the settled amount.
   const settle = async (b: Booking, q?: Quotation) => {
-    const advance = b.advance_received ?? 0;
-    const inv = await create.mutateAsync({
-      ...invoiceFromQuote(b, q), status: 'draft', issue_date: b.event_date, advance_paid: advance,
-      advance_mode: (b.advance_mode as Payment['payment_mode']) || 'cash', advance_date: b.advance_date ?? b.event_date,
-    });
-    const rest = Math.max(0, Number(inv.total_amount) - advance);
-    if (rest > 0) await record.mutateAsync({ invoiceId: inv.id, amount: rest, payment_type: 'partial', payment_mode: 'cash', notes: SETTLED_NOTE, payment_date: b.event_date });
+    const inv = await create.mutateAsync({ ...invoiceFromQuote(b, q), status: 'draft', issue_date: b.event_date, advance_paid: 0 });
+    const rest = Math.max(0, Number(inv.total_amount) - receivedOf(paymentsFor(rows, b.id)));
+    if (rest > 0) await record.mutateAsync({ bookingId: b.id, invoiceId: inv.id, amount: rest, payment_type: 'partial', payment_mode: 'cash', notes: SETTLED_NOTE, payment_date: b.event_date });
     return inv.id as string;
   };
   return { settle, busy: create.isPending || record.isPending };

@@ -1,4 +1,5 @@
 import { inr } from '../money';
+import { fill } from '../fillText';
 import { Account } from './accounts';
 import { shortDay } from './dates';
 import { Lang } from './types';
@@ -34,7 +35,6 @@ const TEXT: Record<Lang, Record<Key, string>> = {
   },
 };
 
-const fill = (t: string, v: Record<string, string | number>) => t.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ''));
 
 export interface ShopInfo { name: string; phone?: string; upi: string }
 

@@ -234,3 +234,10 @@ button.iv-plan:hover { background: #FFFCF6; }
 .mx-skel span i:last-child { width: 60%; height: 10px; }
 .mx-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; background: #FFF4F4; border: 1px solid #F3C2C2; color: #8A2525; border-radius: 12px; padding: 10px 14px; font-size: 14px; }
 .mx-banner.info { background: #EEF5FB; border-color: #C9DDF0; color: #164E80; }
+/* Booking money: totals box, warning banner, receipt tick without a phone */
+.mx-sum { background: #F7F5F0; border-radius: 11px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.mx-sum > span { display: flex; justify-content: space-between; gap: 12px; }
+.mx-sum .good > span:last-child { color: #2F5A0E; }
+.mx-sum .strong { font-size: 16px; font-weight: 700; }
+.mx-banner.warn { background: #FFF8EC; border-color: #F0D9B0; color: #6B4508; }
+.mx-check.off { color: #6B6B66; cursor: default; }

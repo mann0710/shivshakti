@@ -4,7 +4,8 @@ import Modal from '../ui/Modal';
 import { useBookings, useUpdateBooking } from '../../hooks/useBookings';
 import { useQuotations } from '../../hooks/useQuotations';
 import { useCreateInvoice, useInvoices } from '../../hooks/useInvoices';
-import { Payment } from '../../types';
+import { usePaymentRows } from '../../hooks/useBookingPayments';
+import { paymentsFor, receivedOf } from '../../lib/bookingMoney';
 import { formatDateIST, todayIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
 import { pickQuotation } from '../../lib/quoteMath';
@@ -22,6 +23,7 @@ const InvoiceCreateModal: React.FC<Props> = ({ bookingId, onClose, onCreated }) 
   const { data: quotations = [] } = useQuotations();
   const { data: invoices = [] } = useInvoices();
   const createInvoice = useCreateInvoice();
+  const { data: payRows = [] } = usePaymentRows();
   const updateBooking = useUpdateBooking();
   const today = todayIST();
 
@@ -42,7 +44,9 @@ const InvoiceCreateModal: React.FC<Props> = ({ bookingId, onClose, onCreated }) 
   const [advance, setAdvance] = useState<Record<string, string>>({});
   const [tried, setTried] = useState(false);
   const guestText = booking ? guests[booking.id] ?? (booking.guest_count > 0 ? String(booking.guest_count) : '') : '';
-  const advanceText = booking ? advance[booking.id] ?? String(booking.advance_received ?? 0) : '0';
+  // Payments already on the booking carry over; only a booking without any takes a typed advance.
+  const taken = booking ? paymentsFor(payRows, booking.id) : [];
+  const advanceText = booking && !taken.length ? advance[booking.id] ?? '0' : '0';
   const guestError = booking && needsGuests(quote, booking) && !(Number(guestText) > 0) ? 'Needed — the quote has no guest count' : '';
   const busy = createInvoice.isPending || updateBooking.isPending;
 
@@ -55,7 +59,6 @@ const InvoiceCreateModal: React.FC<Props> = ({ bookingId, onClose, onCreated }) 
       const inv = await createInvoice.mutateAsync({
         ...invoiceFromQuote(booking, quote, finalGuests),
         advance_paid: amountOf(advanceText), status: 'draft', issue_date: today,
-        advance_mode: (booking.advance_mode as Payment['payment_mode']) || 'cash', advance_date: booking.advance_date ?? null,
       });
       toast.success(`${inv.invoice_number ?? 'Invoice'} created for ${booking.customer?.name ?? 'the event'}`);
       onCreated(inv.id);
@@ -99,10 +102,17 @@ const InvoiceCreateModal: React.FC<Props> = ({ bookingId, onClose, onCreated }) 
                 onChange={e => setGuests(g => ({ ...g, [booking.id]: e.target.value.replace(/\D/g, '') }))} />
               {tried && guestError ? <span className="mx-err">{guestError}</span> : <span className="mx-hint">{quote?.per_plate_amount ? `${inr(quote.per_plate_amount)} a plate` : 'For the invoice'}</span>}
             </label>
-            <label className="mx-field">Advance already received
-              <input inputMode="decimal" value={`₹${grouped(advanceText)}`} onChange={e => setAdvance(a => ({ ...a, [booking.id]: e.target.value.replace(/[^\d.]/g, '') }))} />
-              <span className="mx-hint">{(booking.advance_received ?? 0) > 0 ? 'From recorded payments' : 'Leave ₹0 if none'}</span>
-            </label>
+            {taken.length ? (
+              <div className="mx-field">Already received
+                <b style={{ fontSize: 16, padding: '10px 0' }}>{inr(receivedOf(taken))}</b>
+                <span className="mx-hint">{taken.length} payment{taken.length === 1 ? '' : 's'} on the booking move onto the invoice</span>
+              </div>
+            ) : (
+              <label className="mx-field">Advance already received
+                <input inputMode="decimal" value={`₹${grouped(advanceText)}`} onChange={e => setAdvance(a => ({ ...a, [booking.id]: e.target.value.replace(/[^\d.]/g, '') }))} />
+                <span className="mx-hint">Leave ₹0 if none</span>
+              </label>
+            )}
           </div>
         )}
       </div>

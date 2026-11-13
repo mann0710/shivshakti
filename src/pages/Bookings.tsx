@@ -4,13 +4,14 @@ import { useBookings, useUpdateBooking, useDeleteBooking } from '../hooks/useBoo
 import { useTeamMembers } from '../hooks/useDataCenter';
 import { Quotation, useQuotations } from '../hooks/useQuotations';
 import { useInvoices } from '../hooks/useInvoices';
+import { usePaymentRows } from '../hooks/useBookingPayments';
 import { useBookingValue } from '../hooks/useBookingValue';
 import { useAcceptFlow, useQuotePdfPref } from '../hooks/useAcceptFlow';
 import { useStoredState } from '../hooks/useStoredState';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 import { useConfirm } from '../components/ui/ConfirmDialog';
-import { Booking, Invoice } from '../types';
+import { Booking } from '../types';
 import { formatDateIST, todayIST } from '../lib/ist';
 import { inr } from '../lib/money';
 import { downloadDoc } from '../lib/docs/output';
@@ -21,7 +22,8 @@ import { eventMenuDoc } from '../lib/docs/invoiceDoc';
 import { bookingView, BookingView, boardStats, groupByMonth, sortForTab, dateRangeText, festivalDays, neverInvoiced, Tab, TABS } from '../lib/bookingBoard';
 import BookingFormModal from '../components/catering/BookingFormModal';
 import EventDetail from '../components/catering/EventDetail';
-import PaymentFormModal from '../components/catering/PaymentFormModal';
+import PaymentDialog from '../components/catering/PaymentDialog';
+import { CancelBookingDialog, ConfirmBookingDialog } from '../components/catering/BookingMoneyDialogs';
 import BookingAgenda from '../components/catering/BookingAgenda';
 import BookingMonth from '../components/catering/BookingMonth';
 import BookingPipeline from '../components/catering/BookingPipeline';
@@ -46,6 +48,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const { data: bookings = [], isLoading } = useBookings();
   const { data: quotes = [] } = useQuotations();
   const { data: invoices = [] } = useInvoices();
+  const { data: payments = [] } = usePaymentRows();
   const { data: teamMembers = [] } = useTeamMembers();
   const { data: occasions = [] } = useSeasonalOccasions();
   const valueOf = useBookingValue();
@@ -66,12 +69,15 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const [presetCustomerId, setPresetCustomerId] = useState(intent?.action === 'new' ? intent.id : undefined);
   const [presetDate, setPresetDate] = useState<string | undefined>();
   const [eventId, setEventId] = useState<string | null>(intent?.action === 'open' ? intent.id ?? null : null);
-  const [paying, setPaying] = useState<Invoice | null>(null);
+  const [paying, setPaying] = useState<BookingView | null>(null);
+  const [confirming, setConfirming] = useState<BookingView | null>(null);
+  const [cancelling, setCancelling] = useState<BookingView | null>(null);
   const teamEmails = useMemo(() => teamMembers.map(t => t.email).filter(Boolean) as string[], [teamMembers]);
 
   const today = todayIST();
   const q = search.trim().toLowerCase();
-  const views = useMemo(() => bookings.map(b => bookingView(b, { quotes, invoices, today, value: valueOf(b) })), [bookings, quotes, invoices, today, valueOf]);
+  const views = useMemo(() => bookings.map(b => bookingView(b, { quotes, invoices, payments, today, value: valueOf(b) })), [bookings, quotes, invoices, payments, today, valueOf]);
+  const viewOf = (b: Booking) => views.find(v => v.b.id === b.id);
   const shown = views.filter(v => matchesSearch(v.b, q));
   const inTab = (t: Tab) => shown.filter(v => v.tab === t);
   const groups = groupByMonth(sortForTab(inTab(tab), tab));
@@ -81,6 +87,11 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const eventView = views.find(v => v.b.id === eventId);
 
   const setStatus = async (b: Booking, status: Booking['status']) => {
+    const v = viewOf(b);
+    // Confirming asks for the advance; going back keeps any money already received.
+    if (status === 'confirmed' && b.status !== 'confirmed' && b.status !== 'completed' && v) return setConfirming(v);
+    if ((status === 'inquiry' || status === 'followup') && v && v.money.received > 0
+      && !(await confirm({ title: `Move back to ${status === 'inquiry' ? 'Inquiry' : 'Follow-up'}?`, message: <>The <b>{inr(v.money.received)}</b> received stays recorded on this booking. To give it back, cancel the event instead.</>, confirmLabel: 'Move back' }))) return;
     try {
       const saved: Booking = await updateBooking.mutateAsync({ id: b.id, status });
       if (status === 'confirmed' && b.status !== 'confirmed') promptCalendar(saved ?? { ...b, status }, teamEmails);
@@ -91,6 +102,11 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const remove = async (b: Booking) => {
     const what = <><b>{b.event_type}</b> for <b>{b.customer?.name ?? 'this customer'}</b> on {dateRangeText(b)}</>;
     const invoice = invoices.find(i => i.booking_id === b.id);
+    const got = viewOf(b)?.money.received ?? 0;
+    if (!invoice && got !== 0) {
+      if (await confirm({ title: 'This booking has payments', message: <>{what} has <b>{inr(got)}</b> received, so it can't be deleted and its money stays counted. Cancel it instead?</>, confirmLabel: 'Cancel event' })) closeAsLost(b);
+      return;
+    }
     if (invoice) {
       if (await confirm({ title: 'This booking has an invoice', message: <>{what} has invoice <b>{invoice.invoice_number}</b>, so it can't be deleted here and its payments stay safe. Mark it lost or cancelled instead?</>, confirmLabel: 'Mark cancelled' })) setStatus(b, 'cancelled');
       return;
@@ -109,6 +125,8 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   };
   const go: Navigate = (page, i) => onNavigate?.(page, i);
   const closeAsLost = async (b: Booking) => {
+    const v = viewOf(b);
+    if (v && v.money.received > 0) return setCancelling(v);
     if (await confirm({ title: 'Close as lost or cancelled?', message: <><b>{b.customer?.name}</b> · {b.event_type} on {dateRangeText(b)} moves to Lost or cancelled. You can change it back from ⋯ → Change status.</>, confirmLabel: 'Close as lost' })) setStatus(b, 'cancelled');
   };
   const newQuote = (b: Booking) => go('quotations', { action: 'new', id: b.id });
@@ -128,7 +146,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
       case 'quote': return sendDraft(b);
       case 'pick': case 'accept': return v.quote ? accept.accept(v.quote) : setEventId(b.id);
       case 'invoice': return go('billing', { action: 'new', id: b.id });
-      case 'payment': return v.invoice && setPaying(v.invoice);
+      case 'advance': case 'payment': return setPaying(v);
       case 'complete': return setStatus(b, 'completed');
       case 'close': return closeAsLost(b);
     }
@@ -139,7 +157,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
     edit: b => setFormFor(b),
     quote: newQuote,
     invoice: b => go('billing', { action: 'new', id: b.id }),
-    pay: v => v.invoice && setPaying(v.invoice),
+    pay: v => setPaying(v),
     accept: q => accept.accept(q),
     send: sendQuote,
     menuPdf: v => downloadDoc(() => eventMenuDoc(v.b, v.quote)),
@@ -220,7 +238,9 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
         <BookingFormModal booking={formFor === 'new' ? null : formFor} presetCustomerId={presetCustomerId} presetDate={presetDate}
           onClose={closeForm} onSaved={closeForm} />
       )}
-      {paying && <PaymentFormModal invoice={paying} onClose={() => setPaying(null)} />}
+      {paying && <PaymentDialog booking={paying.b} invoice={paying.invoice} quote={paying.quote} onClose={() => setPaying(null)} />}
+      {confirming && <ConfirmBookingDialog view={confirming} onClose={() => setConfirming(null)} onConfirmed={saved => promptCalendar(saved, teamEmails)} />}
+      {cancelling && <CancelBookingDialog view={cancelling} onClose={() => setCancelling(null)} onDone={() => setCancelling(null)} />}
       {accept.ui}
       {dialog}
     </div>

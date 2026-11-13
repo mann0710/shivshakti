@@ -45,11 +45,20 @@ describe('periods', () => {
 });
 
 describe('money in', () => {
-  it('leaves out payments on cancelled bookings and tags sources and modes', () => {
+  it('counts money kept on a cancelled event and tags sources and modes', () => {
     const list = receiptsIn(data, { from: '2026-04-01', to: TODAY });
-    expect(list.map(x => x.amount)).toEqual([500, 50000, 1920]);
-    expect(list[1]).toMatchObject({ who: 'Jigar bhai', what: 'advance for Vashtu (INV-1)', source: 'catering', mode: 'cash' });
-    expect(receivedSummary(list)).toMatchObject({ total: 52420, catering: 50000, sweets: 2420, upi: 500 });
+    expect(list.map(x => x.amount)).toEqual([500, 5000, 50000, 1920]);
+    expect(list[2]).toMatchObject({ who: 'Jigar bhai', what: 'advance for Vashtu (INV-1)', source: 'catering', mode: 'cash' });
+    expect(receivedSummary(list)).toMatchObject({ total: 57420, catering: 55000, sweets: 2420, upi: 500 });
+  });
+  it('counts an advance before the invoice and nets off money given back', () => {
+    const extra = [
+      { id: 'p3', invoice_id: null, booking_id: data.bookings[0].id, amount: 2200, payment_date: '2026-10-20', payment_type: 'advance', payment_mode: 'upi', created_at: '' },
+      { id: 'p4', invoice_id: '2', booking_id: null, amount: -5000, payment_date: '2026-10-05', payment_type: 'refund', payment_mode: 'cash', created_at: '' },
+    ] as any[];
+    const list = receiptsIn({ ...data, payments: [...data.payments, ...extra] }, { from: '2026-04-01', to: TODAY });
+    expect(list.find(x => x.key === 'p3')).toMatchObject({ amount: 2200, what: `advance for ${data.bookings[0].event_type}`, mode: 'upi' });
+    expect(receivedSummary(list).catering).toBe(52200);
   });
   it('splits each month of the year into catering and sweets', () => {
     const bars = monthBars(data, '2026-04-01');

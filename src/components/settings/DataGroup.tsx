@@ -6,6 +6,7 @@ import {
 } from '../../hooks/useSchemaStatus';
 import { useHasPosPayments, POS_MIGRATION_FILE } from '../../hooks/useSeasonalOrders';
 import { useHasCredit, CREDIT_MIGRATION_FILE } from '../../hooks/useCredit';
+import { useHasBookingPayments, BOOKING_PAYMENTS_MIGRATION_FILE } from '../../hooks/useBookingPayments';
 import { useRecycleBin } from '../../hooks/useRecycleBin';
 import { useBackup } from '../../hooks/useBackup';
 import { groupBin } from '../../lib/recycleBin';
@@ -25,6 +26,7 @@ export function useDbUpdates() {
     [useHasPosPayments(), POS_MIGRATION_FILE],
     [useHasTeamBin(), TEAM_BIN_MIGRATION_FILE],
     [useHasCredit(), CREDIT_MIGRATION_FILE],
+    [useHasBookingPayments(), BOOKING_PAYMENTS_MIGRATION_FILE],
   ];
   const checking = useIsFetching({ queryKey: ['schema_status'] }) > 0;
   return { checking, pending: checking ? [] : checks.filter(([ok]) => !ok).map(([, file]) => file) };

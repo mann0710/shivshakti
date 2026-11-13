@@ -64,7 +64,7 @@ describe('quotation board', () => {
   });
   it('tells the story of a quote', () => {
     expect(quoteHistory(row('23'), today).map(h => h.what)).toEqual(['Created with a farsan choice', 'Sent to Kavit Mangrolya', 'No reply yet — a reminder is on Home']);
-    expect(quoteHistory(row('09'), today).map(h => h.what)).toContain('Advance ₹8,640 by UPI — goes on the invoice');
+    expect(quoteHistory(row('09'), today).map(h => h.what)).toContain('Accepted');
   });
 });
 

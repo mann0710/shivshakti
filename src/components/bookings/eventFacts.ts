@@ -43,6 +43,7 @@ export function nextBanner(v: BookingView, today: string, options = 1): Banner |
     case 'pick': return { tone: 'warn', text: options > 1 ? `Next: ${name} picks one of the ${options} options, ${final}` : `Next: ${name} picks ${andList(openPicks(v.quote!))}, ${final}` };
     case 'accept': return { tone: 'warn', text: `Next: when ${name} agrees, accept ${v.quote?.quotation_number ?? 'the quote'}.` };
     case 'quote': return { tone: 'warn', text: `Next: make a quotation and send it to ${name}.` };
+    case 'advance': return { tone: 'warn', text: 'Next: record the advance (token) that holds the date.' };
     case 'invoice': return { tone: 'warn', text: 'Next: create the invoice. It uses the accepted menu and price.' };
     case 'complete': return { tone: 'warn', text: 'Next: mark the event completed so your totals stay right.' };
     case 'close': return { tone: 'warn', text: v.stage === 'inquiry' ? 'The date has passed without a quote. Close it as lost.'
@@ -57,12 +58,12 @@ export interface StageRow { stage: Stage; title: string; sub: string; mark: 'don
 export function stageRows(v: BookingView, quotes: Quotation[]): StageRow[] {
   const at = (STAGES as readonly Stage[]).indexOf(v.stage);
   const q = quotes.find(x => x.status === 'accepted') ?? quotes.find(x => x.status !== 'rejected');
-  const adv = Number(v.b.advance_received) || 0;
+  const adv = v.money.received;
   const inv = v.invoice;
   const sub: Record<string, string> = {
     inquiry: v.b.created_at ? `Booked ${formatDateIST(v.b.created_at, 'd MMM')}` : '',
     quoted: q ? `${q.quotation_number} ${q.status === 'draft' ? 'not sent yet' : q.status}${q.issue_date ? ` · ${formatDateIST(q.issue_date, 'd MMM')}` : ''}` : 'When a quotation is made',
-    confirmed: at >= 2 ? (adv ? `Accepted · ${inr(adv)} advance${v.b.advance_mode ? ` by ${modeText(v.b.advance_mode)}` : ''}` : 'Quote accepted') : 'When the quote is accepted',
+    confirmed: at >= 2 ? (adv > 0 ? `Confirmed · ${inr(adv)} received` : 'Confirmed · no advance yet') : 'When the quote is accepted',
     invoiced: inv ? `${inv.invoice_number}${inv.issue_date ? ` · ${formatDateIST(inv.issue_date, 'd MMM')}` : ''}` : '',
     paid: v.stage === 'paid' ? 'Paid in full' : inv ? `${inr(Number(inv.balance_due))} still due` : '',
   };
@@ -74,14 +75,13 @@ export interface MoneyRow { label: string; value: string; strong?: boolean }
 // Before the invoice: advance to ask, advance received, and what is still to come.
 export function moneyRows(v: BookingView, pct: number): MoneyRow[] {
   const q = v.quote && v.quote.status !== 'rejected' ? v.quote : undefined;
-  const adv = Number(v.b.advance_received) || 0;
+  const adv = v.money.received;
   if (!q && !adv) return [];
   const lo = Number(q?.total_amount) || 0;
   const hi = Math.max(lo, Number(q?.total_max) || 0);
-  const how = [modeText(v.b.advance_mode), v.b.advance_date ? formatDateIST(v.b.advance_date, 'd MMM') : ''].filter(Boolean).join(', ');
   const rows: MoneyRow[] = [];
-  if (q && q.status !== 'accepted' && pct > 0) rows.push({ label: `Advance to ask on accept (${pct}%)`, value: range((lo * pct) / 100, (hi * pct) / 100) });
-  rows.push({ label: adv && how ? `Received so far · ${how}` : 'Received so far', value: inr(adv) });
+  if (q && q.status !== 'accepted' && pct > 0 && !adv) rows.push({ label: `Advance to ask on confirm (${pct}%)`, value: range((lo * pct) / 100, (hi * pct) / 100) });
+  rows.push({ label: 'Received so far', value: inr(adv) });
   if (q) rows.push({ label: 'Still to come', value: range(Math.max(0, lo - adv), Math.max(0, hi - adv)), strong: true });
   return rows;
 }

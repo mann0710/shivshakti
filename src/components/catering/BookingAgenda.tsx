@@ -1,9 +1,16 @@
 import React from 'react';
-import { MonthGroup } from '../../lib/bookingBoard';
+import { BookingView, MonthGroup } from '../../lib/bookingBoard';
+import { moneyChip } from '../../lib/bookingMoney';
 import BookingMenu, { BoardActions } from './BookingMenu';
 import { StageChip, NextButton, DateBlock, detailLine, missingGuests } from './BookingBits';
 
 interface Props { groups: MonthGroup[]; actions: BoardActions; empty: string }
+
+// "₹20,000 received · ₹55,150 due" or "No advance yet" under the amount.
+const MoneyChip: React.FC<{ v: BookingView }> = ({ v }) => {
+  const c = moneyChip(v.stage, v.money);
+  return c ? <span className={`bk-money ${c.tone}`}>{c.text}</span> : null;
+};
 
 // List view: month headings, then one row per event — date, who and what, value, stage, next step, ⋯.
 const BookingAgenda: React.FC<Props> = ({ groups, actions: a, empty }) => {
@@ -30,7 +37,7 @@ const BookingAgenda: React.FC<Props> = ({ groups, actions: a, empty }) => {
                   {detailLine(v) && <span style={{ display: 'block', fontSize: 13, color: '#6B6B66', marginTop: 2 }}>{detailLine(v)}</span>}
                   {missingGuests(v) && <span style={{ display: 'block', fontSize: 12.5, color: '#8A4B00', marginTop: 2 }}>Guest count missing</span>}
                 </button>
-                <span className="bk-amt" style={{ fontSize: 15, fontWeight: 600 }}>{v.valueText}</span>
+                <span className="bk-amt" style={{ fontSize: 15, fontWeight: 600 }}>{v.valueText}<MoneyChip v={v} /></span>
                 <span className="bk-stage"><StageChip v={v} /></span>
                 <div className="bk-acts" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   <NextButton v={v} onRun={a.run} style={{ flex: 1 }} />

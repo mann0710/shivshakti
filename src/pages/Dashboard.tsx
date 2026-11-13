@@ -37,7 +37,7 @@ const Dashboard: React.FC<Props> = ({ onNavigate }) => {
     const last = receiptsIn(data, { from: '2000-01-01', to: today })[0];
     const upcoming = data.bookings.filter(b => b.status !== 'cancelled' && b.event_date >= today).sort((a, b) => a.event_date.localeCompare(b.event_date));
     const events = upcoming.slice(0, 5).map(b => {
-      const view = bookingView(b, { quotes, invoices: data.invoices, value: valueOf(b), today });
+      const view = bookingView(b, { quotes, invoices: data.invoices, payments: data.payments, value: valueOf(b), today });
       const pick = view.quote && view.quote.status !== 'accepted' ? openChoiceLabels(view.quote)[0] : undefined;
       const hasDraft = quotes.some(q => q.booking_id === b.id && q.status === 'draft');
       const live = quotes.some(q => q.booking_id === b.id && (q.status === 'sent' || q.status === 'accepted'));

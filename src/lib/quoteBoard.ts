@@ -179,16 +179,13 @@ export interface HistoryLine { when: string; what: string }
 export function quoteHistory(r: BoardRow, today: string): HistoryLine[] {
   const g = r.group;
   const head = r.head;
-  const b: Booking | undefined = head.booking;
   const picks = openPicks(g.options[0]);
   const made = g.grouped ? ` with ${g.options.length} options` : picks.length ? ` with a ${picks[0].label.toLowerCase()} choice` : '';
   const out: HistoryLine[] = [{ when: formatDateIST(g.options[0].created_at, 'd MMM'), what: `Created${made}` }];
   if (r.section === 'waiting' || r.section === 'accepted') out.push({ when: '', what: `Sent${head.customer?.phone ? ' on WhatsApp' : ''} to ${head.customer?.name || 'the customer'}` });
   if (r.section === 'accepted') {
     const won = acceptedOf(g)!;
-    out.push({ when: b?.advance_date ? formatDateIST(b.advance_date, 'd MMM') : '', what: `Accepted${g.grouped ? ` · ${optionTitle(won)}` : ''}` });
-    const mode = b?.advance_mode === 'upi' ? 'UPI' : b?.advance_mode ? cap(b.advance_mode) : '';
-    if (Number(b?.advance_received) > 0) out.push({ when: '', what: `Advance ${inr(Number(b!.advance_received))}${mode ? ` by ${mode}` : ''} — goes on the invoice` });
+    out.push({ when: '', what: `Accepted${g.grouped ? ` · ${optionTitle(won)}` : ''}` });
   }
   if (r.section === 'waiting' && r.date >= today) out.push({ when: '', what: 'No reply yet — a reminder is on Home' });
   if (r.section === 'lost') out.push({ when: '', what: cap(lostWhy(g, today)) });

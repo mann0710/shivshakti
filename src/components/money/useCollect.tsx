@@ -4,7 +4,7 @@ import { MoneyData, Debt } from '../../lib/moneyView';
 import { sendReminder } from '../../lib/sessionalReceipts';
 import { useBillActions } from '../pos/useBillActions';
 import { usePreorderActions } from '../../hooks/usePreorderActions';
-import PaymentFormModal from '../catering/PaymentFormModal';
+import PaymentDialog, { bookingOfInvoice } from '../catering/PaymentDialog';
 import { whatsApp } from '../catering/InvoiceActions';
 import { inr } from '../../lib/money';
 
@@ -31,7 +31,7 @@ export function useCollect(d: MoneyData) {
 
   const ui = (
     <>
-      {paying && <PaymentFormModal invoice={paying} onClose={() => setPaying(null)} />}
+      {paying && <PaymentDialog booking={bookingOfInvoice(paying)} invoice={paying} onClose={() => setPaying(null)} />}
       {bills.ui}
       {pre.ui}
     </>

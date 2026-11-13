@@ -10,6 +10,13 @@ import { siblingsOf } from '../lib/quoteOptions';
 import QuoteAcceptDialog from '../components/catering/QuoteAcceptDialog';
 import SendDialog from '../components/quotes/SendDialog';
 import { todayIST } from '../lib/ist';
+import { useSavePayment } from './useBookingPayments';
+import { payTypeOn } from '../lib/bookingMoney';
+import { amountOf } from '../lib/invoiceEdit';
+import { ReceiptInfo } from '../lib/bookingReceipt';
+import { SHOP } from '../lib/shop';
+import { PayDraft } from '../components/catering/PaymentFields';
+import ReceiptDialog from '../components/catering/ReceiptDialog';
 
 type SendTarget = { q: Quotation; options: Quotation[]; all: boolean; prices: boolean };
 
@@ -23,13 +30,15 @@ export const useAcceptFlow = (onNavigate?: Navigate) => {
   const updateQuotation = useUpdateQuotation();
   const updateStatus = useUpdateQuotationStatus();
   const updateBooking = useUpdateBooking();
+  const savePayment = useSavePayment();
+  const [receipt, setReceipt] = useState<{ phone: string; info: ReceiptInfo } | null>(null);
   const [target, setTarget] = useState<{ q: Quotation; picks?: Set<string> } | null>(null);
   const [sending, setSending] = useState<SendTarget | null>(null);
   const [busy, setBusy] = useState(false);
 
   const accept = (q: Quotation, picks?: Set<string>) => setTarget({ q, picks });
 
-  const confirm = async (chosen: Quotation, picked: Set<string>, guests?: number, advance?: { amount: number; mode: string }) => {
+  const confirm = async (chosen: Quotation, picked: Set<string>, guests?: number, advance?: { draft: PayDraft; receipt: boolean }) => {
     setBusy(true);
     try {
       const patch = acceptPatch(chosen, picked, guests);
@@ -38,9 +47,18 @@ export const useAcceptFlow = (onNavigate?: Navigate) => {
         if (s.id !== chosen.id && s.status !== 'rejected') await updateStatus.mutateAsync({ id: s.id, status: 'rejected' });
       }
       if (guests && chosen.booking_id && chosen.booking?.guest_count !== guests) await updateBooking.mutateAsync({ id: chosen.booking_id, guest_count: guests });
-      if (advance?.amount && chosen.booking_id) await updateBooking.mutateAsync({ id: chosen.booking_id, advance_received: advance.amount, advance_mode: advance.mode, advance_date: todayIST() });
+      // The advance is a payment on the booking, like any other.
+      const amount = amountOf(advance?.draft.amount ?? '');
+      const b = chosen.booking;
+      const day = advance?.draft.payment_date || todayIST();
+      if (amount > 0 && chosen.booking_id) await savePayment.mutateAsync({ bookingId: chosen.booking_id, amount, payment_type: payTypeOn(b?.event_date ?? day, day), payment_mode: advance!.draft.payment_mode, notes: advance!.draft.notes, payment_date: day });
       await lifecycle.setStatus([{ ...chosen, ...patch } as Quotation], 'accepted');
       setTarget(null);
+      const phone = chosen.customer?.phone ?? '';
+      if (amount > 0 && advance?.receipt && phone.replace(/\D/g, '').length >= 10 && b) {
+        const total = patch.total_amount ?? chosen.total_amount;
+        setReceipt({ phone, info: { name: chosen.customer?.name ?? '', amount, mode: advance.draft.payment_mode, day, advance: b.event_date > day, event: b.event_type, eventDate: b.event_date, total, received: amount, shop: SHOP.name } });
+      }
     } catch (e: any) { toast.error(e?.message || 'Could not accept'); }
     finally { setBusy(false); }
   };
@@ -57,6 +75,7 @@ export const useAcceptFlow = (onNavigate?: Navigate) => {
         <QuoteAcceptDialog quote={target.q} options={siblingsOf(target.q, all)} picks={target.picks} busy={busy}
           onClose={() => setTarget(null)} onConfirm={confirm} />
       )}
+      {receipt && <ReceiptDialog phone={receipt.phone} info={receipt.info} onClose={() => setReceipt(null)} />}
       {sending && (
         <SendDialog quote={sending.q} options={sending.options} all={sending.all} withPrices={sending.prices}
           onClose={() => setSending(null)} onSent={lifecycle.markSent} />

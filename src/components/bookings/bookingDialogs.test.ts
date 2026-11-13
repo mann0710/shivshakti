@@ -10,7 +10,7 @@ const kavit = { id: 'kavit', customer_id: 'c1', customer: { name: 'Kavit Mangrol
   venue: '', guest_count: 140, status: 'followup', estimated_cost: 0, created_at: '2026-10-28T10:00:00Z', special_instructions: 'Food style: Swaminarayan\nNo onion' } as any;
 const jigar = { ...kavit, id: 'jigar', customer: { name: 'Jigar bhai (Hitesh Bhai)', phone: '9876500000' }, event_date: '2026-09-13', status: 'completed' } as any;
 const jigarInv = { id: 'i1', booking_id: 'jigar', invoice_number: 'INV-0001', total_amount: 116675, advance_paid: 50000, balance_due: 66675, status: 'sent' } as any;
-const view = (b: any, quotes: any[] = [], invoices: any[] = []) => bookingView(b, { quotes, invoices, today, value: 0 });
+const view = (b: any, quotes: any[] = [], invoices: any[] = [], payments: any[] = []) => bookingView(b, { quotes, invoices, payments, today, value: 0 });
 
 describe('booking form', () => {
   it('reads the food style from its column, or from older notes', () => {
@@ -50,12 +50,12 @@ describe('event page facts', () => {
   });
   it('sums the money before the invoice', () => {
     expect(moneyRows(view(kavit, [kavitQ]), 30)).toEqual([
-      { label: 'Advance to ask on accept (30%)', value: '₹8,640 – ₹9,480' }, { label: 'Received so far', value: '₹0' },
+      { label: 'Advance to ask on confirm (30%)', value: '₹8,640 – ₹9,480' }, { label: 'Received so far', value: '₹0' },
       { label: 'Still to come', value: '₹28,800 – ₹31,600', strong: true },
     ]);
-    const paid = { ...kavit, advance_received: 5000, advance_mode: 'upi', advance_date: '2026-10-30' };
-    expect(moneyRows(view(paid, [{ ...kavitQ, status: 'accepted', total_max: null }]), 30)).toEqual([
-      { label: 'Received so far · UPI, 30 Oct', value: '₹5,000' }, { label: 'Still to come', value: '₹23,800', strong: true },
+    const token = { id: 't', booking_id: kavit.id, amount: 5000, payment_mode: 'upi', payment_date: '2026-10-30', payment_type: 'advance' };
+    expect(moneyRows(view(kavit, [{ ...kavitQ, status: 'accepted', total_max: null }], [], [token]), 30)).toEqual([
+      { label: 'Received so far', value: '₹5,000' }, { label: 'Still to come', value: '₹23,800', strong: true },
     ]);
   });
   it('flags money still due after the event and offers a reminder', () => {

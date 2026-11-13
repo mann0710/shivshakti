@@ -16,7 +16,7 @@ import InvoiceList, { invoiceMatches } from '../components/catering/InvoiceList'
 import InvoiceEditor from '../components/catering/InvoiceEditor';
 import InvoiceCreateModal from '../components/catering/InvoiceCreateModal';
 import InvoiceSettle, { useSettleOutside } from '../components/catering/InvoiceSettle';
-import PaymentFormModal from '../components/catering/PaymentFormModal';
+import PaymentDialog, { bookingOfInvoice } from '../components/catering/PaymentDialog';
 import { Empty, LoadError, Skeleton } from '../components/money/MoneyUi';
 
 interface Props { onNavigate?: Navigate }
@@ -101,7 +101,7 @@ const Billing: React.FC<Props> = () => {
       {creating !== null && (
         <InvoiceCreateModal bookingId={creating || undefined} onClose={() => setCreating(null)} onCreated={id => { setCreating(null); setOpenId(id); }} />
       )}
-      {paying && <PaymentFormModal invoice={paying} onClose={() => setPaying(null)} />}
+      {paying && <PaymentDialog booking={bookingOfInvoice(paying)} invoice={paying} onClose={() => setPaying(null)} />}
       {settling && settleBooking && (
         <InvoiceSettle item={settling} booking={settleBooking} quote={pickQuotation(quotations, settleBooking.id)} onClose={() => setSettling(null)}
           onInvoice={id => { setSettling(null); setCreating(id); }} onDone={() => setSettling(null)} />

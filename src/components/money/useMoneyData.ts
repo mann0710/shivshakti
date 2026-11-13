@@ -1,8 +1,6 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
-import { fetchAll } from '../../lib/fetchAll';
-import { Payment } from '../../types';
 import { useBookings } from '../../hooks/useBookings';
 import { useInvoices } from '../../hooks/useInvoices';
 import { useQuotations } from '../../hooks/useQuotations';
@@ -10,21 +8,16 @@ import { useSeasonalOrders } from '../../hooks/useSeasonalOrders';
 import { useSeasonalPreorders } from '../../hooks/useSeasonalPreorders';
 import { MoneyData } from '../../lib/moneyView';
 import { useCreditEntries } from '../../hooks/useCredit';
+import { usePaymentRows } from '../../hooks/useBookingPayments';
 import { Spend, SpendDraft } from '../../lib/spends';
 
 export const SPENDS_MIGRATION_FILE = 'supabase/migrations/20261109_spends.sql';
-
-// Every catering payment with its mode and date; refreshed with the other payment queries.
-const useAllPaymentRows = () => useQuery({
-  queryKey: ['all_payments', 'rows'],
-  queryFn: () => fetchAll<Payment>((from, to) => supabase.from('payments').select('*').order('payment_date').range(from, to)),
-});
 
 // Catering and sweets data behind Home, Money and the CA download.
 export function useMoneyData() {
   const bookings = useBookings();
   const invoices = useInvoices();
-  const payments = useAllPaymentRows();
+  const payments = usePaymentRows();
   const quotes = useQuotations();
   const orders = useSeasonalOrders();
   const preorders = useSeasonalPreorders();

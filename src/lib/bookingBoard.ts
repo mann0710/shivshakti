@@ -1,4 +1,5 @@
-import type { Booking, Invoice } from '../types';
+import type { Booking, Invoice, Payment } from '../types';
+import { basisOf, Money, moneyOf, paymentsFor } from './bookingMoney';
 import type { Quotation } from '../hooks/useQuotations';
 import { eventStage, Stage } from './eventStage';
 import { pendingChoice, openChoiceLabels } from './quoteChoices';
@@ -14,7 +15,7 @@ export const TABS: { id: Tab; label: string }[] = [
   { id: 'past', label: 'Past' }, { id: 'cancelled', label: 'Lost or cancelled' },
 ];
 
-export type NextKind = 'quote' | 'pick' | 'accept' | 'invoice' | 'payment' | 'complete' | 'close';
+export type NextKind = 'quote' | 'pick' | 'accept' | 'advance' | 'invoice' | 'payment' | 'complete' | 'close';
 export interface Next { kind: NextKind; label: string }
 
 export interface BookingView {
@@ -24,6 +25,8 @@ export interface BookingView {
   next: Next | null;
   quote?: Quotation;     // the quote a pick / accept acts on, else the booking's chosen one
   invoice?: Invoice;
+  payments: Payment[];   // every payment on the booking, oldest first
+  money: Money;
   value: number;
   valueText: string;
   start: string;
@@ -46,7 +49,7 @@ const pickLabel = (q: Quotation, siblings: number) => {
 };
 
 // One next step per booking; past events ask to be closed so totals stay right.
-function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | undefined, toPick: Quotation | undefined, siblings: number, drafted = false): Next | null {
+function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | undefined, toPick: Quotation | undefined, siblings: number, drafted = false, received = 0): Next | null {
   if (stage === 'cancelled') return null;
   if (invoice) {
     if (Number(invoice.balance_due) > 0) return { kind: 'payment', label: 'Record payment' };
@@ -56,11 +59,12 @@ function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | un
   if (toPick) return { kind: 'pick', label: pickLabel(toPick, siblings) };
   if (stage === 'inquiry') return past ? { kind: 'close', label: 'Close as lost' } : { kind: 'quote', label: drafted ? 'Send quote' : 'Make quotation' };
   if (stage === 'quoted') return past ? { kind: 'close', label: 'Close as lost' } : { kind: 'accept', label: 'Mark accepted' };
-  if (stage === 'confirmed') return past ? { kind: 'complete', label: 'Mark completed' } : { kind: 'invoice', label: 'Create invoice' };
+  // A confirmed event with nothing received yet asks for the advance before the invoice.
+  if (stage === 'confirmed') return past ? { kind: 'complete', label: 'Mark completed' } : received > 0 ? { kind: 'invoice', label: 'Create invoice' } : { kind: 'advance', label: 'Record advance' };
   return null;
 }
 
-export function bookingView(b: Booking, ctx: { quotes: Quotation[]; invoices: Invoice[]; value: number; today: string }): BookingView {
+export function bookingView(b: Booking, ctx: { quotes: Quotation[]; invoices: Invoice[]; value: number; today: string; payments?: Payment[] }): BookingView {
   const quotes = ctx.quotes.filter(q => q.booking_id === b.id);
   const invoice = ctx.invoices.find(i => i.booking_id === b.id);
   const stage = eventStage(b, quotes, invoice);
@@ -70,11 +74,14 @@ export function bookingView(b: Booking, ctx: { quotes: Quotation[]; invoices: In
   const sibs = (q: Quotation) => siblingsOf(q, ctx.quotes).length;
   // Only a sent quote can be picked from or accepted; an unsent draft waits to be sent.
   const toPick = quotes.find(q => q.status === 'sent' && pendingChoice(q, sibs(q)));
-  const next = nextStep(b, stage, past, invoice, toPick, toPick ? sibs(toPick) : 1, quotes.some(q => q.status === 'draft'));
-  const quote = toPick ?? (next?.kind === 'accept' ? quotes.find(q => q.status === 'sent') : undefined) ?? pickQuotation(ctx.quotes, b.id);
+  const payments = paymentsFor(ctx.payments ?? [], b.id);
+  const chosen = pickQuotation(ctx.quotes, b.id);
+  const money = moneyOf(basisOf(invoice, chosen), payments);
+  const next = nextStep(b, stage, past, invoice, toPick, toPick ? sibs(toPick) : 1, quotes.some(q => q.status === 'draft'), money.received);
+  const quote = toPick ?? (next?.kind === 'accept' ? quotes.find(q => q.status === 'sent') : undefined) ?? chosen;
   const tab: Tab = stage === 'cancelled' ? 'cancelled' : past && next ? 'attention' : past ? 'past' : 'upcoming';
   const valueText = invoice ? inr(ctx.value) : quote && quote.status !== 'rejected' ? totalText(quote) : ctx.value > 0 ? inr(ctx.value) : 'No quote yet';
-  return { b, stage, tab, next, quote, invoice, value: ctx.value, valueText, start, end };
+  return { b, stage, tab, next, quote, invoice, payments, money, value: ctx.value, valueText, start, end };
 }
 
 // Upcoming and attention read forwards in time; past and cancelled newest first.
@@ -99,7 +106,7 @@ export function boardStats(views: BookingView[]) {
   const upcoming = sortForTab(views.filter(v => v.tab === 'upcoming'), 'upcoming');
   const waiting = views.filter(v => (v.tab === 'upcoming' || v.tab === 'attention') && v.next);
   const count = (kinds: NextKind[]) => waiting.filter(v => kinds.includes(v.next!.kind)).length;
-  const parts = [[count(['invoice']), 'invoice'], [count(['quote']), 'quote'], [count(['pick', 'accept']), 'decision'],
+  const parts = [[count(['advance']), 'advance'], [count(['invoice']), 'invoice'], [count(['quote']), 'quote'], [count(['pick', 'accept']), 'decision'],
     [count(['payment']), 'payment'], [count(['complete', 'close']), 'to close']] as [number, string][];
   return {
     upcoming: upcoming.length,

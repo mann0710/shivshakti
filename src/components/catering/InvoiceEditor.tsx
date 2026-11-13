@@ -15,7 +15,7 @@ import InvoiceSchedule from './InvoiceSchedule';
 import InvoiceChargeList from './InvoiceChargeList';
 import InvoiceTotals from './InvoiceTotals';
 import PaymentHistory from './PaymentHistory';
-import PaymentFormModal from './PaymentFormModal';
+import PaymentDialog, { bookingOfInvoice } from './PaymentDialog';
 
 // backLabel replaces "Invoices" when Back returns to another screen.
 interface Props { invoice: Invoice; onBack: () => void; onDeleted: () => void; backLabel?: string }
@@ -49,7 +49,7 @@ const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted, backLabel 
     r.day >= 0 ? change({ days: editMeal(draft.days, r.day, r.meal, patch) }) : change({ guests: patch.guests ?? r.guests });
   const back = async () => { await flush(); onBack(); };
   const remove = async () => {
-    const paid = invoice.advance_paid > 0 ? ` Its payments (${inr(invoice.advance_paid)}) are deleted too.` : '';
+    const paid = invoice.advance_paid > 0 ? ` Its payments (${inr(invoice.advance_paid)}) stay on the booking.` : '';
     if (!(await confirm({ title: `Delete ${invoice.invoice_number}?`, message: `The invoice for ${name} (${inr(invoice.total_amount)}) is removed for good.${paid}`, confirmLabel: 'Delete invoice', danger: true }))) return;
     try { await del.mutateAsync(invoice.id); toast.success(`${invoice.invoice_number} deleted`); onDeleted(); }
     catch (e) { toast.error(e instanceof Error ? e.message : 'Could not delete'); }
@@ -102,7 +102,7 @@ const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted, backLabel 
         <button type="button" className="ui-btn primary" onClick={record} disabled={!owed}>{owed ? 'Record payment' : 'Paid in full'}</button>
       </div>
 
-      {paying && <PaymentFormModal invoice={invoice} payment={paying === 'new' ? undefined : paying} onClose={() => setPaying(null)} />}
+      {paying && <PaymentDialog booking={bookingOfInvoice(invoice)} invoice={invoice} payment={paying === 'new' ? undefined : paying} onClose={() => setPaying(null)} />}
       {send.ui}
       {dialog}
     </div>

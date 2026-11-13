@@ -74,11 +74,11 @@ export const EventInvoice: React.FC<{ invoice: Invoice; onOpen: () => void; onSe
   );
 };
 
-export interface PayLine { key: string; title: string; sub: string; amount: number }
+export interface PayLine { key: string; title: string; sub: string; amount: number; onEdit?: () => void }
 
 export const EventPayments: React.FC<{ lines: PayLine[] }> = ({ lines }) => (
   <Section title="Payments">
-    <div className="ev-list">{lines.map(p => <Row key={p.key} title={p.title} sub={p.sub} right={inr(p.amount)} />)}</div>
+    <div className="ev-list">{lines.map(p => <Row key={p.key} title={p.title} sub={p.sub} right={inr(p.amount)} tone={p.amount < 0 ? 'due' : undefined} acts={p.onEdit ? [{ label: 'Edit', onClick: p.onEdit }] : undefined} />)}</div>
   </Section>
 );
 
