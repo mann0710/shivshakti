@@ -3,6 +3,7 @@ import { todayIST } from '../../lib/ist';
 import { amountOf } from '../../lib/invoiceEdit';
 import { QuickPick } from '../../lib/bookingMoney';
 import { Picks } from '../money/MoneyUi';
+import UpiPanel from '../pos/UpiPanel';
 
 export type PayModeName = 'cash' | 'upi' | 'bank_transfer' | 'cheque';
 export interface PayDraft { amount: string; payment_mode: PayModeName; notes: string; payment_date: string }
@@ -17,11 +18,12 @@ export const grouped = (text: string) => {
   return `${Number(whole || 0).toLocaleString('en-IN')}${dec !== undefined ? `.${dec}` : ''}`;
 };
 
-interface Props { value: PayDraft; onChange: (v: PayDraft) => void; picks: QuickPick[]; error?: string; label?: string; picksHint?: string; open?: boolean; autoFocus?: boolean }
+interface Props { value: PayDraft; onChange: (v: PayDraft) => void; picks: QuickPick[]; error?: string; label?: string; picksHint?: string; open?: boolean; autoFocus?: boolean; upiNote?: string }
 
-// Amount with quick picks and how it was paid; date and note behind "More details".
-const PaymentFields: React.FC<Props> = ({ value, onChange, picks, error, label = 'Amount', picksHint, open, autoFocus = true }) => {
+// Amount with quick picks and how it was paid (UPI shows a QR with both filled in when upiNote is set); date and note tucked away.
+const PaymentFields: React.FC<Props> = ({ value, onChange, picks, error, label = 'Amount', picksHint, open, autoFocus = true, upiNote }) => {
   const [more, setMore] = useState(!!open || value.payment_date !== todayIST() || !!value.notes);
+  const amount = amountOf(value.amount);
   const set = <K extends keyof PayDraft>(key: K, v: PayDraft[K]) => onChange({ ...value, [key]: v });
   return (
     <>
@@ -35,13 +37,14 @@ const PaymentFields: React.FC<Props> = ({ value, onChange, picks, error, label =
           <span>Quick amounts</span>
           <span className="mx-picks">
             {picks.map(q => (
-              <button key={q.label} type="button" className="mx-pick" aria-pressed={amountOf(value.amount) === q.value} onClick={() => set('amount', String(q.value))}>{q.label}</button>
+              <button key={q.label} type="button" className="mx-pick" aria-pressed={amount === q.value} onClick={() => set('amount', String(q.value))}>{q.label}</button>
             ))}
           </span>
           {picksHint && <span className="mx-hint">{picksHint}</span>}
         </div>
       )}
       <Picks label="Paid by" options={PAY_MODES} value={value.payment_mode} onPick={m => set('payment_mode', m)} />
+      {upiNote !== undefined && value.payment_mode === 'upi' && amount > 0 && <UpiPanel amount={amount} note={upiNote} />}
       {more ? (
         <div className="mx-grid2">
           <label className="mx-field">Date

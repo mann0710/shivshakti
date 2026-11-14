@@ -64,7 +64,7 @@ export const ConfirmBookingDialog: React.FC<ConfirmProps> = ({ view: v, onClose,
         <p className="mx-dlg-sub">{when(v)}</p>
         {m.received > 0 && <div className="mx-banner info" role="status">{inr(m.received)} already received on this booking. Add more only if they paid again.</div>}
         <span className="mx-heading">Advance (token) received now</span>
-        <PaymentFields value={draft} onChange={setDraft} picks={picks} picksHint={hint} label="Amount" />
+        <PaymentFields value={draft} onChange={setDraft} picks={picks} picksHint={hint} label="Amount" upiNote={`Advance ${v.b.customer?.name ?? ''}`} />
         {m.total <= 0 && <p className="mx-hint">No quote yet, so type what they paid. Leave it empty to confirm without an advance.</p>}
         <ReceiptCheck phone={phone} on={receipt} onChange={setReceipt} />
         {m.total > 0 && amount > 0 && (

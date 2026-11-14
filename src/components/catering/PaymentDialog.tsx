@@ -93,7 +93,8 @@ const PaymentDialog: React.FC<Props> = ({ booking: b, invoice, quote, payment, o
             {m.total > 0 && <span className="strong"><span>Balance due</span><span>{inr(m.due)}</span></span>}
           </div>
         )}
-        <PaymentFields value={draft} onChange={setDraft} picks={picks} error={tried ? error : ''} open={!!payment} />
+        <PaymentFields value={draft} onChange={setDraft} picks={picks} error={tried ? error : ''} open={!!payment}
+          upiNote={payment ? undefined : invoice?.invoice_number ?? `${payTypeOn(b.event_date, todayIST()) === 'advance' ? 'Advance' : 'Payment'} ${name}`} />
         {!payment && <ReceiptCheck phone={phone} on={receipt} onChange={setReceipt} />}
         {!invoice && !payment?.invoice_id && <p className="mx-hint">Saved on this booking. It will appear on the invoice with its own date.</p>}
       </div>

@@ -116,7 +116,7 @@ const QuoteAcceptDialog: React.FC<Props> = ({ quote, options, busy, picks, onClo
       </div>
       <div className="mx-dlg" style={{ marginTop: 14 }}>
         <span className="mx-heading">Advance (token) received now{had > 0 ? ` · ${inr(had)} already received` : ''}</span>
-        <PaymentFields value={pay} onChange={setPay} picks={confirmPicks(total, settings.schedule)} picksHint="From your payment plan (Settings › Money). Empty if nothing was paid yet." autoFocus={false} />
+        <PaymentFields value={pay} onChange={setPay} picks={confirmPicks(total, settings.schedule)} picksHint="From your payment plan (Settings › Money). Empty if nothing was paid yet." autoFocus={false} upiNote={`Booking ${quote.quotation_number}`} />
         <ReceiptCheck phone={quote.customer?.phone} on={receipt} onChange={setReceipt} />
       </div>
 
