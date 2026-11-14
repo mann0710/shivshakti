@@ -57,8 +57,11 @@ table.course th, table.course td { padding: 0; text-align: left; font-weight: in
 table.course tr { break-inside: avoid; }
 .course-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-family: ${HEAD_FONT}; font-size: 12.5px; font-weight: 600; letter-spacing: 1.5px; color: var(--accent-text); text-transform: uppercase; margin-bottom: 5px; break-after: avoid; }
 .course-h span { font-family: 'Noto Sans', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0; color: #5C5C6B; text-transform: none; white-space: nowrap; }
-.sg { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; }
-.sg-l { font-size: 10px; font-weight: 600; letter-spacing: 0.6px; line-height: 1.25; text-transform: uppercase; color: #4A4A58; padding-top: 6px; overflow-wrap: anywhere; }
+.sg { display: grid; grid-template-columns: var(--lw, 84px) minmax(0, 1fr); gap: 10px; break-inside: avoid; }
+.sg-l { font-size: 11px; font-weight: 500; line-height: 1.3; color: #5C5C6B; padding-top: 5px; overflow-wrap: anywhere; }
+.course.quick { break-inside: avoid; }
+.pick-sub { font-size: 11.5px; color: #4A4A58; margin: -2px 0 3px; }
+.nw { white-space: nowrap; }
 .dish { padding: 3px 0 4px; border-bottom: 1px dotted #E3E3EA; break-inside: avoid; }
 .dl { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; line-height: 1.35; }
 .dl .n { flex: 1; }
@@ -109,10 +112,10 @@ thead { display: table-header-group; }
 .step .dot em { flex: 1; height: 2px; background: var(--accent); }
 .step .a.rng { font-size: 16px; }
 .step .a { font-family: ${HEAD_FONT}; font-size: 21px; font-weight: 700; color: ${NAVY}; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chips span { font-size: 12.5px; padding: 5px 12px; border: 1px solid #D5D6E4; border-radius: 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips span { font-size: 12px; padding: 3px 10px; border: 1px solid #D5D6E4; border-radius: 14px; }
 ol.terms { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.55; display: flex; flex-direction: column; gap: 4px; }
-.close { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 24px; align-items: end; margin-top: 30px; break-inside: avoid; }
+.close { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 24px; align-items: end; margin-top: 22px; break-inside: avoid; }
 .signs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
 .signs div { border-top: 1px solid #1C1C24; padding-top: 6px; font-size: 12px; color: #4A4A58; }
 .upi { border: 1px solid #E3E3EA; border-radius: 10px; padding: 12px; display: flex; gap: 12px; align-items: center; font-size: 12px; }

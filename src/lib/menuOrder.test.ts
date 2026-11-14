@@ -59,7 +59,7 @@ describe('menu order (design A)', () => {
     const withAlt = menu.map(i => (i.item_name === 'South Boll' ? { ...i, choice: g } : i));
     withAlt.splice(5, 0, d('Mix Bhajiya', 'Main Course', 'Farsan', { choice: g }));
     const html = courseGrid(withAlt, false);
-    expect(html).toContain('<div class="course pick"><div class="course-h">Farsan · choose 1 of 2');
+    expect(html).toContain('<div class="course pick"><div class="course-h">Farsan</div><div class="pick-sub">Choose 1 of 2');
     expect(html).not.toContain('Tick one.');
     expect(planCourses(withAlt, { groups: choiceGroups(withAlt) })[2].count).toBe(1);
   });
@@ -74,9 +74,9 @@ describe('menu order (design A)', () => {
     const list = [d('Paneer', 'Main Course', 'Punjabi Sabji', { choice: a, amount: 40 }), d('Kofta', 'Main Course', 'Punjabi Sabji', { choice: a, amount: 60 }),
       d('Mix Veg', 'Main Course', 'Punjabi Sabji', { choice: b }), d('Bhindi', 'Main Course', 'Punjabi Sabji', { choice: b })];
     const html = courseGrid(list, false);
-    expect(html).toContain('Punjabi Sabji 1 · choose 1 of 2');
-    expect(html).toContain('Punjabi Sabji 2 · choose 1 of 2');
-    expect(html.match(/Your pick changes the plate price\./g)).toHaveLength(1);
+    expect(html).toContain('<div class="course-h">Punjabi Sabji 1</div><div class="pick-sub">Choose 1 of 2');
+    expect(html).toContain('<div class="course-h">Punjabi Sabji 2</div><div class="pick-sub">Choose 1 of 2');
+    expect(html.match(/changes the plate price/g)).toHaveLength(1);
   });
   it('recognises roles and accompaniments', () => {
     expect(roleOf(d('x', 'Delicious Dal', ''))).toBe('main');

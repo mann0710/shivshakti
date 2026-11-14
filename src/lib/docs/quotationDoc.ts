@@ -3,7 +3,7 @@ import { DocContext, docContext } from './context';
 import { scheduleAmounts } from './settings';
 import { page, esc, money, cap, timeText } from './theme';
 import { header, facts, sectionHead, sumRows, SumRow, banner, paySteps, StepOption, chips, terms, upiBox, signatures, endLine, footerText } from './parts';
-import { courseGrid, coursesOf, hasItemPrices, priceShow, PriceShow, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText, dayLabel } from './menu';
+import { courseGrid, coursesOf, hasItemPrices, priceShow, PriceShow, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText } from './menu';
 import { plateRange, choiceGroups, pickedOf, dishCount } from '../quoteChoices';
 import { optionTitle, statusText } from '../quoteOptions';
 import { formatDateIST } from '../ist';
@@ -38,14 +38,14 @@ function priceSection(q: Quotation, itemPrices: PriceShow, title = 'Price'): str
   const rows: string[] = [];
   const adj: SumRow[] = [];
   const row = (name: string, sub: string, n: number, rate: string, amount: string) =>
-    `<tr><td>${esc(name)}<small>${esc(sub)}</small></td><td class="r">${n}</td><td class="r">${rate}</td><td class="r">${amount}</td></tr>`;
+    `<tr><td>${esc(name)}${sub ? `<small>${esc(sub)}</small>` : ''}</td><td class="r">${n}</td><td class="r">${rate}</td><td class="r">${amount}</td></tr>`;
   let detail = '';
   let first: SumRow = { label: 'Subtotal', value: q.subtotal, cls: '' };
   const range = plateRange(q.items);
 
   if (multi) {
     for (const g of daysOf(q.event_days)) for (const m of g.meals) {
-      rows.push(row(mealTitle(m), dayLabel(g), m.guest_count || 0, rangeText(m.per_plate_amount, m.per_plate_max ?? 0), money(m.subtotal)));
+      rows.push(row(`Day ${g.number}${g.date ? `, ${formatDateIST(g.date, 'd MMM')}` : ''} · ${mealTitle(m)}`, '', m.guest_count || 0, rangeText(m.per_plate_amount, m.per_plate_max ?? 0), rangeText(m.subtotal, (m.per_plate_max ?? 0) * (m.guest_count || 0))));
       if (mealSaving(m)) adj.push({ label: `${cap(m.meal_type)} offer · Day ${g.number} (${money(offerOf(m))} / plate)`, value: mealSaving(m), sign: '-' });
     }
     adj.push(...(q.additional_discounts ?? []).filter(d => Number(d.amount) > 0).map(d => ({ label: d.description || 'Discount', value: Number(d.amount), sign: '-' as const })));
@@ -89,7 +89,7 @@ const menuSection = (q: Quotation, itemPrices: PriceShow, title: string) => {
   const dishes = dishesOf(q);
   const note = isMulti(q)
     ? `${daysOf(q.event_days).length} day(s) · ${daysOf(q.event_days).reduce((n, g) => n + g.meals.length, 0)} meal(s)`
-    : [`${dishCount(dishes)} dishes`, itemPrices === true ? 'prices per plate' : '', q.food_type].filter(Boolean).join(' · ');
+    : [`${dishCount(dishes)} dishes`, itemPrices === true ? 'prices per plate' : '', q.food_type, isRange(q) ? 'price final once you choose' : ''].filter(Boolean).join(' · ');
   return `<section>${sectionHead(title, note)}${
     isMulti(q) ? mealSchedule(q.event_days, { amounts: true, itemPrices: !!itemPrices }) : courseGrid(q.items ?? [], itemPrices)}</section>`;
 };
@@ -120,6 +120,9 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   // Exact rupees only once the price is fixed; options and open choices show percentages.
   const open = grouped || isRange(q);
   const firstStep = open ? 0 : scheduleAmounts(q.total_amount, s.schedule)[0] ?? 0;
+  // The UPI QR sits beside the payment schedule it pays, so the closing signatures stay short.
+  const qr = s.quote_qr ? upiBox(ctx, firstStep, firstStep ? `Confirm with ${money(firstStep)}` : 'Pay the booking amount', `Booking ${q.quotation_number}`) : '';
+  const steps = s.schedule.length ? paySteps(grouped ? null : q.total_amount, s.schedule, perOption, isRange(q) ? q.total_max ?? 0 : 0) : '';
 
   const details = grouped
     ? options.map(o => `${menuSection(o, prices(o), `${optionTitle(o)} — the menu`)}${priceSection(o, prices(o), `${optionTitle(o)} — price`)}`).join('')
@@ -136,11 +139,11 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   </div>
   ${grouped ? compareSection(options) : ''}
   ${details}
-  ${s.schedule.length ? `<section class="keep">${sectionHead('Payment schedule', grouped ? 'of the option you choose' : open ? 'final once you choose' : '')}${paySteps(grouped ? null : q.total_amount, s.schedule, perOption, isRange(q) ? q.total_max ?? 0 : 0)}</section>` : ''}
+  ${steps ? `<section class="keep">${sectionHead('Payment schedule', grouped ? 'of the option you choose' : open ? 'final once you choose' : '')}${qr ? `<div class="split">${steps}${qr}</div>` : steps}</section>` : ''}
   ${s.extras.length ? `<section class="keep">${sectionHead('On request, charged extra')}${chips(s.extras)}</section>` : ''}
-  <div class="keep"><section>${sectionHead('Terms')}${terms([...s.terms, ...(validTill ? [`This quotation is valid till ${day(validTill)}.`] : [])])}</section>
-  <div class="close">${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', `For ${ctx.settings.catering_name}`)}
-    ${s.quote_qr ? upiBox(ctx, firstStep, firstStep ? `Confirm with ${money(firstStep)}` : 'Pay the booking amount', `Booking ${q.quotation_number}`) : ''}</div>
+  <section class="keep">${sectionHead('Terms')}${terms([...s.terms, ...(validTill ? [`This quotation is valid till ${day(validTill)}.`] : [])])}</section>
+  <div class="keep"><div class="close">${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', `For ${ctx.settings.catering_name}`)}
+    ${steps ? '<div></div>' : qr}</div>
   ${endLine(ctx, `Thank you for considering ${ctx.settings.catering_name}`)}</div>
 </div>`;
 

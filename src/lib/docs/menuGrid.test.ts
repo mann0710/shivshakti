@@ -1,0 +1,32 @@
+import { courseGrid } from './menuGrid';
+import { mealSchedule } from './menu';
+
+const d = (name: string, course: string, amount = 0, extra: object = {}) =>
+  ({ item_id: name, item_name: name, category_name: course, subcategory_name: course, amount, course, ...extra }) as any;
+
+describe('menu layout (design B)', () => {
+  it('runs of one-dish courses become one compact list with the course beside each dish', () => {
+    const html = courseGrid([d('Juice', 'Cold Appetizers', 55), d('Soup', 'Soups', 60), d('Kheer', 'Sweet'), d('Gulab Jamun', 'Sweet')], true);
+    expect(html.match(/course quick/g)).toHaveLength(1);
+    expect(html).toContain('<div class="sg-l">Cold Appetizers</div>');
+    expect(html).toContain('<div class="sg-l">Soups</div>');
+    expect(html).toContain('<div class="course-h">Sweet<span class="num">2 dishes</span>');
+  });
+  it('labels share one width sized to the longest, capped', () => {
+    expect(courseGrid([d('A', 'Gujarati Vegetables'), d('B', 'Dal')], false)).toContain('--lw:116px');
+    expect(courseGrid([d('A', 'Dal'), d('B', 'Rice')], false)).toContain('--lw:56px');
+  });
+  it('a course longer than four dishes may continue in the next column', () => {
+    const five = Array.from({ length: 5 }, (_, i) => d(`Sabji ${i}`, 'Main Course'));
+    expect(courseGrid(five, false)).toContain('<table class="course long">');
+    expect(courseGrid(five.slice(0, 4), false)).toContain('<table class="course">');
+  });
+  it('drops a course heading that repeats the meal and shows ranges on the day and meal', () => {
+    const meal = { id: 'm', meal_type: 'breakfast', time: '', guest_count: 10, per_plate_amount: 65, per_plate_max: 105, discount_amount: 0, subtotal: 650,
+      items: [d('Chai', 'Breakfast'), d('Coffee', 'Breakfast')] };
+    const html = mealSchedule([{ day_number: 1, date: '2027-02-16', meals: [meal], day_subtotal: 650 }], { amounts: true, itemPrices: false });
+    expect(html).not.toContain('<div class="course-h">Breakfast');
+    expect(html).toContain('₹650 – ₹1,050');
+    expect(html).toContain('final once you choose');
+  });
+});
