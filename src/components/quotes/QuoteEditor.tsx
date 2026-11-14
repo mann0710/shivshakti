@@ -141,7 +141,7 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
               </section>
               <PriceSection f={f} pkg={pkg} />
               <PaymentSection steps={settings.schedule} lo={draft.total_amount} hi={draft.total_max ?? null} />
-              <PdfSection who={who} prices={pdfPrices} canPrice={f.hasItemPrices} onPrices={onPdfPrices} note={f.notes} onNote={f.setNotes} />
+              <PdfSection who={who} multi={f.isMultiDay} prices={pdfPrices} canPrice={f.hasItemPrices} onPrices={onPdfPrices} note={f.notes} onNote={f.setNotes} />
             </div>
             <SummaryAside q={draft} checks={checks} picks={picks} who={who} />
           </div>

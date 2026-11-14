@@ -19,6 +19,8 @@ export interface QuotationLineItem {
   chosen?: boolean;
   // Course the owner put this dish in for this quote (drag or rename); else it follows Menu Builder.
   course?: string;
+  // Section heading for this dish in this quote (e.g. "Rotli" for Indian Breads); else its subcategory.
+  sub_label?: string;
 }
 
 export interface ChoiceMeta { id: string; label: string; pick: number; included?: boolean }
@@ -34,6 +36,7 @@ export interface MealSlot {
   items: QuotationLineItem[];
   subtotal: number;
   per_plate_max?: number | null;
+  hide_prices?: boolean;     // dish prices left off this meal on the PDF
 }
 
 export interface EventDay {

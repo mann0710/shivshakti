@@ -3,6 +3,7 @@ import { mealNet } from '../quoteMath';
 import { formatDateIST } from '../ist';
 import { esc, money, cap, timeText } from './theme';
 import { choiceGroups, pickedOf, servedItems, plateRange, ChoiceGroup } from '../quoteChoices';
+import { showsDishPrices } from '../mealPrice';
 import { planCourses, servedNames, subGroups, showSubs, Course, Entry } from '../menuOrder';
 
 // Menu blocks shared by quotations, invoices and the event menu.
@@ -127,7 +128,7 @@ export function mealSchedule(days: EventDay[] | undefined, opts: { amounts: bool
     g.meals.map(m => `<div class="meal"><div class="meal-h"><div><b>${esc(mealTitle(m))}</b><div class="muted num" style="font-size:12px">${
       m.guest_count || 0} guests${opts.amounts && m.per_plate_amount ? ` · ${rateText(m)}` : ''}</div></div>${
       opts.amounts ? `<b class="num">${money(mealNet(m))}${!offerOf(m) && m.per_plate_max ? ` – ${money(m.per_plate_max * (m.guest_count || 0))}` : ''}</b>` : ''}</div>
-      <div class="meal-b">${(m.items ?? []).length ? courseGrid(m.items, priceShow(opts.itemPrices, m.per_plate_amount, m.items), opts.mode) : '<span class="muted">Menu to be decided</span>'}${
+      <div class="meal-b">${(m.items ?? []).length ? courseGrid(m.items, priceShow(opts.itemPrices && showsDishPrices(m), m.per_plate_amount, m.items), opts.mode) : '<span class="muted">Menu to be decided</span>'}${
       opts.amounts && mealSaving(m) ? `<div class="save num">Offer price saves ${money(mealSaving(m))} on this meal</div>` : ''}</div></div>`).join('')}`).join('');
 }
 

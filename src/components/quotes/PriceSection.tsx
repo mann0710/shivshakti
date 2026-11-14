@@ -7,6 +7,7 @@ import { onePickPrice, pickRange } from '../../lib/quoteChoices';
 import { inr } from '../../lib/money';
 import { Tick } from './EventSection';
 import type { PackagePrice } from './usePackagePrice';
+import MealRangeBox from './MealRangeBox';
 
 interface Props { f: QuoteForm; pkg?: PackagePrice }
 
@@ -76,6 +77,7 @@ const PriceSection: React.FC<Props> = ({ f, pkg }) => {
           </div>
         </div>
       )}
+      <MealRangeBox f={f} />
       {gap && (
         <div className="q-radio2 q-picks" role="radiogroup" aria-label="When the customer picks">
           <button type="button" role="radio" aria-checked={!fixed} className={`q-rcard${!fixed ? ' on' : ''}`} onClick={() => fixed && f.letPicksPrice()}>

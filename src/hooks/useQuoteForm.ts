@@ -11,7 +11,7 @@ import { useItemPrices } from './useItemPrices';
 import { useDataCenter } from './useDataCenter';
 import { useQuotations, useCreateQuotation, useUpdateQuotation, Quotation, QuotationLineItem, EventDay, ChoiceMeta } from './useQuotations';
 import { getDayNumber, quoteTotals } from '../lib/quoteMath';
-import { plateRange, atMaxPrices, basePlate, ownRange, typedPrice, setPickPrices } from '../lib/quoteChoices';
+import { plateRange, atMaxPrices, basePlate, ownRange, typedPrice, setPickPrices, listedForTop } from '../lib/quoteChoices';
 import { genId, lineOf, mergeLines, moveLine, PickerItem, Charge, Discount } from '../lib/quoteLines';
 
 // Everything the quotation editor holds: booking, menu, prices, charges, totals and save.
@@ -118,7 +118,7 @@ export const useQuoteForm = () => {
   const typePerPlate = (v: string) => { setAutoPrice(false); setPerPlate(v); };
   // One fixed plate price at the top of the range, whatever the customer picks; or let picks move it again.
   const chargeHighest = () => { const top = perPlateMax ?? plateLow; setSelectedItems(setPickPrices(selectedItems, true)); typePerPlate(String(top)); };
-  const letPicksPrice = () => { const next = setPickPrices(selectedItems, false); setSelectedItems(next); typePerPlate(String(basePlate(next))); };
+  const letPicksPrice = () => { const next = setPickPrices(selectedItems, false); setSelectedItems(next); typePerPlate(String(listedForTop(plateLow, next))); };
 
   const resetForm = (keepOpen = false) => {
     setEditingId(null); ev.reset(); setSelectedItems([]); setNotes(''); setPerPlate('');

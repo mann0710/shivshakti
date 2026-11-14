@@ -78,6 +78,8 @@ export function pickRange(items: QuotationLineItem[] | undefined): { min: number
   const r = plateRange(setPickPrices(items ?? [], false));
   return r.max > r.min ? r : null;
 }
+// Typed price that makes `top` the dearest pick again once picks move the price (undoes "one price").
+export const listedForTop = (top: number, items: QuotationLineItem[]) => top - plateRange(items).max + basePlate(items);
 // True when every choice keeps one price (set by "One price for any pick" or per choice).
 export const onePickPrice = (items: QuotationLineItem[] | undefined) => {
   const groups = choiceGroups(items);

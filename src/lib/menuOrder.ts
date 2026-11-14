@@ -69,11 +69,14 @@ export function planCourses(all: QuotationLineItem[], opts: { merge?: boolean; g
 
 export interface SubGroup { name: string; entries: Entry[] }
 
+// A dish's section heading: the owner's name for it in this quote, else its Menu Builder subcategory.
+export const sectionOf = (i: QuotationLineItem) => (i.sub_label || i.subcategory_name || i.category_name || '').trim();
+
 // A course's dishes by Menu Builder subcategory, in the order they come; a "choose any" group stays one block.
 export function subGroups(c: Course): SubGroup[] {
   const out: SubGroup[] = [];
   for (const e of c.entries) {
-    const name = e.choice ? '' : (e.item.subcategory_name || e.item.category_name || '').trim();
+    const name = e.choice ? '' : sectionOf(e.item);
     const g = name ? out.find(x => x.name === name) : undefined;
     if (g) g.entries.push(e); else out.push({ name, entries: [e] });
   }

@@ -1,5 +1,6 @@
 import type { QuotationLineItem } from '../hooks/useQuotations';
 import { coursesOf } from './quoteSummary';
+import { sectionOf } from './menuOrder';
 
 // Owner's changes to a quote's courses: move a dish anywhere, move a whole course, rename one.
 type Items = QuotationLineItem[];
@@ -73,4 +74,18 @@ export function renameCourse(items: Items, from: string, to: string): Items {
     const choice = i.choice && name && i.choice.label === from ? { ...i.choice, label: name } : i.choice;
     return { ...i, choice, course: name || undefined };
   });
+}
+
+// Renames a section (subcategory heading) inside one course, for this quote only; blank goes back to Menu Builder's.
+export function renameSection(items: Items, course: string, from: string, to: string): Items {
+  const ids = new Set(courseMap(items).get(course) ?? []);
+  const name = to.trim();
+  return items.map(i => (ids.has(i.item_id) && !i.choice && sectionOf(i) === from
+    ? { ...i, sub_label: name && name !== (i.subcategory_name || '').trim() ? name : undefined } : i));
+}
+
+// Renames a "choose any" group that sits inside a bigger course; its dishes stay in that course.
+export function renameChoice(items: Items, course: string, id: string, to: string): Items {
+  const name = to.trim();
+  return name ? items.map(i => (i.choice?.id === id ? { ...i, choice: { ...i.choice, label: name }, course } : i)) : items;
 }

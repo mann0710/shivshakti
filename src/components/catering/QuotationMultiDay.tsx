@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
 import { getDayNumber } from '../../lib/quoteMath';
-import { basePlate, ownRange, typedPrice } from '../../lib/quoteChoices';
+import { sumMeals, isOnePrice, mealGap, priceMeal, setMealOnePrice, typedOf, withItems, hasDishPrices, showsDishPrices } from '../../lib/mealPrice';
 import { genId, PickerItem } from '../../lib/quoteLines';
 import { range } from '../../lib/quoteSummary';
 import { formatDateIST } from '../../lib/ist';
@@ -23,20 +23,6 @@ interface Props {
   who: string;
 }
 
-const sumMeals = (meals: MealSlot[]) => meals.reduce((s, m) => s + m.subtotal, 0);
-
-// A meal price is for its menu as listed; open alternatives give a range around it.
-const priceMeal = (m: MealSlot, items: QuotationLineItem[], price: number): MealSlot => {
-  const p = ownRange(price, items);
-  return { ...m, items, per_plate_amount: p.low, per_plate_max: p.high, subtotal: p.low * m.guest_count };
-};
-const typedOf = (m: MealSlot) => typedPrice(m.per_plate_amount, m.per_plate_max, m.items ?? []);
-
-// Dish changes keep a typed meal price; otherwise the meal adds up its dish prices.
-const withItems = (m: MealSlot, items: QuotationLineItem[]): MealSlot => {
-  const own = typedOf(m) > 0 && typedOf(m) !== basePlate(m.items ?? []);
-  return priceMeal(m, items, !items.length ? 0 : own ? typedOf(m) : basePlate(items));
-};
 const nextDate = (iso: string) => {
   if (!iso) return '';
   const d = new Date(`${iso}T00:00:00Z`);
@@ -91,6 +77,9 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
   const meal = (m: MealSlot) => {
     const rate = m.discount_amount > 0 && m.discount_amount < m.per_plate_amount ? m.discount_amount : m.per_plate_amount;
     const hi = m.per_plate_max != null && m.per_plate_max > m.per_plate_amount ? m.per_plate_max * m.guest_count : null;
+    const gap = mealGap(m);
+    const one = isOnePrice(m);
+    const priced = hasDishPrices(m);
     return (
       <div key={m.id} className="q-meal">
         <div className="q-meal-row">
@@ -102,8 +91,15 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           <Field label="Time"><input type="time" value={m.time} onChange={e => setField(at, m.id, 'time', e.target.value)} /></Field>
           <Field label="Guests"><input type="number" min={0} inputMode="numeric" value={m.guest_count || ''} placeholder="0" onChange={e => setField(at, m.id, 'guest_count', parseInt(e.target.value, 10) || 0)} /></Field>
           <Field label="A plate"><input type="number" min={0} inputMode="decimal" value={typedOf(m) || ''} placeholder="₹" onChange={e => setField(at, m.id, 'per_plate_amount', parseFloat(e.target.value) || 0)} /></Field>
-          <button type="button" className="q-x" aria-label={`Remove ${m.meal_type}`} onClick={() => patchDay(at, meals => meals.filter(x => x.id !== m.id))}>×</button>
+          <button type="button" className="q-x" aria-label={`Remove Day ${getDayNumber(day.date, eventDays)} ${m.meal_type}`} onClick={() => patchDay(at, meals => meals.filter(x => x.id !== m.id))}>×</button>
         </div>
+        {gap && (
+          <label className="q-check">
+            <input type="checkbox" checked={one} onChange={e => patchMeal(at, m.id, x => setMealOnePrice(x, e.target.checked))} />
+            <span className="t"><b>Same price whatever they choose ({inr(one ? m.per_plate_amount : m.per_plate_max ?? m.per_plate_amount)} a plate)</b>
+              <small>{one ? 'Change it in A plate' : `Off: ${range(m.per_plate_amount, m.per_plate_max)} a plate, final once they choose`}</small></span>
+          </label>
+        )}
         <MenuCourses compact items={m.items ?? []} menu={menuItems} showPrices={showPrices} who={who} toLine={toLine}
           preview={next => { const p = withItems(m, next); return `${range(p.per_plate_amount, p.per_plate_max)} a plate`; }}
           onChange={next => patchMeal(at, m.id, x => withItems(x, next))} />
@@ -111,6 +107,13 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           <span>{m.guest_count} × {inr(rate)}{rate !== m.per_plate_amount ? ` (offer, was ${inr(m.per_plate_amount)})` : ''}</span>
           <b>{range(rate * m.guest_count, hi)}</b>
         </div>
+        {showPrices && (
+          <label className={`q-check${priced ? '' : ' off'}`}>
+            <input type="checkbox" checked={priced && showsDishPrices(m)} disabled={!priced} onChange={e => patchMeal(at, m.id, x => ({ ...x, hide_prices: !e.target.checked || undefined }))} />
+            <span className="t"><b>Dish prices on the PDF</b>
+              <small>{!priced ? 'No dish prices in this meal' : showsDishPrices(m) ? 'Each dish shows its price' : `Off for this meal: only the plate price prints`}</small></span>
+          </label>
+        )}
         <details className="q-more">
           <summary>More for this meal</summary>
           <div className="q-fields">

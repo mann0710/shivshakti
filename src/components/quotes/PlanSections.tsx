@@ -19,16 +19,17 @@ export const PaymentSection: React.FC<{ steps: PayStep[]; lo: number; hi: number
   );
 };
 
-interface PdfProps { who: string; prices: boolean; canPrice: boolean; onPrices: (on: boolean) => void; note: string; onNote: (v: string) => void }
+interface PdfProps { who: string; multi?: boolean; prices: boolean; canPrice: boolean; onPrices: (on: boolean) => void; note: string; onNote: (v: string) => void }
 
 // What prints on the PDF: dish prices or only the plate price, and a note.
-export const PdfSection: React.FC<PdfProps> = ({ who, prices, canPrice, onPrices, note, onNote }) => (
+export const PdfSection: React.FC<PdfProps> = ({ who, multi, prices, canPrice, onPrices, note, onNote }) => (
   <section className="q-sec" aria-label="On the PDF">
     <h2>On the PDF</h2>
     <label className="q-check">
       <input type="checkbox" checked={prices && canPrice} disabled={!canPrice} onChange={e => onPrices(e.target.checked)} />
       Show each dish's price (off: only the plate price shows)
     </label>
+    {multi && canPrice && <p className="q-hint">Each meal card has its own "Dish prices on the PDF" tick to leave one meal's dish prices off.</p>}
     <label className="q-field">Note for {who}
       <textarea rows={2} value={note} onChange={e => onNote(e.target.value)} placeholder="Printed under the menu, e.g. live counter on request" />
     </label>

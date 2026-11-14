@@ -160,9 +160,12 @@
 .q-seg-chips button { min-height: 44px; padding: 0 14px; border-radius: 9px; border: 1px solid #D9D8D2; background: #fff; font: inherit; font-size: 13.5px; font-weight: 400; color: var(--ink); cursor: pointer; }
 .q-seg-chips button.on { border: 2px solid var(--accent); background: #FFF8F0; font-weight: 700; }
 .q-info { background: #EEF5FB; border: 1px solid #C9DDF0; color: #164E80; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.45; margin-bottom: 12px; }
+.q-ranges { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.q-ranges .ui-btn { align-self: stretch; min-height: 44px; }
 .q-warnbox { background: #FFF8EC; border: 1px solid #F0D9B0; color: #6B4508; border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.45; }
 .q-check { display: flex; gap: 10px; align-items: center; font-size: 14px; min-height: 44px; cursor: pointer; }
 .q-check input { width: 20px; height: 20px; accent-color: var(--accent); flex-shrink: 0; }
+.q-check.off { color: #6B6B66; cursor: default; }
 .q-check.row { border-top: 1px solid #F0EFEA; padding: 4px 12px; }
 .q-check.row:first-child { border-top: none; }
 .q-check .t { flex: 1; display: flex; flex-direction: column; }
@@ -371,6 +374,11 @@
 .q-subs { display: flex; flex-direction: column; gap: 6px; }
 .q-sub { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; align-items: start; }
 .q-sub-l { font-size: 12px; font-weight: 700; color: #7A4A0A; text-transform: uppercase; letter-spacing: 0.5px; padding-top: 14px; overflow-wrap: anywhere; }
+.q-sub-name { all: unset; cursor: text; border-bottom: 1px dashed transparent; min-height: 24px; }
+.q-sub-name:hover, .q-sub-name:focus-visible { border-bottom-color: currentColor; outline: none; }
+.q-sub.pick { border: 1px solid #F0D9B0; background: #FFF8EC; border-radius: 10px; padding: 4px 10px 8px; }
+.q-sub-b { display: flex; flex-direction: column; gap: 6px; }
+.q-sub-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: #7A4A0A; }
 .q-course.empty { border-style: dashed; background: #fff; }
 .q-course.empty .q-hint { margin: 0; }
 .q-newcourse { align-self: flex-start; border: 1px dashed #D6D4CC; background: #fff; color: #8A4B00; font: inherit; font-size: 13.5px; font-weight: 600; border-radius: 10px; padding: 0 14px; min-height: 44px; cursor: pointer; }

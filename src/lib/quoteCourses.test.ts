@@ -1,4 +1,6 @@
-import { courseMap, dropDish, moveCourse, renameCourse, setCourse } from './quoteCourses';
+import { courseMap, dropDish, moveCourse, renameChoice, renameCourse, renameSection, setCourse } from './quoteCourses';
+import { subGroups } from './menuOrder';
+import { coursesOf } from './quoteSummary';
 
 const d = (name: string, cat: string, extra: object = {}) =>
   ({ item_id: name, item_name: name, category_name: cat, subcategory_name: cat, amount: 0, ...extra }) as any;
@@ -39,5 +41,29 @@ describe('owner moves and renames courses in a quote', () => {
     expect(starters.find(i => i.item_id === 'South Boll')!.choice!.label).toBe('Starters');
     expect(plan(starters).Starters).toEqual(['Mix Bhajiya', 'South Boll']);
     expect(renameCourse(named, 'Extras', ' ').find(i => i.item_id === 'Salad')!.course).toBeUndefined();
+  });
+});
+
+describe('section headings and choices inside a course', () => {
+  const main = () => [d('Puri', 'Main Course', { subcategory_name: 'Indian Breads' }), d('Shaak', 'Main Course', { subcategory_name: 'Gujarati Vegetables' }),
+    d('Chana', 'Main Course', { subcategory_name: 'Kathod', choice: { id: 'k', label: 'Kathod', pick: 1 } }),
+    d('Vaal', 'Main Course', { subcategory_name: 'Kathod', choice: { id: 'k', label: 'Kathod', pick: 1 } })];
+  const heads = (list: any[]) => subGroups(coursesOf(list).find(c => c.name === 'Main Course')!).map(g => g.name || g.entries[0].choice?.meta.label);
+  it('a choice moved into Main Course stays one named block there', () => {
+    const moved = setCourse(main(), 'Chana', 'Main Course');
+    expect(coursesOf(moved).map(c => c.name)).toEqual(['Main Course']);
+    expect(heads(moved)).toEqual(['Indian Breads', 'Gujarati Vegetables', 'Kathod']);
+  });
+  it('renames a heading for this quote only, and blank goes back', () => {
+    const moved = setCourse(main(), 'Chana', 'Main Course');
+    const named = renameSection(moved, 'Main Course', 'Indian Breads', 'Rotli');
+    expect(heads(named)).toEqual(['Rotli', 'Gujarati Vegetables', 'Kathod']);
+    expect(named[0].subcategory_name).toBe('Indian Breads');
+    expect(renameSection(named, 'Main Course', 'Rotli', '  ')[0].sub_label).toBeUndefined();
+  });
+  it('renames a choice inside a course without moving it out', () => {
+    const named = renameChoice(setCourse(main(), 'Chana', 'Main Course'), 'Main Course', 'k', 'Kathod (pick one)');
+    expect(coursesOf(named).map(c => c.name)).toEqual(['Main Course']);
+    expect(heads(named)).toEqual(['Indian Breads', 'Gujarati Vegetables', 'Kathod (pick one)']);
   });
 });

@@ -3,8 +3,9 @@ import type { QuotationLineItem } from '../../hooks/useQuotations';
 import { subGroups, showSubs, Course } from '../../lib/menuOrder';
 import { coursesOf } from '../../lib/quoteSummary';
 import { tidyGroups } from '../../lib/quoteChoices';
+import type { ChoiceGroup } from '../../lib/quoteChoices';
 import type { PickerItem } from '../../lib/quoteLines';
-import { dropDish, moveCourse, renameCourse, setCourse } from '../../lib/quoteCourses';
+import { dropDish, moveCourse, renameChoice, renameCourse, renameSection, setCourse } from '../../lib/quoteCourses';
 import { inr } from '../../lib/money';
 import AddDish from './AddDish';
 import DishEditor from './DishEditor';
@@ -22,7 +23,11 @@ interface Props {
   compact?: boolean;
 }
 
-const pickOf = (c: Course) => c.entries.find(e => e.choice)?.choice;
+// A course that is only one "choose any" group; a group inside a bigger course shows as its own block.
+const pickOf = (c: Course) => (c.entries.length === 1 ? c.entries[0].choice : undefined);
+const picksText = (g: ChoiceGroup) => `customer picks ${Math.min(Math.max(1, g.meta.pick), g.items.length)} of ${g.items.length}`;
+// The choice dialog sees a course's plain dishes plus one group (none: a new choice).
+const forDialog = (c: Course, groupId?: string): Course => ({ ...c, entries: c.entries.filter(e => !e.choice || e.choice.meta.id === groupId) });
 
 type Drag = { id: string; course?: undefined } | { course: string; id?: undefined };
 
@@ -32,7 +37,7 @@ type Drag = { id: string; course?: undefined } | { course: string; id?: undefine
 const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, preview, onChange, compact }) => {
   const courses = useMemo(() => coursesOf(items), [items]);
   const [edit, setEdit] = useState<{ id: string; el: HTMLElement } | null>(null);
-  const [choose, setChoose] = useState<string | null>(null);
+  const [choose, setChoose] = useState<{ course: string; group?: string } | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [naming, setNaming] = useState<string | null>(null);
@@ -61,7 +66,10 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
     end();
   };
   const overOn = (e: React.DragEvent, key: string) => { if (!drag) return; e.preventDefault(); e.stopPropagation(); setOver(key); };
-  const rename = (from: string, to: string | null) => { if (to !== null) onChange(renameCourse(items, from, to)); setNaming(null); };
+  // Tap to rename in this quote only: a course, a section heading or a choice inside a course.
+  const nameBtn = (key: string, value: string, cls: string, title: string, save: (to: string) => QuotationLineItem[]) => (naming === key
+    ? <InlineName className="q-cname-in" value={value} label={`New name for ${value}`} onDone={to => { if (to !== null) onChange(save(to)); setNaming(null); }} />
+    : <button type="button" className={cls} title={title} onClick={() => setNaming(key)}>{value}</button>);
   const addCourse = (name: string | null) => { if (name && !names.includes(name) && !extra.includes(name)) setExtra([...extra, name]); setNewCourse(false); };
 
   const chip = (i: QuotationLineItem, course: string) => {
@@ -81,19 +89,34 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
     );
   };
 
-  // A course's chips, split into subcategory sections when it mixes them (Main Course › Farsan).
+  // A course's chips, split into sections when it mixes subcategories (Main Course › Farsan); a choice is its own block.
   const sections = (c: Course) => {
+    const chipsOf = (entries: Course['entries']) => entries.flatMap(e => (e.choice ? e.choice.items : [e.item!])).map(i => chip(i, c.name));
+    if (pickOf(c)) return <div className="q-chips">{chipsOf(c.entries)}</div>;
     const groups = subGroups(c);
-    const chipsOf = (g: { entries: Course['entries'] }) => g.entries.flatMap(e => (e.choice ? e.choice.items : [e.item!])).map(i => chip(i, c.name));
-    if (!showSubs(groups)) return <div className="q-chips">{groups.flatMap(chipsOf)}</div>;
+    const heads = showSubs(groups);
     return (
       <div className="q-subs">
-        {groups.map((g, k) => (
-          <div key={g.name || `choice${k}`} className="q-sub">
-            <span className="q-sub-l">{g.name || 'Customer picks'}</span>
-            <div className="q-chips">{chipsOf(g)}</div>
-          </div>
-        ))}
+        {groups.map((g, k) => {
+          const ch = g.entries[0]?.choice;
+          if (ch) return (
+            <div key={ch.meta.id} className="q-sub pick">
+              <span className="q-sub-l">{nameBtn(`g:${ch.meta.id}`, ch.meta.label, 'q-sub-name', 'Rename this choice in this quote', to => renameChoice(items, c.name, ch.meta.id, to))}</span>
+              <div className="q-sub-b">
+                <div className="q-chips">{chipsOf(g.entries)}</div>
+                <span className="q-sub-acts"><span className="n">{picksText(ch)}</span>
+                  <button type="button" className="q-mini" onClick={() => setChoose({ course: c.name, group: ch.meta.id })}>Edit the choice</button></span>
+              </div>
+            </div>
+          );
+          if (!heads || !g.name) return <div key={`p${k}`} className="q-chips">{chipsOf(g.entries)}</div>;
+          return (
+            <div key={g.name} className="q-sub">
+              <span className="q-sub-l">{nameBtn(`s:${c.name}:${g.name}`, g.name, 'q-sub-name', 'Rename this heading in this quote', to => renameSection(items, c.name, g.name, to))}</span>
+              <div className="q-chips">{chipsOf(g.entries)}</div>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -104,14 +127,15 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
     return showPrices && c.sum > 0 ? `${inr(c.sum)} a plate` : 'in plate price';
   };
   const editing = edit && items.find(i => i.item_id === edit.id);
-  const course = choose != null ? courses.find(c => c.name === choose) : undefined;
+  const found = choose && courses.find(c => c.name === choose.course);
+  const course = found ? forDialog(found, choose!.group) : undefined;
 
   return (
     <div className={`q-courses${compact ? ' compact' : ''}`}>
       {!compact && <AddDish menu={menu} skip={skip} onPick={add} showPrices={showPrices} />}
       {courses.map(c => {
         const g = pickOf(c);
-        const dishes = c.entries.flatMap(e => (e.choice ? e.choice.items : [e.item!]));
+        const dishes = c.entries.flatMap(e => (e.choice ? (g ? e.choice.items : []) : [e.item!]));
         return (
           <div key={c.name} className={`q-course${g ? ' choice' : ''}${drag?.course === c.name ? ' drag' : ''}${over === `c:${c.name}` && drag?.course !== c.name ? ' drop' : ''}`}
             onDragOver={e => overOn(e, `c:${c.name}`)} onDrop={e => dropOn(e, c.name)}>
@@ -119,13 +143,11 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
               <span className="q-course-title">
                 <span className="q-grip" draggable title="Drag to move this course" aria-hidden="true"
                   onDragStart={e => start(e, { course: c.name }, e.currentTarget.closest('.q-course'))} onDragEnd={end}>⠿</span>
-                {naming === c.name
-                  ? <InlineName className="q-cname-in" value={c.name} label={`New name for ${c.name}`} onDone={to => rename(c.name, to)} />
-                  : <button type="button" className="q-cname" title="Rename this course in this quote" onClick={() => setNaming(c.name)}>{c.name}</button>}
-                <span className="n">{g ? `· customer picks ${Math.min(Math.max(1, g.meta.pick), g.items.length)} of ${g.items.length}` : dishes.length > 1 ? `· ${dishes.length}` : ''}</span></span>
+                {nameBtn(c.name, c.name, 'q-cname', 'Rename this course in this quote', to => renameCourse(items, c.name, to))}
+                <span className="n">{g ? `· ${picksText(g)}` : c.count > 1 ? `· ${c.count}` : ''}</span></span>
               <span className="q-course-acts">
                 {!compact && <span className="r">{right(c)}</span>}
-                {(dishes.length > 1 || g) && <button type="button" className="q-mini" onClick={() => setChoose(c.name)}>{g ? 'Edit the choice' : `Let ${who} choose`}</button>}
+                {(dishes.length > 1 || g) && <button type="button" className="q-mini" onClick={() => setChoose({ course: c.name, group: g?.meta.id })}>{g ? 'Edit the choice' : `Let ${who} choose`}</button>}
               </span>
             </div>
             {sections(c)}
