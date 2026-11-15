@@ -29,4 +29,11 @@ describe('menu layout (design B)', () => {
     expect(html).toContain('₹650 – ₹1,050');
     expect(html).toContain('final once you choose');
   });
+  it('prints dish prices when ticked even if the plate price is above the dishes', () => {
+    const meal = { id: 'm', meal_type: 'dinner', time: '', guest_count: 100, per_plate_amount: 325, discount_amount: 0, subtotal: 32500,
+      items: [d('Fulka Roti', 'Indian Breads', 55), d('Sev Tameta', 'Main Course', 35)] };
+    const day = (m: object) => [{ day_number: 1, date: '2027-02-15', meals: [m], day_subtotal: 32500 }] as any;
+    expect(mealSchedule(day(meal), { amounts: true, itemPrices: true })).toContain('₹55');
+    expect(mealSchedule(day({ ...meal, hide_prices: true }), { amounts: true, itemPrices: true })).not.toContain('₹55');
+  });
 });

@@ -89,7 +89,7 @@ const menuSection = (q: Quotation, itemPrices: PriceShow, title: string) => {
   const dishes = dishesOf(q);
   const note = isMulti(q)
     ? `${daysOf(q.event_days).length} day(s) · ${daysOf(q.event_days).reduce((n, g) => n + g.meals.length, 0)} meal(s)`
-    : [`${dishCount(dishes)} dishes`, itemPrices === true ? 'prices per plate' : '', q.food_type, isRange(q) ? 'price final once you choose' : ''].filter(Boolean).join(' · ');
+    : [`${dishCount(dishes)} dishes`, itemPrices ? 'prices per plate' : '', q.food_type, isRange(q) ? 'price final once you choose' : ''].filter(Boolean).join(' · ');
   return `<section>${sectionHead(title, note)}${
     isMulti(q) ? mealSchedule(q.event_days, { amounts: true, itemPrices: !!itemPrices }) : courseGrid(q.items ?? [], itemPrices)}</section>`;
 };

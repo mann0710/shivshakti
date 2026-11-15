@@ -7,7 +7,7 @@ import { planCourses, servedNames, subGroups, showSubs, Course, Entry } from '..
 
 export const hasItemPrices = (items: QuotationLineItem[]) => (items ?? []).some(i => (Number(i.amount) || 0) > 0);
 
-// true: dish prices make up the plate price. 'diff': your own higher price, so only choice differences print.
+// true: dish prices make up the plate price. 'diff': your own higher plate price; dishes still print, choices show the difference.
 export type PriceShow = boolean | 'diff';
 export const priceShow = (on: boolean, plate: number, items: QuotationLineItem[] | undefined): PriceShow =>
   on && hasItemPrices(items ?? []) && plate > plateRange(items).min ? 'diff' : on;
@@ -24,7 +24,7 @@ function dish(it: QuotationLineItem, price: string, tick?: boolean): string {
     served.length ? `<div class="with">with ${esc(served.join(', '))}</div>` : ''}${
     it.instruction ? `<div class="note">${esc(it.instruction)}</div>` : ''}</div>`;
 }
-const itemPrice = (it: QuotationLineItem, prices: PriceShow) => (prices === true && Number(it.amount) > 0 ? money(it.amount) : '');
+const itemPrice = (it: QuotationLineItem, prices: PriceShow) => (prices && Number(it.amount) > 0 ? money(it.amount) : '');
 const dishLines = (it: QuotationLineItem) => 1 + (servedNames(it).length ? 0.6 : 0) + (it.instruction ? 0.6 : 0);
 
 // "Choose any N": name, then "Choose 1 of 3 · up to +₹40 / plate", then tick boxes (ticked once decided).
