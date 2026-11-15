@@ -39,7 +39,9 @@ function choiceParts(g: ChoiceGroup, prices: PriceShow, label = g.meta.label) {
   const price = (i: QuotationLineItem) => { const v = (Number(i.amount) || 0) - (diff ? a[0] : 0); return priced && v > 0 ? `+${money(v)}` : ''; };
   // With dish prices hidden, a pick that moves the price still says so.
   const varies = !decided && !g.meta.included && hi > lo;
-  const cost = !priced ? (varies ? 'changes the plate price' : '') : diff || lo === 0 ? `up to +${money(diff ? hi - lo : hi)} / plate` : lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`;
+  // One price whatever they pick: the plate carries the dearest pick, shown once.
+  const fixed = !!prices && !!g.meta.included && hi > 0 ? `${money(hi)} / plate` : '';
+  const cost = fixed || !priced ? fixed || (varies ? 'changes the plate price' : '') : diff || lo === 0 ? `up to +${money(diff ? hi - lo : hi)} / plate` : lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`;
   const rule = decided ? 'Your choice' : `Choose ${n} of ${g.items.length}`;
   const sub = `<div class="pick-sub">${rule}${cost ? ` · <span class="num">${cost}</span>` : ''}</div>`;
   const list = g.items.map(i => dish(i, price(i), !!i.chosen)).join('');

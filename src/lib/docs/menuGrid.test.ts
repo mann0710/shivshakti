@@ -29,6 +29,14 @@ describe('menu layout (design B)', () => {
     expect(html).toContain('₹650 – ₹1,050');
     expect(html).toContain('final once you choose');
   });
+  it('a same-price choice shows its plate cost once, not per dish', () => {
+    const soup = { id: 's', pick: 1, label: 'Chinese Soup', included: true };
+    const items = [d('Mocktail Bar', 'Cold Appetizers', 90), d('Thukpa Soup', 'Chinese Soup', 60, { choice: soup }), d('Aglio Soup', 'Chinese Soup', 0, { choice: soup })];
+    const html = courseGrid(items, 'diff');
+    expect(html).toContain('Choose 1 of 2 · <span class="num">₹60 / plate</span>');
+    expect(html).not.toContain('+₹60');
+    expect(courseGrid(items, false)).not.toContain('₹60');
+  });
   it('prints dish prices when ticked even if the plate price is above the dishes', () => {
     const meal = { id: 'm', meal_type: 'dinner', time: '', guest_count: 100, per_plate_amount: 325, discount_amount: 0, subtotal: 32500,
       items: [d('Fulka Roti', 'Indian Breads', 55), d('Sev Tameta', 'Main Course', 35)] };
