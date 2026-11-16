@@ -6,7 +6,7 @@ import BookingMenu, { BoardActions } from './BookingMenu';
 import { fmtTime } from './BookingCalendar';
 import PaymentDialog from './PaymentDialog';
 import { Payment } from '../../types';
-import { EventInvoice, EventPayments, EventQuotes, MoneySummary, PayLine } from '../bookings/EventSections';
+import { EventInvoice, EventMenu, EventPayments, EventQuotes, MoneySummary, PayLine } from '../bookings/EventSections';
 import { invoiceText, modeText, moneyRows, nextBanner, remindHref, stageRows } from '../bookings/eventFacts';
 import { splitFood } from '../bookings/bookingForm';
 import { BookingView } from '../../lib/bookingBoard';
@@ -21,7 +21,7 @@ import { shareDoc } from '../../lib/docs/output';
 
 interface Props { view: BookingView; actions: BoardActions; onClose: () => void; onNavigate: Navigate }
 
-// One side panel per event: stage, next step, quotes, invoice, payments and money; nested dialogs open on top.
+// One side panel per event: stage, next step, quotes, menu with the customer's picks, invoice, payments and money; nested dialogs open on top.
 const EventDetail: React.FC<Props> = ({ view: v, actions: a, onClose, onNavigate }) => {
   const { data: allQuotes = [] } = useQuotations();
   const { data: payments = [] } = usePaymentHistory(v.invoice?.id);
@@ -71,6 +71,7 @@ const EventDetail: React.FC<Props> = ({ view: v, actions: a, onClose, onNavigate
         {!inv && v.stage !== 'cancelled' && <EventStepper rows={stageRows(v, quotes)} />}
         <EventQuotes quotes={quotes} live={live} onNew={() => a.quote(b)} onAccept={a.accept} canAccept={q => v.stage !== 'cancelled' && q.status !== 'accepted'}
           onEdit={q => go('quotations', { action: 'open', id: q.id })} onSend={a.send} />
+        {v.stage !== 'cancelled' && <EventMenu quote={v.quote} onPdf={() => a.menuPdf(v)} />}
         {inv && <EventInvoice invoice={inv} onOpen={() => go('billing', { action: 'open', id: inv.id })} onSend={sendInvoice} onPay={() => a.pay(v)} />}
         {!inv && money.length > 0 && <MoneySummary rows={money} />}
         {lines.length > 0 && <EventPayments lines={lines} />}

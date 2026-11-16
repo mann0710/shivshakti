@@ -24,6 +24,10 @@ export const isAccompaniment = (category = '', subcategory = '', name = '') =>
 export const servedNames = (i: Pick<QuotationLineItem, 'served_with'>) =>
   (i.served_with || '').split(',').map(s => s.trim()).filter(Boolean);
 
+// Served-with names the dish name does not already say ("Bhajiya with Chutney" needs no second "with Chutney").
+export const servedExtra = (i: Pick<QuotationLineItem, 'served_with' | 'item_name'>) =>
+  servedNames(i).filter(n => !i.item_name.toLowerCase().includes(n.toLowerCase()));
+
 // A dish served with an item also on the menu prints it under the dish, not again in its course.
 function dropServed(items: QuotationLineItem[]): QuotationLineItem[] {
   const ids = new Set(items.flatMap(i => i.served_ids ?? []));

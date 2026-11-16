@@ -1,7 +1,7 @@
 import type { QuotationLineItem } from '../../hooks/useQuotations';
 import { esc, money } from './theme';
 import { choiceGroups, pickedOf, servedItems, plateRange, ChoiceGroup } from '../quoteChoices';
-import { planCourses, servedNames, subGroups, showSubs, Course, Entry } from '../menuOrder';
+import { planCourses, servedExtra, subGroups, showSubs, Course, Entry } from '../menuOrder';
 
 // The menu as balanced columns of course blocks (quotations, invoices, the event menu).
 
@@ -18,14 +18,14 @@ const LABEL_MAX = 116;
 
 // One dish line: tick box (choices), name, price; then "with …" and the owner's note.
 function dish(it: QuotationLineItem, price: string, tick?: boolean): string {
-  const served = servedNames(it);
+  const served = servedExtra(it);
   return `<div class="dish${tick === undefined ? '' : ' ticked'}"><div class="dl">${tick === undefined ? '' : `<span class="tick">${tick ? '✓' : ''}</span>`}<span class="n">${esc(it.item_name)}</span>${
     price ? `<span class="p num">${price}</span>` : ''}</div>${
     served.length ? `<div class="with">with ${esc(served.join(', '))}</div>` : ''}${
     it.instruction ? `<div class="note">${esc(it.instruction)}</div>` : ''}</div>`;
 }
 const itemPrice = (it: QuotationLineItem, prices: PriceShow) => (prices && Number(it.amount) > 0 ? money(it.amount) : '');
-const dishLines = (it: QuotationLineItem) => 1 + (servedNames(it).length ? 0.6 : 0) + (it.instruction ? 0.6 : 0);
+const dishLines = (it: QuotationLineItem) => 1 + (servedExtra(it).length ? 0.6 : 0) + (it.instruction ? 0.6 : 0);
 
 // "Choose any N": name, then "Choose 1 of 3 · up to +₹40 / plate", then tick boxes (ticked once decided).
 function choiceParts(g: ChoiceGroup, prices: PriceShow, label = g.meta.label) {

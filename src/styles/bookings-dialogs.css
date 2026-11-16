@@ -58,6 +58,8 @@ textarea.bkf-input { resize: vertical; min-height: 76px; }
 .ev-acts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; margin: -6px 0 -8px -8px; }
 .ev-act { border: none; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--primary); cursor: pointer; min-height: 44px; padding: 0 8px; }
 .ev-empty { padding: 12px; font-size: 13px; color: #6B6B66; }
+.ev-menu-h { padding: 8px 12px; font-size: 13px; font-weight: 700; background: #F7F5F0; }
+.ev-row small.ev-open { color: #A32D2D; }
 .ev-money { background: #F7F5F0; border-radius: 11px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
 .ev-money span { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
 .ev-money span.strong { font-size: 16px; font-weight: 700; }

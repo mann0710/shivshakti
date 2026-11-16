@@ -1,0 +1,115 @@
+{
+ "quotation_number": "QTN-0023",
+ "items": [
+  {
+   "item_id": "ed252ce0",
+   "item_name": "Churma Na Ladoo",
+   "category_name": "Sweet",
+   "subcategory_name": "Gujarati Sweet",
+   "amount": 50,
+   "choice": {
+    "id": "cmvxgkycjmz0a",
+    "pick": 1,
+    "label": "Gujarati Sweet",
+    "included": true
+   },
+   "chosen": true
+  },
+  {
+   "item_id": "46739e0d",
+   "item_name": "Lapsi",
+   "category_name": "Sweet",
+   "subcategory_name": "Gujarati Sweet",
+   "amount": 30,
+   "choice": {
+    "id": "cmvxgkycjmz0a",
+    "pick": 1,
+    "label": "Gujarati Sweet",
+    "included": true
+   },
+   "chosen": false
+  },
+  {
+   "item_id": "8d1735a2",
+   "item_name": "Puri",
+   "category_name": "Indian Breads",
+   "subcategory_name": "Indian Breads",
+   "amount": 15
+  },
+  {
+   "item_id": "484d33ce",
+   "item_name": "Ringan Bataka Nu Shaak",
+   "category_name": "Main Course",
+   "subcategory_name": "Gujarati Vegetables",
+   "amount": 24
+  },
+  {
+   "item_id": "bf83dc41",
+   "item_name": "Desi Vaal",
+   "category_name": "Main Course",
+   "subcategory_name": "Kathod",
+   "amount": 0
+  },
+  {
+   "item_id": "d92fe02c",
+   "item_name": "Taj-Laving Rice",
+   "category_name": "Aromatic Rice",
+   "subcategory_name": "Aromatic Rice",
+   "amount": 30
+  },
+  {
+   "item_id": "0930c022",
+   "item_name": "Gujarati Varani Dal",
+   "category_name": "Delicious Dal",
+   "subcategory_name": "Delicious Dal",
+   "amount": 35
+  },
+  {
+   "item_id": "1d51d0fa",
+   "item_name": "Papad-Papdi",
+   "category_name": "Main Course",
+   "subcategory_name": "Farsan",
+   "amount": 3
+  },
+  {
+   "item_id": "9361456b",
+   "item_name": "Mix Bhajiya (Methi/Aloo Puri/Rajkoti Marcha) with Chutney",
+   "category_name": "Main Course",
+   "subcategory_name": "Farsan",
+   "amount": 43,
+   "served_with": "Chutney",
+   "served_ids": [
+    "9ef9b8f7-1794-4f6d-a575-49d0942a5d0c"
+   ]
+  },
+  {
+   "item_id": "edadea90",
+   "item_name": "Green Salad",
+   "category_name": "Including",
+   "subcategory_name": "Including",
+   "amount": 3,
+   "course": "Including"
+  },
+  {
+   "item_id": "ba8f8bab",
+   "item_name": "Aachar",
+   "category_name": "Including",
+   "subcategory_name": "Including",
+   "amount": 2
+  },
+  {
+   "item_id": "211117ea",
+   "item_name": "Water Jug",
+   "category_name": "Including",
+   "subcategory_name": "Including",
+   "amount": 5
+  },
+  {
+   "item_id": "6226b335",
+   "item_name": "Mukhwas",
+   "category_name": "Including",
+   "subcategory_name": "Including",
+   "amount": 7
+  }
+ ]
+}

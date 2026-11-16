@@ -4,9 +4,10 @@ import { Quotation } from '../../hooks/useQuotations';
 import { optionTitle, plateText, statusText, totalText } from '../../lib/quoteOptions';
 import { inr } from '../../lib/money';
 import { MoneyRow, openGroups } from './eventFacts';
+import { eventMenu, PickLine } from '../../lib/eventMenu';
 import '../../styles/bookings-dialogs.css';
 
-// The event page's blocks: quotations, invoice, payments and money.
+// The event page's blocks: quotations, menu, invoice, payments and money.
 export const Section: React.FC<{ title: string; action?: React.ReactNode; children: React.ReactNode }> = ({ title, action, children }) => (
   <section className="ev-sec" aria-label={title}>
     <span className="ev-head">{title}{action && <> · {action}</>}</span>
@@ -58,6 +59,30 @@ export const EventQuotes: React.FC<QuotesProps> = ({ quotes, live, canAccept, on
     </div>
   </Section>
 );
+
+const pickText = (p: PickLine) => `${p.label}: ${p.chosen.length ? p.chosen.join(', ') : `not chosen yet (${p.options.join(' or ')})`}`;
+
+// The booked menu with what the customer chose; open picks show in red until decided.
+export const EventMenu: React.FC<{ quote?: Quotation; onPdf: () => void }> = ({ quote, onPdf }) => {
+  const blocks = eventMenu(quote);
+  return (
+    <Section title={quote ? `Menu · ${quote.quotation_number}` : 'Menu'} action={quote ? <button type="button" className="ev-add" onClick={onPdf}>Kitchen PDF</button> : undefined}>
+      {blocks.length === 0 ? <div className="ev-list"><div className="ev-empty">No menu yet. It comes from the quotation.</div></div> : blocks.map((b, n) => (
+        <div className="ev-list" key={b.title || n}>
+          {b.title && <div className="ev-menu-h">{b.title}</div>}
+          {b.picks.length > 0 && (
+            <div className="ev-row">
+              <span><b>Customer's choice</b>{b.picks.map(p => <small key={p.label + p.options.join()} className={p.chosen.length ? undefined : 'ev-open'}>{p.chosen.length ? '✓ ' : ''}{pickText(p)}</small>)}</span>
+            </div>
+          )}
+          {b.courses.length === 0 ? <div className="ev-empty">Menu to be decided</div> : b.courses.map(c => (
+            <div className="ev-row" key={c.name}><span><b>{c.name}</b><small className={c.open ? 'ev-open' : undefined}>{c.dishes.join(' · ')}</small></span></div>
+          ))}
+        </div>
+      ))}
+    </Section>
+  );
+};
 
 const invoiceState = (i: Invoice) => (Number(i.balance_due) <= 0 ? 'paid' : Number(i.advance_paid) > 0 ? 'part paid' : i.status);
 
