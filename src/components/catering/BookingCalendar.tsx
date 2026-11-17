@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { Booking } from '../../types';
+import { useTeamMembers } from '../../hooks/useDataCenter';
 
 const EVENT_HOURS = 4;
 
@@ -43,16 +44,30 @@ export function calendarUrl(b: Booking, teamEmails: string[] = []): string {
   return `https://calendar.google.com/calendar/render?${p.toString()}`;
 }
 
+// Team emails invited to every event added to Google Calendar.
+export const useTeamEmails = () => {
+  const { data = [] } = useTeamMembers();
+  return useMemo(() => data.map(t => t.email).filter(Boolean) as string[], [data]);
+};
+
 // Opened from a real tap on a link, so phones don't block it as a popup.
-export function promptCalendar(b: Booking, teamEmails: string[]) {
-  toast(t => (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13 }}>
-      <span>✅ {b.customer?.name ?? 'Booking'} confirmed</span>
-      <a href={calendarUrl(b, teamEmails)} target="_blank" rel="noopener noreferrer"
-        onClick={() => toast.dismiss(t.id)}
-        style={{ background: 'var(--primary)', color: '#fff', padding: '5px 10px', borderRadius: 7, textDecoration: 'none', fontWeight: 500, fontSize: 12 }}>
-        📅 Add to Google Calendar
-      </a>
-    </span>
-  ), { duration: 12000 });
+export const CalendarLink: React.FC<{ b: Booking; emails: string[]; onTap?: () => void }> = ({ b, emails, onTap }) => (
+  <a href={calendarUrl(b, emails)} target="_blank" rel="noopener noreferrer" onClick={onTap}
+    style={{ background: 'var(--primary)', color: '#fff', padding: '5px 10px', borderRadius: 7, textDecoration: 'none', fontWeight: 500, fontSize: 12, whiteSpace: 'nowrap' }}>
+    📅 Add to Google Calendar
+  </a>
+);
+
+// "✅ Kavit confirmed  [Add to Google Calendar]", plus any other step (Create invoice).
+export function promptCalendar(b: Booking, teamEmails: string[], text = `✅ ${b.customer?.name ?? 'Booking'} confirmed`, extra?: (close: () => void) => React.ReactNode) {
+  toast(t => {
+    const close = () => toast.dismiss(t.id);
+    return (
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13 }}>
+        <span>{text}</span>
+        <CalendarLink b={b} emails={teamEmails} onTap={close} />
+        {extra?.(close)}
+      </span>
+    );
+  }, { duration: 15000 });
 }

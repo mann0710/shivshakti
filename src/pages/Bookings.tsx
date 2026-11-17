@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useBookings, useUpdateBooking, useDeleteBooking } from '../hooks/useBookings';
-import { useTeamMembers } from '../hooks/useDataCenter';
 import { Quotation, useQuotations } from '../hooks/useQuotations';
 import { useInvoices } from '../hooks/useInvoices';
 import { usePaymentRows } from '../hooks/useBookingPayments';
@@ -28,7 +27,7 @@ import BookingAgenda from '../components/catering/BookingAgenda';
 import BookingMonth from '../components/catering/BookingMonth';
 import BookingPipeline from '../components/catering/BookingPipeline';
 import { BoardActions } from '../components/catering/BookingMenu';
-import { calendarUrl, promptCalendar } from '../components/catering/BookingCalendar';
+import { calendarUrl, promptCalendar, useTeamEmails } from '../components/catering/BookingCalendar';
 import '../styles/bookings-dialogs.css';
 
 type View = 'list' | 'calendar' | 'pipeline';
@@ -49,7 +48,6 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const { data: quotes = [] } = useQuotations();
   const { data: invoices = [] } = useInvoices();
   const { data: payments = [] } = usePaymentRows();
-  const { data: teamMembers = [] } = useTeamMembers();
   const { data: occasions = [] } = useSeasonalOccasions();
   const valueOf = useBookingValue();
   const updateBooking = useUpdateBooking();
@@ -72,7 +70,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const [paying, setPaying] = useState<BookingView | null>(null);
   const [confirming, setConfirming] = useState<BookingView | null>(null);
   const [cancelling, setCancelling] = useState<BookingView | null>(null);
-  const teamEmails = useMemo(() => teamMembers.map(t => t.email).filter(Boolean) as string[], [teamMembers]);
+  const teamEmails = useTeamEmails();
 
   const today = todayIST();
   const q = search.trim().toLowerCase();

@@ -3,35 +3,39 @@ import toast from 'react-hot-toast';
 import { Quotation, useUpdateQuotationStatus } from './useQuotations';
 import { useUpdateBooking } from './useBookings';
 import { Navigate } from './useNavIntent';
+import { Booking } from '../types';
+import { promptCalendar, useTeamEmails } from '../components/catering/BookingCalendar';
 
 const OPEN = new Set(['inquiry', 'followup', 'pending']);
+// Inline so it looks the same on any screen (quotes.css loads only with Quotations).
+const linkBtn: React.CSSProperties = { border: 'none', background: 'none', color: 'var(--primary)', font: 'inherit', fontWeight: 700, minHeight: 40, cursor: 'pointer' };
 
 // Quote actions that also move the booking along, so the two statuses never need manual syncing.
 export const useQuoteLifecycle = (onNavigate?: Navigate) => {
   const updateStatus = useUpdateQuotationStatus();
   const updateBooking = useUpdateBooking();
+  const teamEmails = useTeamEmails();
 
-  // True when the booking's status changed; `reopen` also brings a cancelled booking back to follow-up.
-  const bookingTo = async (q: Quotation, status: 'followup' | 'confirmed', reopen = false) => {
+  // The saved booking when its status changed, else null; `reopen` also brings a cancelled booking back to follow-up.
+  const bookingTo = async (q: Quotation, status: 'followup' | 'confirmed', reopen = false): Promise<Booking | null> => {
     const b = q.booking;
-    if (!b || !q.booking_id) return false;
+    if (!b || !q.booking_id) return null;
     const moves = status === 'confirmed' ? OPEN.has(b.status) : b.status === 'inquiry' || (reopen && b.status === 'cancelled');
-    if (!moves) return false;
-    await updateBooking.mutateAsync({ id: q.booking_id, status });
-    return true;
+    if (!moves) return null;
+    const saved: Booking | null = await updateBooking.mutateAsync({ id: q.booking_id, status });
+    return saved ?? ({ ...b, status, customer: b.customer ?? q.customer } as Booking);
   };
 
-  // "QTN-0023 accepted · Kavit's booking confirmed  [Create invoice]"; the booking part only when it moved.
-  const acceptedToast = (q: Quotation, confirmed: boolean) => {
+  // "QTN-0023 accepted · Kavit's booking confirmed  [Add to Google Calendar] [Create invoice]"; the booking part only when it moved.
+  const acceptedToast = (q: Quotation, confirmed: Booking | null) => {
     const who = String(q.customer?.name || '').trim().split(/\s+/)[0];
     const text = `${q.quotation_number} accepted${confirmed && who ? ` · ${who}'s booking confirmed` : ''}`;
-    if (!onNavigate || !q.booking_id) { toast.success(text); return; }
-    toast(t => (
-      <span className="q-toast">
-        {text}
-        <button type="button" onClick={() => { toast.dismiss(t.id); onNavigate('billing', { action: 'new', id: q.booking_id }); }}>Create invoice</button>
-      </span>
-    ), { duration: 8000 });
+    const invoice = onNavigate && q.booking_id
+      ? (close: () => void) => <button type="button" style={linkBtn} onClick={() => { close(); onNavigate('billing', { action: 'new', id: q.booking_id }); }}>Create invoice</button>
+      : undefined;
+    if (confirmed) { promptCalendar(confirmed, teamEmails, text, invoice); return; }
+    if (!invoice) { toast.success(text); return; }
+    toast(t => <span className="q-toast">{text}{invoice(() => toast.dismiss(t.id))}</span>, { duration: 8000 });
   };
 
   // Accepted confirms the booking; Sent moves an inquiry to follow-up; reopening a declined quote revives its booking.

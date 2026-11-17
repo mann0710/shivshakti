@@ -220,7 +220,7 @@ Sweets given now and paid for later, kept as one **credit account per mobile num
 - **Quote → booking → invoice:** marking a quotation Accepted offers to confirm its booking, then shows "Create invoice →". Confirmed bookings also have an **Invoice** button that opens the invoice form with that booking selected.
 - **GST stays as issued:** editing an old quotation or invoice keeps the GST rate it was issued at, even if the Data Center rate has changed since.
 - **Long lists are complete:** customers, bookings, quotations, invoices, payments and sweets load page by page, so nothing silently drops after 1,000 rows.
-- **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked.
+- **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked. It shows after every way of confirming: Bookings → Confirm, and accepting a quotation (event page, Quotations, Home), next to "Create invoice". Google opens the event filled in; tap **Save** there. Missed it? Event ⋯ → Add to Google Calendar.
 
 ## One look across the app (redesign, Nov 2026)
 
