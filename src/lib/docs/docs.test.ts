@@ -1,4 +1,4 @@
-import { quotationDoc } from './quotationDoc';
+import { quotationDoc, dueText } from './quotationDoc';
 import { priceLines } from '../quoteSummary';
 import { invoiceDoc, eventMenuDoc } from './invoiceDoc';
 import { posBillHtml } from '../thermalSlips';
@@ -96,7 +96,8 @@ describe('choose-any groups in documents', () => {
   it('quote shows tick boxes and the price effect', () => {
     const html = courseGrid(items, true);
     expect(html).toContain('<div class="course-h">Sweets</div><div class="pick-sub">Choose 1 of 2');
-    expect(html).toContain('+₹40 – ₹60 / plate');
+    expect(html).toContain('Choose 1 of 2 · <span class="num">up to +₹20 / plate</span>');
+    expect(html).not.toContain('+₹40');
   });
   it('served copies keep only the picked dish', () => {
     const html = courseGrid(items.map(i => (i.item_name === 'Halwa' ? { ...i, chosen: true } : i)), false, 'served');
@@ -142,5 +143,19 @@ describe('invoice and event menu', () => {
     expect(s2.reminders.pay_due).toEqual({ on: false, days: 5 });
     expect(s2.reminders.pickup).toEqual({ on: true, days: 1 });
     expect(mergeDocSettings({ catering_name: '  ' } as any).catering_name).toBe('Shiv Shakti Catering Service');
+  });
+});
+
+describe('quotation dates', () => {
+  it('dates a step before the event, or says before the event once that date has passed', () => {
+    expect(dueText('One month before the event', '2026-12-20', '2026-10-31')).toBe('One month before the event · by 20 Nov 2026');
+    expect(dueText('One month before the event', '2026-11-27', '2026-11-26')).toBe('Before the event');
+    expect(dueText('On booking', '2026-11-27', '2026-11-26')).toBe('On booking');
+    expect(dueText('One month before the event', '2027-05-31', '2027-01-01')).toContain('by 30 Apr 2027');
+  });
+  it('is never valid past the event and drops an empty food label', () => {
+    const html = quotationDoc(quote({ issue_date: '2026-12-15' }), {}, ctx).html;
+    expect(html).toContain('Valid till 20 Dec 2026');
+    expect(html).toContain('>Guests<');
   });
 });

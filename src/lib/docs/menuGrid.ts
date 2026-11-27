@@ -36,16 +36,18 @@ function choiceParts(g: ChoiceGroup, prices: PriceShow, label = g.meta.label) {
   const hi = a.slice(a.length - n).reduce((s, x) => s + x, 0);
   const diff = prices === 'diff';
   const priced = !decided && !!prices && !g.meta.included && (diff ? hi > lo : hi > 0);
-  const price = (i: QuotationLineItem) => { const v = (Number(i.amount) || 0) - (diff ? a[0] : 0); return priced && v > 0 ? `+${money(v)}` : ''; };
+  // The plate already carries the cheapest pick: equal picks print their own price, dearer ones what they add.
+  const same = a[0] === a[a.length - 1];
+  const price = (i: QuotationLineItem) => { const v = Number(i.amount) || 0; return !priced || v <= 0 ? '' : same && !diff ? money(v) : v > a[0] ? `+${money(v - a[0])}` : ''; };
   // With dish prices hidden, a pick that moves the price still says so.
   const varies = !decided && !g.meta.included && hi > lo;
   // One price whatever they pick: the plate carries the dearest pick, shown once.
   const fixed = !!prices && !!g.meta.included && hi > 0 ? `${money(hi)} / plate` : '';
-  const cost = fixed || !priced ? fixed || (varies ? 'changes the plate price' : '') : diff || lo === 0 ? `up to +${money(diff ? hi - lo : hi)} / plate` : lo === hi ? `+${money(lo)} / plate` : `+${money(lo)} – ${money(hi)} / plate`;
+  const cost = fixed || !priced ? fixed || (varies ? 'changes the plate price' : '') : hi > lo ? `up to +${money(hi - lo)} / plate` : '';
   const rule = decided ? 'Your choice' : `Choose ${n} of ${g.items.length}`;
   const sub = `<div class="pick-sub">${rule}${cost ? ` · <span class="num">${cost}</span>` : ''}</div>`;
   const list = g.items.map(i => dish(i, price(i), !!i.chosen)).join('');
-  return { head: `<div class="course-h">${esc(label)}</div>${sub}`, list, rows: 2.4 + g.items.reduce((s, i) => s + dishLines(i), 0) };
+  return { head: `${label ? `<div class="course-h">${esc(label)}</div>` : ''}${sub}`, list, rows: 2.4 + g.items.reduce((s, i) => s + dishLines(i), 0) };
 }
 
 // Two "choose" boxes with the same title are numbered so the customer picks from each.
@@ -75,7 +77,7 @@ function blocksOf(courses: Course[]): Block[] {
 }
 
 // Layout design B: per meal (or menu), course blocks flow through two balanced columns. A course longer than
-// SPLIT_ROWS may continue in the next column with its heading repeated; sections, dishes and choice boxes never split.
+// SPLIT_ROWS may continue in the next column (heading printed once); sections, dishes and choice boxes never split.
 // Labels beside dishes (sections, one-dish courses) share one width per menu so they line up.
 // "quote" shows choice groups to tick; "served" shows only what will be served. `hide` drops a course
 // heading that only repeats the meal's name (Breakfast in the Breakfast card).
@@ -86,7 +88,11 @@ export function courseGrid(all: QuotationLineItem[], prices: PriceShow, mode: 'q
   // Served copies list decided picks as normal dishes; open choices stay as choices.
   const list = items.map(i => (i.choice && !groups.some(g => g.meta.id === i.choice!.id) ? { ...i, choice: undefined } : i));
   const labels = choiceLabels(groups);
-  const parts = (g: ChoiceGroup) => choiceParts(g, prices, labels.get(g.meta.id));
+  // A choice named like its course doesn't print the name twice.
+  const parts = (g: ChoiceGroup, course = '') => {
+    const label = labels.get(g.meta.id) ?? g.meta.label;
+    return choiceParts(g, prices, label.trim().toLowerCase() === course.trim().toLowerCase() ? '' : label);
+  };
   const blocks = blocksOf(planCourses(list, { merge: true, groups }));
   const sideLabels = blocks.flatMap(b => (b.kind === 'quick' ? b.list.map(c => c.name) : showSubs(subGroups(b.c)) ? subGroups(b.c).map(g => g.name) : []));
   const lw = Math.min(LABEL_MAX, Math.max(56, Math.round(Math.max(0, ...sideLabels.map(s => s.length)) * 6.2)));
@@ -104,7 +110,7 @@ export function courseGrid(all: QuotationLineItem[], prices: PriceShow, mode: 'q
     }
     const entry = (e: Entry) => {
       if (!e.choice) return dish(e.item, itemPrice(e.item, prices));
-      const p = parts(e.choice);
+      const p = parts(e.choice, c.name);
       return `<div class="pickbox">${p.head}${p.list}</div>`;
     };
     // A course mixing subcategories lists them beside small labels (Main Course › Farsan).

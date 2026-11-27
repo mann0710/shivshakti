@@ -28,7 +28,7 @@ body { font: 13px/1.45 'Noto Sans', 'Noto Sans Gujarati', Arial, sans-serif; col
 .num, td, .amt { font-variant-numeric: tabular-nums; }
 .wrap { padding: 0 13mm; }
 .hdr { background: #F7F7F7; padding: 24px 13mm 20px; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
-.hdr img { width: 140px; height: 90px; object-fit: contain; }
+.hdr img { width: 140px; height: 90px; object-fit: contain; mix-blend-mode: darken; }
 .brand { display: flex; align-items: center; gap: 16px; }
 .shop { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: #4A4A58; line-height: 1.45; }
 .shop b { color: #1C1C24; }
@@ -55,6 +55,7 @@ h2 { font-family: ${HEAD_FONT}; font-size: 19px; font-weight: 600; color: ${NAVY
 table.course { width: 100%; border-collapse: collapse; }
 table.course th, table.course td { padding: 0; text-align: left; font-weight: inherit; vertical-align: top; }
 table.course tr { break-inside: avoid; }
+table.course thead { display: table-row-group; }
 .course-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-family: ${HEAD_FONT}; font-size: 12.5px; font-weight: 600; letter-spacing: 1.5px; color: var(--accent-text); text-transform: uppercase; margin-bottom: 5px; break-after: avoid; }
 .course-h span { font-family: 'Noto Sans', sans-serif; font-size: 11px; font-weight: 500; letter-spacing: 0; color: #5C5C6B; text-transform: none; white-space: nowrap; }
 .sg { display: grid; grid-template-columns: var(--lw, 84px) minmax(0, 1fr); gap: 10px; break-inside: avoid; }
@@ -77,7 +78,8 @@ table.course tr { break-inside: avoid; }
 .compare { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 12px; break-inside: avoid; }
 .opt { border: 1px solid #E3E3EA; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
 .opt b.price { font-family: ${HEAD_FONT}; font-size: 22px; color: #1E1B6E; }
-.meal { border: 1px solid #E3E3EA; border-radius: 10px; margin-top: 12px; overflow: clip; }
+table.meal { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #E3E3EA; border-radius: 10px; margin-top: 12px; overflow: clip; }
+table.meal > * > tr > * { padding: 0; text-align: left; font-weight: inherit; }
 .meal-h { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; background: #F5F6FB; break-after: avoid; }
 .meal-h b { font-size: 14px; color: ${NAVY}; }
 .meal-b { padding: 12px 14px; }

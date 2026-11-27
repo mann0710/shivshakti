@@ -44,15 +44,16 @@ export const mealTop = (m: MealSlot) => (!offerOf(m) && m.per_plate_max ? m.per_
 const span = (lo: number, hi: number) => `<span class="nw">${money(lo)}${hi > lo ? ` – ${money(hi)}` : ''}</span>`;
 
 // Day → meal cards, each with its own menu; amounts hidden for kitchen copies.
+// A card is a table so its heading repeats when the meal runs onto the next page; a one-meal day shows its amount once.
 export function mealSchedule(days: EventDay[] | undefined, opts: { amounts: boolean; itemPrices: boolean; mode?: 'quote' | 'served' }): string {
   return daysOf(days).map(g => `<div class="day-h"><span>${esc(dayLabel(g))}</span>${
-    opts.amounts ? `<span class="num">${span(g.meals.reduce((s, m) => s + mealNet(m), 0), g.meals.reduce((s, m) => s + mealTop(m), 0))}</span>` : ''}</div>${
-    g.meals.map(m => `<div class="meal"><div class="meal-h"><div><b>${esc(mealTitle(m))}</b><div class="muted num" style="font-size:12px">${
+    opts.amounts && g.meals.length > 1 ? `<span class="num">${span(g.meals.reduce((s, m) => s + mealNet(m), 0), g.meals.reduce((s, m) => s + mealTop(m), 0))}</span>` : ''}</div>${
+    g.meals.map(m => `<table class="meal"><thead><tr><th><div class="meal-h"><div><b>${esc(mealTitle(m))}</b><div class="muted num" style="font-size:12px">${
       m.guest_count || 0} guests${opts.amounts && m.per_plate_amount ? ` · ${rateText(m, opts.itemPrices)}` : ''}</div></div>${
-      opts.amounts ? `<b class="num">${span(mealNet(m), mealTop(m))}</b>` : ''}</div>
-      <div class="meal-b">${(m.items ?? []).length ? courseGrid(m.items, priceShow(opts.itemPrices && showsDishPrices(m), m.per_plate_amount, m.items), opts.mode, m.meal_type) : '<span class="muted">Menu to be decided</span>'}${
+      opts.amounts ? `<b class="num">${span(mealNet(m), mealTop(m))}</b>` : ''}</div></th></tr></thead>
+      <tbody><tr><td><div class="meal-b">${(m.items ?? []).length ? courseGrid(m.items, priceShow(opts.itemPrices && showsDishPrices(m), m.per_plate_amount, m.items), opts.mode, m.meal_type) : '<span class="muted">Menu to be decided</span>'}${
       opts.amounts && mealSaving(m) ? `<div class="save num">Offer price saves ${money(mealSaving(m))} on this meal</div>` : ''}${
-      opts.amounts && discountSaving(m, opts.itemPrices) ? `<div class="save num">${money(plateOff(m))} off a plate saves ${money(discountSaving(m, opts.itemPrices))} on this meal</div>` : ''}</div></div>`).join('')}`).join('');
+      opts.amounts && discountSaving(m, opts.itemPrices) ? `<div class="save num">${money(plateOff(m))} off a plate saves ${money(discountSaving(m, opts.itemPrices))} on this meal</div>` : ''}</div></td></tr></tbody></table>`).join('')}`).join('');
 }
 
 // Guests or guest range across meals.

@@ -306,11 +306,24 @@ Until they run, the app hides Cancel bill and Day close and saves bills without 
 - **Bookings & quotes:** an unsent draft shows **Send quote** (opens the Send dialog), never "Pick & accept"; **Confirm booking** takes the sent quote, not a newer draft; **+ New quote** always starts a new one; Mark sent / lost / Reopen / Delete on a quote with options act on every option; **Reopen** is hidden once the event date has passed and brings a cancelled booking back to follow-up; Send everywhere follows the "Show each dish's price" setting (`useQuotePdfPref`); phones get the quote ⋯ menu and "See the N" on the tidy banner.
 - **Home, Money, Invoices, Customers:** Pick & confirm opens the Confirm booking dialog; a draft's **Send on WhatsApp** sends it and **Open** opens the quote; the tidy row is split into invoices and quotes; "Received in <month>" opens Money on This month; Invoices leaves out cancelled bookings like Home and Money; **+ Record payment** hides when nothing is due; an invoice opened from a booking goes back to it; **Download for CA** works on phones; **+ Sweets bill** and a customer's sweets history open the POS for that person; a customer with bookings gets an explanation instead of a Delete that always fails.
 
+### Quotation PDF polish (27 Nov 2026)
+
+A review of QTN-0029 found headings printed twice, wording that read as extra charges and dates that made no sense (`lib/docs/menuGrid.ts`, `menu.ts`, `quotationDoc.ts`, `theme.ts`).
+
+- **A course heading prints once:** a long course that runs into the next column no longer repeats "MAIN COURSE 9 dishes" (`table.course thead` is a plain row group). A "choose" box named like its course (Floating Stater) drops its own title and starts at "Choose 1 of 2".
+- **No "+₹" for prices already in the plate:** the plate carries the cheapest pick, so picks that cost the same print their own price with no surcharge (Pizza / Dosa ₹110), and picks that differ show what the dearer one adds ("+₹15", "up to +₹20 / plate").
+- **Meal cards are tables:** a meal that runs onto the next page repeats its heading (Dinner · 6:30 PM, guests, amount). A day with one meal shows its amount once, on the meal.
+- **Dates:** Valid till never passes the event date. A payment step written like "One month before the event" gets its date ("· by 20 Nov 2026"), or reads "Before the event" when that date had already passed when the quote was issued (`dueText`).
+- **Labels:** "2 days · 5 meals" (no "(s)"); the fact reads "Guests" when no food style is set.
+- **Look:** the logo blends into the grey header (`mix-blend-mode: darken`, works for white or grey logo backgrounds); signatures use the full width when the UPI QR sits beside the payment schedule.
+- Not changed: page breaks. QTN-0029 is still 4 pages (the payment schedule does not fit under the total on page 3).
+- Still your call per quote: untick *Show each dish's price* for a premium menu without ₹4 / ₹7 lines; menu typos are menu data.
+
 ### Quotation PDF: no more blank first page (Nov 2026)
 
 A quote whose Main Course held several "choose any" boxes printed an almost empty page 1: course cards could not split, so the tall Main Course jumped to page 2 and took the menu heading with it, and the short course beside it left a gap (`lib/docs/menu.ts`, `theme.ts`, `quotationDoc.ts`).
 
-- **The menu flows** down two columns and on across pages (`.courses { columns: 2 }`). Short courses, single dishes and "choose" boxes never split; a course taller than about half a column may continue in the next column, and because each course is a one-column table its heading repeats there (`<thead>`).
+- **The menu flows** down two columns and on across pages (`.courses { columns: 2 }`). Short courses, single dishes and "choose" boxes never split; a course taller than about half a column may continue in the next column, its heading prints once (see *Quotation PDF polish*).
 - **Subcategory labels** sit in a narrow column beside their dishes (MAIN COURSE › PUNJABI SABJI · Paneer Angara), so they add no extra lines.
 - **"Choose" boxes** read "Punjabi Sabji · choose 1 of 2"; two boxes with the same title are numbered (Punjabi Sabji 1, Punjabi Sabji 2); the hint line shows only when the pick changes the plate price ("Your pick changes the plate price." even with dish prices hidden). Tick boxes are 17px.
 - **Page 1 shows the total** (or *Estimated total* for a range) next to the event facts, since a WhatsApp preview shows only the first page. Issued and Valid till sit on two lines.

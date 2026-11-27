@@ -44,4 +44,15 @@ describe('menu layout (design B)', () => {
     expect(mealSchedule(day(meal), { amounts: true, itemPrices: true })).toContain('₹55');
     expect(mealSchedule(day({ ...meal, hide_prices: true }), { amounts: true, itemPrices: true })).not.toContain('₹55');
   });
+  it('a choice named like its course prints the name once, and a one-meal day its amount once', () => {
+    const g = { id: 'g', pick: 1, label: 'Floating Stater' };
+    const items = [d('Vol Vent', 'Floating Stater', 45, { choice: g }), d('Kachori', 'Floating Stater', 45, { choice: g }), d('Kabab', 'Floating Stater', 45)];
+    const html = courseGrid(items, true);
+    expect(html.match(/Floating Stater/g)).toHaveLength(1);
+    expect(html).not.toContain('+₹45');
+    const meal = { id: 'm', meal_type: 'dinner', time: '', guest_count: 10, per_plate_amount: 100, discount_amount: 0, subtotal: 1000, items };
+    const sched = mealSchedule([{ day_number: 1, date: '2027-02-16', meals: [meal], day_subtotal: 1000 }] as any, { amounts: true, itemPrices: true });
+    expect(sched.match(/₹1,000/g)).toHaveLength(1);
+    expect(sched).toContain('<table class="meal"><thead>');
+  });
 });

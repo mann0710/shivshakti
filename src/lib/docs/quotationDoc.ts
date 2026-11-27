@@ -23,6 +23,25 @@ const dishesOf = (q: Quotation) => (isMulti(q) ? (q.event_days ?? []).flatMap(d 
 const isRange = (q: Quotation) => !!q.total_max && q.total_max > q.total_amount;
 const rangeText = (lo: number, hi: number) => (hi > lo ? `${money(lo)} – ${money(hi)}` : money(lo));
 
+const firstDate = (q: Quotation) => (isMulti(q) ? daysOf(q.event_days).map(g => g.date).filter(Boolean).sort()[0] : q.booking?.event_date) || '';
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+const WORDS: Record<string, number> = { a: 1, one: 1, two: 2, three: 3, four: 4, six: 6 };
+// "One month before the event" gets its date; a date already past when issued reads "Before the event".
+export function dueText(when: string, event: string, issued: string): string {
+  const m = /^(\w+)\s+(day|week|month)s?\s+before the event$/i.exec(when.trim());
+  const n = m ? Number(m[1]) || WORDS[m[1].toLowerCase()] || 0 : 0;
+  if (!m || !n || !event) return when;
+  const d = new Date(`${event}T00:00:00Z`);
+  if (m[2].toLowerCase() === 'month') {
+    const dd = d.getUTCDate();
+    d.setUTCMonth(d.getUTCMonth() - n);
+    if (d.getUTCDate() !== dd) d.setUTCDate(0); // 31 May − 1 month = 30 Apr, not 1 May
+  } else d.setUTCDate(d.getUTCDate() - n * (m[2].toLowerCase() === 'week' ? 7 : 1));
+  const due = d.toISOString().slice(0, 10);
+  return issued && due <= issued ? 'Before the event' : `${when} · by ${day(due)}`;
+}
+
 // Event date(s): the meal dates for multi-day quotes, else the booking's date and time.
 function whenText(q: Quotation): string {
   const dates = daysOf(q.event_days).map(g => g.date).filter(Boolean).sort();
@@ -99,7 +118,7 @@ function priceSection(q: Quotation, itemPrices: PriceShow, title = 'Price'): str
 const menuSection = (q: Quotation, itemPrices: PriceShow, title: string) => {
   const dishes = dishesOf(q);
   const note = isMulti(q)
-    ? `${daysOf(q.event_days).length} day(s) · ${daysOf(q.event_days).reduce((n, g) => n + g.meals.length, 0)} meal(s)`
+    ? `${plural(daysOf(q.event_days).length, 'day')} · ${plural(daysOf(q.event_days).reduce((n, g) => n + g.meals.length, 0), 'meal')}`
     : [`${dishCount(dishes)} dishes`, itemPrices ? 'prices per plate' : '', q.food_type, isRange(q) ? 'price final once you choose' : ''].filter(Boolean).join(' · ');
   return `<section>${sectionHead(title, note)}${
     isMulti(q) ? mealSchedule(q.event_days, { amounts: true, itemPrices: !!itemPrices }) : courseGrid(q.items ?? [], itemPrices)}</section>`;
@@ -126,14 +145,18 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   const perOption: StepOption[] = grouped ? options.map(o => ({ label: `Option ${o.option_label}`, lo: o.total_amount, hi: o.total_max ?? 0 })) : [];
   const prices = (o: Quotation) => priceShow(opts.withPrices !== false && hasItemPrices(dishesOf(o)), o.per_plate_amount, o.items);
   const issued = (q.issue_date || q.created_at || '').slice(0, 10);
-  const validTill = issued ? addDays(issued, s.quote_valid_days) : '';
+  // Valid till the usual days, but never past the event itself.
+  const event = firstDate(q);
+  const usual = issued ? addDays(issued, s.quote_valid_days) : '';
+  const validTill = usual && event >= issued && event < usual ? event : usual;
+  const schedule = s.schedule.map(st => ({ ...st, when: dueText(st.when, event, issued) }));
   const guests = guestsText(isMulti(q) ? q.event_days : [], q.guest_count || b?.guest_count || 0);
   // Exact rupees only once the price is fixed; options and open choices show percentages.
   const open = grouped || isRange(q);
   const firstStep = open ? 0 : scheduleAmounts(q.total_amount, s.schedule)[0] ?? 0;
   // The UPI QR sits beside the payment schedule it pays, so the closing signatures stay short.
   const qr = s.quote_qr ? upiBox(ctx, firstStep, firstStep ? `Confirm with ${money(firstStep)}` : 'Pay the booking amount', `Booking ${q.quotation_number}`) : '';
-  const steps = s.schedule.length ? paySteps(grouped ? null : q.total_amount, s.schedule, perOption, isRange(q) ? q.total_max ?? 0 : 0) : '';
+  const steps = schedule.length ? paySteps(grouped ? null : q.total_amount, schedule, perOption, isRange(q) ? q.total_max ?? 0 : 0) : '';
 
   const details = grouped
     ? options.map(o => `${menuSection(o, prices(o), `${optionTitle(o)} — the menu`)}${priceSection(o, prices(o), `${optionTitle(o)} — price`)}`).join('')
@@ -146,15 +169,15 @@ export function quotationDoc(q: Quotation, opts: { withPrices?: boolean; options
   <div class="intro">
     <div class="fact"><span class="lbl">Prepared for</span><span class="big">${esc(q.customer?.name || 'Customer')}</span>
       ${q.customer?.phone ? `<span class="muted num">+91 ${esc(q.customer.phone)}</span>` : ''}</div>
-    ${facts([['Event', b?.event_type], ['Date & time', whenText(q)], ['Venue', b?.venue], ['Guests · food', [guests && `${guests} guests`, q.food_type].filter(Boolean).join(' · ')], ...(total ? [total] : [])])}
+    ${facts([['Event', b?.event_type], ['Date & time', whenText(q)], ['Venue', b?.venue], [q.food_type ? 'Guests · food' : 'Guests', [guests && `${guests} guests`, q.food_type].filter(Boolean).join(' · ')], ...(total ? [total] : [])])}
   </div>
   ${grouped ? compareSection(options) : ''}
   ${details}
   ${steps ? `<section class="keep">${sectionHead('Payment schedule', grouped ? 'of the option you choose' : open ? 'final once you choose' : '')}${qr ? `<div class="split">${steps}${qr}</div>` : steps}</section>` : ''}
   ${s.extras.length ? `<section class="keep">${sectionHead('On request, charged extra')}${chips(s.extras)}</section>` : ''}
   <section class="keep">${sectionHead('Terms')}${terms([...s.terms, ...(validTill ? [`This quotation is valid till ${day(validTill)}.`] : [])])}</section>
-  <div class="keep"><div class="close">${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', `For ${ctx.settings.catering_name}`)}
-    ${steps ? '<div></div>' : qr}</div>
+  <div class="keep"><div class="close"${steps ? ' style="grid-template-columns:minmax(0,1fr)"' : ''}>${signatures(grouped ? 'Accepted option ____ — signature & date' : 'Accepted by — signature & date', `For ${ctx.settings.catering_name}`)}
+    ${steps ? '' : qr}</div>
   ${endLine(ctx, `Thank you for considering ${ctx.settings.catering_name}`)}</div>
 </div>`;
 
