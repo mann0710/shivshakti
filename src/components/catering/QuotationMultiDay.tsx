@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
 import { getDayNumber } from '../../lib/quoteMath';
 import { sumMeals, isOnePrice, mealGap, priceMeal, setMealOnePrice, typedOf, withItems, hasDishPrices, showsDishPrices, plateOff } from '../../lib/mealPrice';
+import { basePlate } from '../../lib/quoteChoices';
 import { genId, PickerItem } from '../../lib/quoteLines';
 import { range } from '../../lib/quoteSummary';
 import { formatDateIST } from '../../lib/ist';
@@ -82,6 +83,7 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
     const one = isOnePrice(m);
     const priced = hasDishPrices(m);
     const off = plateOff(m);
+    const dishes = basePlate(m.items);
     return (
       <div key={m.id} className="q-meal">
         <div className="q-meal-row">
@@ -92,7 +94,8 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           </Field>
           <Field label="Time"><input type="time" value={m.time} onChange={e => setField(at, m.id, 'time', e.target.value)} /></Field>
           <Field label="Guests"><input type="number" min={0} inputMode="numeric" value={m.guest_count || ''} placeholder="0" onChange={e => setField(at, m.id, 'guest_count', parseInt(e.target.value, 10) || 0)} /></Field>
-          <Field label="A plate"><input type="number" min={0} inputMode="decimal" value={typedOf(m) || ''} placeholder="₹" onChange={e => setField(at, m.id, 'per_plate_amount', parseFloat(e.target.value) || 0)} /></Field>
+          <Field label="A plate"><input type="number" min={0} inputMode="decimal" value={typedOf(m) || ''} placeholder={dishes ? `₹${dishes}` : '₹'} onChange={e => setField(at, m.id, 'per_plate_amount', parseFloat(e.target.value) || 0)}
+            onBlur={e => { if (!e.target.value && dishes) setField(at, m.id, 'per_plate_amount', dishes); }} /></Field>
           <Field label="Full price"><input type="number" min={0} inputMode="decimal" value={m.full_price || ''} placeholder="No discount" aria-label="Full price a plate, before discount" onChange={e => setField(at, m.id, 'full_price', parseFloat(e.target.value) || 0)} /></Field>
           <button type="button" className="q-x" aria-label={`Remove Day ${getDayNumber(day.date, eventDays)} ${m.meal_type}`} onClick={() => patchDay(at, meals => meals.filter(x => x.id !== m.id))}>×</button>
         </div>
@@ -107,7 +110,7 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           preview={next => { const p = withItems(m, next); return `${range(p.per_plate_amount, p.per_plate_max)} a plate`; }}
           onChange={next => patchMeal(at, m.id, x => withItems(x, next))} />
         <div className="q-meal-foot">
-          <span>{m.guest_count} × {inr(rate)}{rate !== m.per_plate_amount ? ` (offer, was ${inr(m.per_plate_amount)})` : ''}{off ? ` · ${inr(off)} off ${inr(Number(m.full_price))} saves ${inr(off * m.guest_count)}` : ''}</span>
+          <span>{m.guest_count} × {inr(rate)}{rate !== m.per_plate_amount ? ` (offer, was ${inr(m.per_plate_amount)})` : ''}{off ? ` · ${inr(off)} off ${inr(Number(m.full_price))} saves ${inr(off * m.guest_count)}` : ''}{dishes && dishes !== m.per_plate_amount ? ` · dishes add up to ${inr(dishes)}` : ''}</span>
           <b>{range(rate * m.guest_count, hi)}</b>
         </div>
         {off > 0 && <DiscountTick full={Number(m.full_price)} price={m.per_plate_amount} hidden={!!m.hide_discount} onShow={v => patchMeal(at, m.id, x => ({ ...x, hide_discount: !v || undefined }))} />}
