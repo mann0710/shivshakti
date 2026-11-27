@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Navigate, useNavIntent } from '../hooks/useNavIntent';
+import { Navigate } from '../hooks/useNavIntent';
+import { useRecordRoute } from '../hooks/useRoute';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import { todayIST, formatDateIST } from '../lib/ist';
 import { inr } from '../lib/money';
@@ -29,10 +30,11 @@ const Finance: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate }) => {
   const { data: occasions = [] } = useSeasonalOccasions();
   const now = useNow();
   const today = todayIST();
-  const [tab, setTab] = useState<Tab>('overview');
-  // Links can open a preset period, e.g. Home's "Received in <month>" opens This month.
-  const intent = useNavIntent('finance');
-  const [period, setPeriod] = useState<Period>(() => PERIODS.find(([p]) => intent?.action === 'open' && p === intent.id)?.[0] ?? 'year');
+  // The address names the tab (/money/spends) or, from links like Home's "Received in <month>", a preset period (/money/month).
+  const route = useRecordRoute('finance');
+  const tab = TABS.find(([t]) => t === route.id)?.[0] ?? 'overview';
+  const setTab = (t: Tab) => route.open(t === 'overview' ? undefined : t, true);
+  const [period, setPeriod] = useState<Period>(() => PERIODS.find(([p]) => p === route.id)?.[0] ?? 'year');
   const [custom, setCustom] = useState<Range>({ from: `${today.slice(0, 7)}-01`, to: today });
   const [dlg, setDlg] = useState<'spend' | 'paste' | 'ca' | null>(null);
   const collect = useCollect(data);

@@ -9,6 +9,7 @@ import { useAcceptFlow, useQuotePdfPref } from '../hooks/useAcceptFlow';
 import { useStoredState } from '../hooks/useStoredState';
 import { useSeasonalOccasions } from '../hooks/useSeasonalOccasions';
 import { Navigate, useNavIntent } from '../hooks/useNavIntent';
+import { useRecordRoute } from '../hooks/useRoute';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Booking } from '../types';
 import { formatDateIST, todayIST } from '../lib/ist';
@@ -66,7 +67,8 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const [formFor, setFormFor] = useState<Booking | 'new' | null>(intent?.action === 'new' ? 'new' : null);
   const [presetCustomerId, setPresetCustomerId] = useState(intent?.action === 'new' ? intent.id : undefined);
   const [presetDate, setPresetDate] = useState<string | undefined>();
-  const [eventId, setEventId] = useState<string | null>(intent?.action === 'open' ? intent.id ?? null : null);
+  // The event panel lives in the address: /bookings/<id> or /calendar/<id>.
+  const event = useRecordRoute(startView === 'calendar' ? 'calendar' : 'bookings');
   const [paying, setPaying] = useState<BookingView | null>(null);
   const [confirming, setConfirming] = useState<BookingView | null>(null);
   const [cancelling, setCancelling] = useState<BookingView | null>(null);
@@ -82,7 +84,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   const stats = boardStats(views);
   const attention = inTab('attention').length;
   const festivals = useMemo(() => festivalDays(occasions), [occasions]);
-  const eventView = views.find(v => v.b.id === eventId);
+  const eventView = views.find(v => v.b.id === event.id);
 
   const setStatus = async (b: Booking, status: Booking['status']) => {
     const v = viewOf(b);
@@ -142,7 +144,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
     const b = v.b;
     switch (v.next?.kind) {
       case 'quote': return sendDraft(b);
-      case 'pick': case 'accept': return v.quote ? accept.accept(v.quote) : setEventId(b.id);
+      case 'pick': case 'accept': return v.quote ? accept.accept(v.quote) : event.open(b.id);
       case 'invoice': return go('billing', { action: 'new', id: b.id });
       case 'advance': case 'payment': return setPaying(v);
       case 'complete': return setStatus(b, 'completed');
@@ -151,7 +153,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
   };
   const actions: BoardActions = {
     run,
-    open: b => setEventId(b.id),
+    open: b => event.open(b.id),
     edit: b => setFormFor(b),
     quote: newQuote,
     invoice: b => go('billing', { action: 'new', id: b.id }),
@@ -231,7 +233,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
           : <BookingAgenda groups={groups} actions={actions}
               empty={q ? 'No bookings match your search' : tab === 'attention' ? 'Nothing needs attention' : `No ${TABS.find(t => t.id === tab)!.label.toLowerCase()} bookings`} />}
 
-      {eventView && onNavigate && <EventDetail view={eventView} actions={actions} onClose={() => setEventId(null)} onNavigate={onNavigate} />}
+      {eventView && onNavigate && <EventDetail view={eventView} actions={actions} onClose={event.close} onNavigate={onNavigate} />}
       {formFor && (
         <BookingFormModal booking={formFor === 'new' ? null : formFor} presetCustomerId={presetCustomerId} presetDate={presetDate}
           onClose={closeForm} onSaved={closeForm} />

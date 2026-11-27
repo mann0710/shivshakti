@@ -51,6 +51,8 @@ beforeEach(() => {
   mockUpdate.mockImplementation(async (q: any) => ({ ...q }));
   mockCreate.mockImplementation(async (q: any) => ({ ...q, id: 'new1', quotation_number: 'QTN-0099', created_at: '2026-10-31T10:00:00Z' }));
   mockUpdateBooking.mockImplementation(async (b: any) => b);
+  // The open quote lives in the address, so each test starts on the list.
+  window.history.replaceState(null, '', '/quotations');
 });
 
 describe('quote editor', () => {
@@ -58,6 +60,7 @@ describe('quote editor', () => {
     render(<Quotations />);
     fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
     expect(screen.getByText('All changes saved')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/quotations/k');
     ['Event', 'Menu', 'Price', 'Payment plan', 'On the PDF'].forEach(name => expect(screen.getByRole('region', { name })).toBeInTheDocument());
     expect(screen.getByText('1 dish in 1 course')).toBeInTheDocument();
     await settle();
@@ -72,6 +75,22 @@ describe('quote editor', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Quotations' }));
     expect(await screen.findByRole('heading', { name: 'Quotations' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/quotations');
+  });
+
+  it('a pasted link opens the quote, and Back returns to the list', async () => {
+    window.history.replaceState(null, '', '/quotations/k');
+    render(<Quotations />);
+    expect(await screen.findByText('All changes saved')).toBeInTheDocument();
+    act(() => { window.history.pushState(null, '', '/quotations'); window.dispatchEvent(new PopStateEvent('popstate')); });
+    expect(await screen.findByRole('heading', { name: 'Quotations' })).toBeInTheDocument();
+  });
+
+  it('a link to a deleted quote falls back to the list', async () => {
+    window.history.replaceState(null, '', '/quotations/gone');
+    render(<Quotations />);
+    expect(await screen.findByRole('heading', { name: 'Quotations' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/quotations');
   });
 
   it('one meal: a full price saves as a plate discount with its PDF tick', async () => {
@@ -149,5 +168,6 @@ describe('quote editor', () => {
     await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1), { timeout: 3000 });
     expect(mockCreate.mock.calls[0][0]).toMatchObject({ booking_id: 'br', customer_id: 'c2', status: 'draft', items: [expect.objectContaining({ item_name: 'Gujarati Dal' })] });
     expect(await screen.findByText('QTN-0099 · Rushi Ghandhi')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/quotations/new1');
   });
 });

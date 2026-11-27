@@ -38,7 +38,8 @@ const EventDetail: React.FC<Props> = ({ view: v, actions: a, onClose, onNavigate
   const food = v.quote?.food_type || (noted !== 'Regular' ? noted : '');
   const when = `${formatDateIST(v.start, 'EEE d MMM')}${v.end > v.start ? ` – ${formatDateIST(v.end, 'EEE d MMM')}` : ''}`;
   const sub = [when, fmtTime(b.event_time), b.guest_count > 0 ? `${b.guest_count} guests` : 'Guests not set', food, b.venue].filter(Boolean).join(' · ');
-  const go: Navigate = (page, intent) => { onClose(); onNavigate(page, intent); };
+  // Leaves the panel open in history, so Back returns to it.
+  const go: Navigate = (page, intent) => onNavigate(page, intent);
   // Every payment on the booking, before and after the invoice; each can be changed.
   const lines: PayLine[] = v.payments.map(p => ({
     key: p.id, title: `${formatDateIST(p.payment_date, 'EEE d MMM')} · ${p.payment_type === 'refund' ? 'given back' : p.payment_type === 'advance' ? 'advance' : 'payment'}`,

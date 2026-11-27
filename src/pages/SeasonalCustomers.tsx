@@ -7,7 +7,7 @@ import { Navigate, useNavIntent } from '../hooks/useNavIntent';
 const SeasonalCustomers: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate = () => {} }) => {
   const intent = useNavIntent('seasonal_customers');
   return (
-    <PeopleScreen title="Sweets customers" onNavigate={onNavigate} intent={intent} startFilter="sweets" defaultBuys={['sweets']}
+    <PeopleScreen page="seasonal_customers" title="Sweets customers" onNavigate={onNavigate} intent={intent} startFilter="sweets" defaultBuys={['sweets']}
       tabs={<SweetsTabs current="seasonal_customers" onNavigate={onNavigate} />} />
   );
 };

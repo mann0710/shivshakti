@@ -1,4 +1,4 @@
-import { posLink, posStart } from './posIntent';
+import { posLink, posPath, posStart, PosTabId } from './posIntent';
 
 const who = { name: 'Krinal', phone: '9876543210' };
 
@@ -27,5 +27,11 @@ describe('posStart', () => {
     expect(posStart(posLink.close())).toEqual({ tab: 'close' });
     expect(posStart(posLink.report('dues'))).toEqual({ tab: 'reports', report: 'dues' });
     expect(posStart(posLink.report())).toEqual({ tab: 'reports', report: undefined });
+  });
+
+  it('reads back every tab from its address', () => {
+    const tabs: PosTabId[] = ['pos', 'orders', 'preorders', 'credit', 'close', 'reports'];
+    tabs.forEach(t => { const id = posPath(t); expect(posStart(id ? { action: 'open', id } : null).tab).toBe(t); });
+    expect(posPath('orders')).toBe('bills');
   });
 });

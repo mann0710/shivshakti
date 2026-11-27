@@ -16,7 +16,8 @@ import { isOpenPreorder } from '../lib/preorders';
 import { unpaidCount } from '../lib/dues';
 import { useNavIntent, canGoBack, Navigate } from '../hooks/useNavIntent';
 import { usePosFull } from '../hooks/usePosFull';
-import { posStart, posLink, PosStart, PosTabId as Tab } from '../lib/posIntent';
+import { posStart, posLink, posPath, PosStart, PosTabId as Tab } from '../lib/posIntent';
+import { useRecordRoute } from '../hooks/useRoute';
 
 const currentYear = new Date().getFullYear();
 const yearOptions = Array.from({ length: 6 }, (_, i) => currentYear - i);
@@ -32,13 +33,17 @@ const leavePos = (onNavigate?: Navigate) => {
 const SeasonalBilling: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate }) => {
   // Links from other screens pick the tab, mode, customer or report.
   const intent = useNavIntent('seasonal_billing');
-  const [start, setStart] = useState<PosStart>(() => posStart(intent));
+  // The tab lives in the address (/pos/bills); a pasted link starts the same way as an in-app one.
+  const route = useRecordRoute('seasonal_billing');
+  const [start, setStart] = useState<PosStart>(() => posStart(intent ?? (route.id ? { action: 'open', id: route.id } : null)));
   // A new start (e.g. "New sweets bill" from Credit) remounts the counter with it.
   const [startKey, setStartKey] = useState(0);
-  const [tab, setTab] = useState<Tab>(start.tab);
+  const tab = route.id ? posStart({ action: 'open', id: route.id }).tab : 'pos';
   // Bills and Pre-bookings stay mounted once opened, so filters and search survive an edit.
-  const [seen, setSeen] = useState<Tab[]>([start.tab]);
-  const open = (t: Tab) => { setTab(t); setSeen(s => (s.includes(t) ? s : [...s, t])); };
+  const [seen, setSeen] = useState<Tab[]>([]);
+  const mounted = (t: Tab) => tab === t || seen.includes(t);
+  // Tabs swap the address in place, so Back still leaves the POS.
+  const open = (t: Tab) => { route.open(posPath(t), true); setSeen(s => Array.from(new Set([...s, tab, t]))); };
   const [year, setYear] = useState(currentYear);
   const [edit, setEdit] = useState<EditTarget | null>(null);
   const { data: occasions = [] } = useSeasonalOccasions(false);
@@ -103,13 +108,13 @@ const SeasonalBilling: React.FC<{ onNavigate?: Navigate }> = ({ onNavigate }) =>
           <PosTab key={edit ? (edit.kind === 'bill' ? edit.order.id : edit.preorder.id) : `new-${startKey}`}
             occasions={occasions} edit={edit} gst={dc?.gst_number} onEditDone={endEdit} start={start.tab === 'pos' ? start : undefined} />
         )}
-        {seen.includes('orders') && (
+        {mounted('orders') && (
           <div hidden={tab !== 'orders'}>
             <OrdersTab orders={orders} preorders={preorders} occasions={occasions} gst={dc?.gst_number} onEdit={order => startEdit({ kind: 'bill', order })}
               search={start.tab === 'orders' ? start.who?.phone || start.who?.name : undefined} />
           </div>
         )}
-        {seen.includes('preorders') && (
+        {mounted('preorders') && (
           <div hidden={tab !== 'preorders'}>
             <PreordersTab preorders={preorders} occasions={occasions} gst={dc?.gst_number} onEdit={preorder => startEdit({ kind: 'preorder', preorder })}
               search={start.tab === 'preorders' ? start.who?.phone || start.who?.name : undefined} openId={start.openId} />

@@ -26,54 +26,47 @@ import { usePosFull } from './hooks/usePosFull';
 import { useDocContextSync } from './hooks/useDocSettings';
 import LoginScreen from './components/LoginScreen';
 import SetPasswordDialog from './components/settings/SetPasswordDialog';
-import { fromAuthLink } from './lib/supabase';
+import { goTo, useRoute } from './hooks/useRoute';
 
 const queryClient = new QueryClient();
 
 export type { Page };
 
-const hashPage = () => window.location.hash.replace('#', '');
-
 // Keeps printed documents in step with Data Center settings.
 const DocContextSync: React.FC = () => { useDocContextSync(); return null; };
 
 function App() {
-  // URL hash first (#quotations), then the last-viewed page, then the dashboard.
-  const [currentPage, setCurrentPage] = useState<Page>(() => {
-    let saved: string | null = hashPage();
-    if (!isPage(saved)) { try { saved = localStorage.getItem('currentPage'); } catch { saved = null; } }
+  const route = useRoute();
+  // A bare "/" opens the last-viewed page, else the dashboard.
+  const [lastPage] = useState<Page>(() => {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem('currentPage'); } catch { /* storage blocked */ }
     return isPage(saved) ? saved : 'dashboard';
   });
+  const currentPage = route.page ?? lastPage;
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [posFull] = usePosFull();
   const auth = useAuth();
   const signOut = async () => { await auth.signOut(); queryClient.clear(); };
 
-  const remember = (page: Page) => { try { localStorage.setItem('currentPage', page); } catch { /* storage blocked */ } };
-
-  // Each page is a history entry, so the phone Back button returns to the previous screen.
-  useEffect(() => {
-    // An email sign-in link keeps its address until the auth client has read it.
-    if (!fromAuthLink) window.history.replaceState({ page: currentPage }, '', `#${currentPage}`);
-    const onPop = (e: PopStateEvent) => {
-      const page = e.state?.page ?? hashPage();
-      if (isPage(page)) { setCurrentPage(page); remember(page); setShowMobileMenu(false); }
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
+  // Each page and opened record is its own address and history entry; App only pushes, pages read their record.
   const navigate = (page: Page, intent?: NavIntent) => leaveThen(() => {
     setNavIntent(page, intent);
-    if (page !== currentPage) window.history.pushState({ page }, '', `#${page}`);
-    setCurrentPage(page);
-    remember(page);
+    goTo(page, intent?.action === 'open' ? intent.id : undefined);
     setShowMobileMenu(false);
   });
 
   // Counter and kitchen logins only reach their own screens.
   const role: Role = auth.role;
   const page: Page = canOpen(role, currentPage) ? currentPage : homeFor(role);
+
+  // The address names the page shown; it waits for sign-in so a shared link survives the login screen.
+  useEffect(() => {
+    if (auth.access !== 'staff' || window.location.hash.includes('=')) return;
+    try { localStorage.setItem('currentPage', page); } catch { /* storage blocked */ }
+    if (route.page !== page || window.location.hash) goTo(page, route.page === page ? route.id : undefined, true);
+  }, [auth.access, page, route.page, route.id]);
+  useEffect(() => setShowMobileMenu(false), [route.page, route.id]);
 
   const renderPage = () => {
     switch (page) {

@@ -1,12 +1,14 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../ui/ConfirmDialog';
 import Modal from '../ui/Modal';
 import { posLink } from '../../lib/posIntent';
 import { useUpdateBooking } from '../../hooks/useBookings';
 import { NavIntent, Navigate } from '../../hooks/useNavIntent';
+import { useRecordRoute } from '../../hooks/useRoute';
+import type { Page } from '../navItems';
 import { Booking } from '../../types';
-import { Side, personByRecord, searchPeople } from '../../lib/people';
+import { Person, Side, personByRecord, searchPeople } from '../../lib/people';
 import { Filter, HistoryItem, filterCounts, matchesFilter } from '../../lib/personHistory';
 import { undoToast } from '../pos/undoToast';
 import CustomerDetail from '../catering/CustomerDetail';
@@ -18,6 +20,7 @@ import { usePersonActions } from './usePersonActions';
 import '../../styles/people.css';
 
 interface Props {
+  page: Page;
   onNavigate: Navigate;
   intent?: NavIntent | null;
   startFilter?: Filter;
@@ -29,18 +32,22 @@ interface Props {
 const isPhone = () => window.matchMedia('(max-width: 768px)').matches;
 // Phones swap the list for the detail, so start the new view at the top.
 const toTop = (el: HTMLElement | null) => { if (isPhone()) requestAnimationFrame(() => el?.scrollIntoView({ block: 'start' })); };
+// Links carry a record id, never the person key (a mobile number).
+const linkId = (p: Person) => p.catering[0]?.id ?? p.sweets[0]?.id;
 
 // Customers screen: one list for catering and sweets with a detail panel beside it (stacked on phones).
-const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all', defaultBuys, title, tabs }) => {
+const PeopleScreen: React.FC<Props> = ({ page, onNavigate, intent, startFilter = 'all', defaultBuys, title, tabs }) => {
   const { rows, isLoading } = usePeople();
   const actions = usePersonActions();
   const updateBooking = useUpdateBooking();
   const { confirm, dialog } = useConfirm();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>(startFilter);
-  const [picked, setPicked] = useState<string | null>(null);
-  const [openId] = useState(intent?.action === 'open' ? intent.id : undefined);
-  const [view, setView] = useState<'list' | 'detail'>(intent?.action === 'open' ? 'detail' : 'list');
+  // The open customer lives in the address (/customers/<record id>); phones show the detail while one is open.
+  const route = useRecordRoute(page);
+  // A person saved just now opens once the list has them.
+  const pending = useRef<string | null>(null);
+  const view = route.id ? 'detail' : 'list';
   const [editing, setEditing] = useState<string | 'new' | null>(intent?.action === 'new' ? 'new' : null);
   const [combining, setCombining] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<string | null>(null);
@@ -49,11 +56,19 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
   const shown = useMemo(() => searchPeople(rows, search).filter(p => matchesFilter(p.s, filter)), [rows, search, filter]);
   const counts = useMemo(() => filterCounts(searchPeople(rows, search).map(p => p.s)), [rows, search]);
   const twice = rows.find(p => p.twice);
-  const selectedKey = picked ?? (openId ? personByRecord(rows, openId)?.key : undefined);
+  const selectedKey = route.id ? personByRecord(rows, route.id)?.key : undefined;
   const current = rows.find(p => p.key === selectedKey) ?? shown[0];
   const byKey = (k: string | null) => rows.find(p => p.key === k);
 
-  const select = (key: string) => { setPicked(key); setView('detail'); toTop(top.current); };
+  const select = (key: string) => {
+    const p = byKey(key);
+    if (p) route.open(linkId(p)); else pending.current = key;
+    toTop(top.current);
+  };
+  useEffect(() => {
+    const p = byKey(pending.current);
+    if (p) { pending.current = null; route.open(linkId(p)); }
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const remove = async () => {
     if (!current) return;
@@ -69,7 +84,7 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
     try {
       await actions.remove(current);
       toast.success(`${current.name} deleted`);
-      setEditing(null); setPicked(null); setView('list');
+      setEditing(null); route.open(undefined, true);
     } catch (e: any) {
       toast.error(e?.code === '23503' ? "Can't delete: this customer still has bookings or quotations" : e?.message || 'Could not delete');
     }
@@ -109,7 +124,7 @@ const PeopleScreen: React.FC<Props> = ({ onNavigate, intent, startFilter = 'all'
         <PeopleList rows={shown} counts={counts} filter={filter} search={search} selected={current?.key} twice={twice} loading={isLoading}
           onFilter={setFilter} onSearch={setSearch} onSelect={select} onCombine={p => setCombining(p.key)} />
         {current ? (
-          <CustomerDetail p={current} onBack={() => { setView('list'); toTop(top.current); }} onEdit={() => setEditing(current.key)} onDelete={remove}
+          <CustomerDetail p={current} onBack={() => { route.close(); toTop(top.current); }} onEdit={() => setEditing(current.key)} onDelete={remove}
             onCombine={() => setCombining(current.key)} onNewBooking={newBooking} onSweetsBill={() => onNavigate('seasonal_billing', posLink.bill(who))}
             onMarkCompleted={markCompleted} onOpen={openItem}
             onCredit={() => onNavigate('seasonal_billing', posLink.credit(who))} />

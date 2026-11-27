@@ -197,7 +197,7 @@ Sweets given now and paid for later, kept as one **credit account per mobile num
 ## Easier to use, especially on phones
 
 - **Popups that always show:** forms open in dialogs, bottom sheets on phones. Before, they rendered below long lists and looked dead. This covers new/edit booking, customer and package. Deletes and other risky actions use an in-app confirmation instead of the browser's confirm box, which many phone home-screen setups block silently.
-- **Back button works:** each screen has its own address (`#bookings`, `#quotations`, …), so the phone Back button returns to the previous screen instead of leaving the app.
+- **Back button works:** each screen and open record has its own address (see *Links to any screen or record* below), so the phone Back button returns to the previous screen instead of leaving the app.
 - **One tap to the form:** dashboard quick actions (New booking, New quotation, Add customer, Create invoice) open the form directly. A booking's **Quote** action opens a new quotation with that booking already selected.
 - **Share on WhatsApp:**
   - quotations and invoices can be shared as a PDF;
@@ -221,6 +221,28 @@ Sweets given now and paid for later, kept as one **credit account per mobile num
 - **GST stays as issued:** editing an old quotation or invoice keeps the GST rate it was issued at, even if the Data Center rate has changed since.
 - **Long lists are complete:** customers, bookings, quotations, invoices, payments and sweets load page by page, so nothing silently drops after 1,000 rows.
 - **Google Calendar:** the "add to Google Calendar" step is a button you tap. It used to be an automatic popup that phones blocked. It shows after every way of confirming: Bookings → Confirm, and accepting a quotation (event page, Quotations, Home), next to "Create invoice". Google opens the event filled in; tap **Save** there. Missed it? Event ⋯ → Add to Google Calendar.
+
+## Links to any screen or record (Nov 2026)
+
+Every page and every opened record has its own address. Copy it from the address bar and send it to staff. Opening it in a new tab, or refreshing, lands on the same screen. A signed-out person sees the sign-in screen first and then lands on the link. Links in emails (invite, "Forgot password?") still open the home page.
+
+| Address | Opens |
+|---|---|
+| `/home`, `/customers`, `/bookings`, `/calendar`, `/quotations`, `/invoices`, `/money`, `/menu-builder`, `/packages`, `/settings` | the page |
+| `/quotations/<quote id>` (or `<booking id>`: its quote, else a new one) | one quotation in the editor |
+| `/bookings/<booking id>`, `/calendar/<booking id>` | the event page (side panel) |
+| `/customers/<customer id>` | that customer's detail |
+| `/invoices/<invoice id>` | one invoice |
+| `/settings/<group>`: `business`, `money`, `documents`, `catering`, `sweets`, `credit`, `reminders`, `team`, `data`, `device` | one Settings section |
+| `/money/reports`, `/money/spends`; `/money/month` and the other periods | a Money tab or period |
+| `/pos`, `/pos/bills`, `/pos/preorders`, `/pos/preorders/<id>`, `/pos/credit`, `/pos/close`, `/pos/reports`, `/pos/reports/<report>` | Sweets POS: counter, Bills and the other tabs |
+| `/sweets`, `/sweet-items`, `/occasions`, `/sweets-customers` | the sweets pages |
+
+- **Back and Forward** follow what you open and close: quotations, the event panel, customers, invoices and Settings sections. Close or **‹ Back** on a record goes back to the screen that opened it. On a pasted link it goes to the page's list. POS and Money tabs change the address without adding Back steps, so Back still leaves the POS.
+- The sidebar and phone bar highlight the page from the address. A link to a page your login can't open goes to your home screen.
+- **Old links still work:** `#quotations`, `#dashboard` and the other `#page` links open their page and switch to the new address. A bare `/` opens the last page you used.
+- Customer links carry a record id, never a mobile number. Links never open a "new", payment or confirm dialog by themselves.
+- Code: `lib/route.ts` (address ↔ page and record, tests in `route.test.ts`), `hooks/useRoute.ts` (the history store: `goTo`, `closeRoute`, `useRecordRoute`), `components/quotes/useQuoteRoute.ts` (editor ↔ address). Vercel already serves `index.html` for these paths, so `vercel.json` needs no rewrite.
 
 ## One look across the app (redesign, Nov 2026)
 
@@ -469,6 +491,7 @@ src/
   components/catering/              booking, quotation, customer and invoice pieces (dialogs, lists, cards)
   hooks/useAuth.ts, components/LoginScreen.tsx   staff sign-in and the staff-list check
   hooks/useNavIntent.ts             "open the new form" / "preselect this booking" between screens
+  lib/route.ts, hooks/useRoute.ts   page and record addresses (/quotations/<id>), Back/Forward, old #page links
   components/pos/                   ProductGrid, ProductTile, PackPicker, TicketPanel, TicketLines,
                                     CustomerFields, CheckoutFields, SaleDone, QtyInput
   components/sessional/             PosTab, OrdersTab, PreordersTab, PreorderSheet, PrepList, ReportsTab,
@@ -516,7 +539,7 @@ supabase/
 ## Tests and checks
 
 ```bash
-CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, documents, reports, pre-booking sheet/slip, nav and roles, Excel, recycle bin, backups, sheet edits, imports, price tiers, rate card
+CI=true npx react-scripts test --watchAll=false   # unit tests: pack pricing, merge plan, money, GST, documents, reports, pre-booking sheet/slip, nav and roles, addresses (routes), Excel, recycle bin, backups, sheet edits, imports, price tiers, rate card
 npx tsc --noEmit -p .                             # type check
 npx eslint src --ext .ts,.tsx                     # lint (the hosted build fails on warnings when CI=true)
 ```

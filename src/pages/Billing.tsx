@@ -4,6 +4,7 @@ import { useInvoices } from '../hooks/useInvoices';
 import { useQuotations } from '../hooks/useQuotations';
 import { useBookings } from '../hooks/useBookings';
 import { Navigate, useNavIntent, canGoBack } from '../hooks/useNavIntent';
+import { useRecordRoute } from '../hooks/useRoute';
 import { useConfirm } from '../components/ui/ConfirmDialog';
 import { Invoice } from '../types';
 import { todayIST } from '../lib/ist';
@@ -29,7 +30,8 @@ const Billing: React.FC<Props> = () => {
   const { data: bookings = [] } = useBookings();
   const { settle, busy: settlingAll } = useSettleOutside();
   const { confirm, dialog } = useConfirm();
-  const [openId, setOpenId] = useState<string | null>(intent?.action === 'open' ? intent.id ?? null : null);
+  // The open invoice lives in the address: /invoices/<id>.
+  const route = useRecordRoute('billing');
   // Opened from another screen: Back returns there instead of the list.
   const [linked, setLinked] = useState(() => intent?.action === 'open' && canGoBack());
   const [creating, setCreating] = useState<string | null>(intent?.action === 'new' ? intent.id ?? '' : null);
@@ -44,7 +46,8 @@ const Billing: React.FC<Props> = () => {
     return { ...t, ready: t.ready.filter(r => !awaitsAcceptance(r.booking.id, quotations)) };
   }, [bookings, quotations, invoices, today]);
   const owed = todo.owing.reduce((s, o) => s + o.invoice.balance_due, 0);
-  const open = invoices.find(i => i.id === openId);
+  const open = invoices.find(i => i.id === route.id);
+  const openInvoice = (id: string) => { setLinked(false); route.open(id); };
   const bookingOf = (id: string) => bookings.find(b => b.id === id);
 
   const settleAll = async () => {
@@ -63,8 +66,7 @@ const Billing: React.FC<Props> = () => {
     toast.success(`${done} past events marked as settled`, { id });
   };
 
-  const close = () => { setLinked(false); setOpenId(null); };
-  if (open) return <InvoiceEditor key={open.id} invoice={open} onBack={linked ? () => window.history.back() : close} onDeleted={close} backLabel={linked ? 'Back' : undefined} />;
+  if (open) return <InvoiceEditor key={open.id} invoice={open} onBack={route.close} onDeleted={() => route.open(undefined, true)} backLabel={linked ? 'Back' : undefined} />;
 
   const matches = q.trim() ? invoices.filter(i => invoiceMatches(i, q)) : [];
   const settleBooking = settling ? bookingOf(settling.booking.id) : undefined;
@@ -87,19 +89,19 @@ const Billing: React.FC<Props> = () => {
 
       {error && <LoadError onRetry={() => refetch()} />}
       {isLoading ? <Skeleton rows={4} /> : q.trim() ? (
-        <InvoiceList title="Matches" invoices={matches} onOpen={i => setOpenId(i.id)}
+        <InvoiceList title="Matches" invoices={matches} onOpen={i => openInvoice(i.id)}
           empty={<Empty title={`Nothing matches "${q.trim()}"`} text="Search looks at names, phones and invoice numbers.">
             <button type="button" className="ui-btn" onClick={() => setQ('')}>Clear search</button></Empty>} />
       ) : (
         <>
-          <InvoiceTodo {...todo} invoices={invoices} onOpen={i => setOpenId(i.id)} onPay={setPaying}
+          <InvoiceTodo {...todo} invoices={invoices} onOpen={i => openInvoice(i.id)} onPay={setPaying}
             onCreate={id => setCreating(id)} onSettle={setSettling} onSettleAll={() => { if (!settlingAll) settleAll(); }} />
-          <InvoiceList title="All invoices" invoices={invoices} onOpen={i => setOpenId(i.id)} collapsed={!showAll} onToggle={() => setShowAll(v => !v)} />
+          <InvoiceList title="All invoices" invoices={invoices} onOpen={i => openInvoice(i.id)} collapsed={!showAll} onToggle={() => setShowAll(v => !v)} />
         </>
       )}
 
       {creating !== null && (
-        <InvoiceCreateModal bookingId={creating || undefined} onClose={() => setCreating(null)} onCreated={id => { setCreating(null); setOpenId(id); }} />
+        <InvoiceCreateModal bookingId={creating || undefined} onClose={() => setCreating(null)} onCreated={id => { setCreating(null); openInvoice(id); }} />
       )}
       {paying && <PaymentDialog booking={bookingOfInvoice(paying)} invoice={paying} onClose={() => setPaying(null)} />}
       {settling && settleBooking && (

@@ -16,6 +16,7 @@ import DeviceGroup from '../components/settings/DeviceGroup';
 import { readTextSize } from '../lib/textSize';
 import { useStaffLogins } from '../hooks/useStaff';
 import { useHasTeamBin } from '../hooks/useSchemaStatus';
+import { useRecordRoute } from '../hooks/useRoute';
 import { backupStale } from '../lib/backup';
 import ImportScreen from '../components/data/ImportScreen';
 import '../styles/settings.css';
@@ -30,8 +31,11 @@ const DataCenter: React.FC = () => {
   const db = useDbUpdates();
   const { data: logins = [] } = useStaffLogins(useHasTeamBin());
   const [importing, setImporting] = useState(false);
-  const [group, setGroup] = useState<GroupId>('business');
-  const [phoneOpen, setPhoneOpen] = useState(false);
+  // The open group lives in the address (/settings/credit); phones show it full screen until searching.
+  const route = useRecordRoute('datacenter');
+  const group = GROUPS.find(g => g.id === route.id)?.id ?? 'business';
+  const [listFirst, setListFirst] = useState(false);
+  const phoneOpen = !!route.id && !listFirst;
   const [query, setQuery] = useState('');
   const [textSize, setTextSize] = useState(readTextSize);
   const top = useRef<HTMLDivElement>(null);
@@ -48,7 +52,7 @@ const DataCenter: React.FC = () => {
   const shown = searching ? GROUPS.filter(g => hits.has(g.id)) : GROUPS;
   const active = searching && !hits.has(group) ? shown[0]?.id : group;
 
-  const open = (id: GroupId) => { setGroup(id); setPhoneOpen(true); requestAnimationFrame(() => top.current?.scrollIntoView({ block: 'start' })); };
+  const open = (id: GroupId) => { setListFirst(false); route.open(id, listFirst); requestAnimationFrame(() => top.current?.scrollIntoView({ block: 'start' })); };
 
   const panel = (id?: GroupId) => {
     switch (id) {
@@ -75,7 +79,7 @@ const DataCenter: React.FC = () => {
         <label className="st-search">
           <span className="st-sr">Search settings</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-          <input type="search" placeholder='Search settings — try "UPI" or "GST"' value={query} onChange={e => { setQuery(e.target.value); setPhoneOpen(false); }} />
+          <input type="search" placeholder='Search settings — try "UPI" or "GST"' value={query} onChange={e => { setQuery(e.target.value); setListFirst(true); }} />
         </label>
       </div>
 
@@ -90,7 +94,7 @@ const DataCenter: React.FC = () => {
           {!shown.length && <p className="st-empty">Nothing matches "{query}".</p>}
         </nav>
         <div className="st-main">
-          <button type="button" className="st-back" onClick={() => setPhoneOpen(false)}>‹ Settings</button>
+          <button type="button" className="st-back" onClick={route.close}>‹ Settings</button>
           {panel(active)}
         </div>
       </div>

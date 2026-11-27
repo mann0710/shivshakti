@@ -12,21 +12,24 @@ export interface PosStart { tab: PosTabId; mode?: PosMode; who?: Who; report?: R
 export const posLink = {
   bill: (who?: Who): NavIntent => ({ action: 'new', id: 'bill', who }),
   preorder: (who?: Who): NavIntent => ({ action: 'new', id: 'preorder', who }),
-  bills: (who?: Who): NavIntent => ({ action: 'open', id: 'orders', who }),
-  preorders: (openId?: string, who?: Who): NavIntent => ({ action: 'open', id: openId ? `preorders:${openId}` : 'preorders', who }),
+  bills: (who?: Who): NavIntent => ({ action: 'open', id: 'bills', who }),
+  preorders: (openId?: string, who?: Who): NavIntent => ({ action: 'open', id: openId ? `preorders/${openId}` : 'preorders', who }),
   credit: (who?: Who): NavIntent => ({ action: 'open', id: 'credit', who }),
   close: (): NavIntent => ({ action: 'open', id: 'close' }),
-  report: (id?: ReportId): NavIntent => ({ action: 'open', id: id ? `report:${id}` : 'reports' }),
+  report: (id?: ReportId): NavIntent => ({ action: 'open', id: id ? `reports/${id}` : 'reports' }),
 };
 
+// The address part for each tab: /pos/bills, /pos/credit; the counter is plain /pos.
+export const posPath = (tab: PosTabId) => (tab === 'pos' ? undefined : tab === 'orders' ? 'bills' : tab);
+
 export function posStart(intent: NavIntent | null | undefined): PosStart {
-  const [what = '', arg] = (intent?.id ?? '').split(':');
+  const [what = '', arg] = (intent?.id ?? '').split('/');
   const who = intent?.who;
   if (what === 'bill' || what === 'preorder') return { tab: 'pos', mode: what, who };
-  if (what === 'orders') return { tab: 'orders', who };
+  if (what === 'bills') return { tab: 'orders', who };
   if (what === 'preorders') return { tab: 'preorders', who, openId: arg || undefined };
   if (what === 'credit') return { tab: 'credit', who };
   if (what === 'close') return { tab: 'close' };
-  if (what === 'reports' || what === 'report') return { tab: 'reports', report: (arg as ReportId) || undefined };
+  if (what === 'reports') return { tab: 'reports', report: (arg as ReportId) || undefined };
   return { tab: 'pos' };
 }
