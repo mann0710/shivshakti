@@ -21,4 +21,17 @@ describe('meal plate price', () => {
     rerender(ui());
     expect([days[0].meals[0].per_plate_amount, days[0].meals[0].subtotal]).toEqual([703, 281200]);
   });
+  it('swaps a before-discount price typed below the plate price', () => {
+    let days: any[] = [{ day_number: 1, date: '2026-11-27', meals: [{ ...meal, per_plate_amount: 703, subtotal: 281200 }], day_subtotal: 281200 }];
+    const set = (fn: any) => { days = typeof fn === 'function' ? fn(days) : fn; };
+    const ui = () => <QuotationMultiDay eventDays={days} setEventDays={set} guestCount={400} defaultDate="2026-11-27" menuItems={[]} toLine={(x: any) => x} showPrices who="Pradeep" />;
+    const { rerender } = render(ui());
+    fireEvent.change(screen.getByLabelText('Price a plate before discount'), { target: { value: '690' } });
+    rerender(ui());
+    fireEvent.blur(screen.getByLabelText('Price a plate before discount'));
+    rerender(ui());
+    const m = days[0].meals[0];
+    expect([m.per_plate_amount, m.full_price, m.subtotal]).toEqual([690, 703, 276000]);
+    expect(screen.getByText(/₹13 off ₹703 saves ₹5,200/)).toBeInTheDocument();
+  });
 });

@@ -84,8 +84,9 @@ const PriceSection: React.FC<Props> = ({ f, pkg }) => {
       )}
       {!f.isMultiDay && plateReady && (
         <div className="q-fullprice">
-          <Field label="Full price a plate" hint={off ? `${inr(off)} off ${inr(f.fullPrice)} · saves ${inr(off * f.guestCount)}` : 'Your usual price, to show a discount'}>
-            <input type="number" min={0} inputMode="decimal" value={f.fullPrice || ''} placeholder="No discount" onChange={e => f.setFullPrice(parseFloat(e.target.value) || 0)} />
+          <Field label="Price before discount" hint={off ? `${inr(off)} off ${inr(f.fullPrice)} · saves ${inr(off * f.guestCount)}` : 'Your usual price, to show a discount'}>
+            <input type="number" min={0} inputMode="decimal" value={f.fullPrice || ''} placeholder="No discount" onChange={e => f.setFullPrice(parseFloat(e.target.value) || 0)}
+              onBlur={() => { if (f.fullPrice > 0 && f.fullPrice < f.plateLow) { const was = f.plateLow; f.typePerPlate(String(f.fullPrice)); f.setFullPrice(was); } }} />
           </Field>
           <DiscountTick full={f.fullPrice} price={f.plateLow} hidden={f.hideDiscount} onShow={v => f.setHideDiscount(!v)} />
         </div>

@@ -53,3 +53,9 @@ export const showsDiscount = (m: Plate) => plateOff(m) > 0 && !m.hide_discount;
 export const discountSaving = (m: Plate) => (showsDiscount(m) ? plateOff(m) * (m.guest_count || 0) : 0);
 // A one-meal quote as a plate; its discount_amount is the quote's discounts, not an offer price.
 export const quotePlate = (q: Plate, guests: number): Plate => ({ ...q, discount_amount: 0, guest_count: guests });
+// A "before discount" price typed below the plate price means the two were entered the other way round.
+export const swapLower = (m: MealSlot): MealSlot => {
+  const full = Number(m.full_price) || 0;
+  const typed = typedOf(m);
+  return full > 0 && full < typed ? { ...priceMeal(m, m.items ?? [], full), full_price: typed } : m;
+};

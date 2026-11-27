@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
 import { getDayNumber } from '../../lib/quoteMath';
-import { sumMeals, isOnePrice, mealGap, priceMeal, setMealOnePrice, typedOf, withItems, hasDishPrices, showsDishPrices, plateOff } from '../../lib/mealPrice';
+import { sumMeals, isOnePrice, mealGap, priceMeal, setMealOnePrice, typedOf, withItems, hasDishPrices, showsDishPrices, plateOff, swapLower } from '../../lib/mealPrice';
 import { basePlate } from '../../lib/quoteChoices';
 import { genId, PickerItem } from '../../lib/quoteLines';
 import { range } from '../../lib/quoteSummary';
@@ -96,7 +96,8 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           <Field label="Guests"><input type="number" min={0} inputMode="numeric" value={m.guest_count || ''} placeholder="0" onChange={e => setField(at, m.id, 'guest_count', parseInt(e.target.value, 10) || 0)} /></Field>
           <Field label="A plate"><input type="number" min={0} inputMode="decimal" value={typedOf(m) || ''} placeholder={dishes ? `₹${dishes}` : '₹'} onChange={e => setField(at, m.id, 'per_plate_amount', parseFloat(e.target.value) || 0)}
             onBlur={e => { if (!e.target.value && dishes) setField(at, m.id, 'per_plate_amount', dishes); }} /></Field>
-          <Field label="Full price"><input type="number" min={0} inputMode="decimal" value={m.full_price || ''} placeholder="No discount" aria-label="Full price a plate, before discount" onChange={e => setField(at, m.id, 'full_price', parseFloat(e.target.value) || 0)} /></Field>
+          <Field label="Before discount"><input type="number" min={0} inputMode="decimal" value={m.full_price || ''} placeholder="No discount" aria-label="Price a plate before discount" onChange={e => setField(at, m.id, 'full_price', parseFloat(e.target.value) || 0)}
+            onBlur={() => patchMeal(at, m.id, swapLower)} /></Field>
           <button type="button" className="q-x" aria-label={`Remove Day ${getDayNumber(day.date, eventDays)} ${m.meal_type}`} onClick={() => patchDay(at, meals => meals.filter(x => x.id !== m.id))}>×</button>
         </div>
         {gap && (
@@ -125,7 +126,7 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           <summary>More for this meal</summary>
           <div className="q-fields">
             <Field label="Ceremony name"><input value={m.ceremony_name || ''} placeholder="e.g. Haldi" onChange={e => setField(at, m.id, 'ceremony_name', e.target.value)} /></Field>
-            {m.discount_amount > 0 && <Field label="Offer price a plate" hint="Older way to discount; clear it and use Full price instead"><input type="number" min={0} inputMode="decimal" value={m.discount_amount || ''} placeholder="Same" onChange={e => setField(at, m.id, 'discount_amount', parseFloat(e.target.value) || 0)} /></Field>}
+            {m.discount_amount > 0 && <Field label="Offer price a plate" hint="Older way to discount; clear it and use Before discount instead"><input type="number" min={0} inputMode="decimal" value={m.discount_amount || ''} placeholder="Same" onChange={e => setField(at, m.id, 'discount_amount', parseFloat(e.target.value) || 0)} /></Field>}
           </div>
           <div className="q-chips">
             <button type="button" className="q-mini" onClick={() => copyMeal(at, m)}>Copy this meal</button>

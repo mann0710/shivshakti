@@ -97,12 +97,22 @@ describe('quote editor', () => {
     render(<Quotations />);
     fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
     await settle();
-    fireEvent.change(screen.getByLabelText(/Full price a plate/), { target: { value: '220' } });
+    fireEvent.change(screen.getByLabelText(/Price before discount/), { target: { value: '220' } });
     expect(screen.getByText('₹20 off ₹220 · saves ₹2,800')).toBeInTheDocument();
     await waitFor(() => expect(mockUpdate).toHaveBeenCalled(), { timeout: 3000 });
     expect(mockUpdate.mock.calls.at(-1)[0]).toMatchObject({ full_price: 220, hide_discount: false, total_amount: 28000 });
     fireEvent.click(screen.getByRole('checkbox', { name: /Discount on the PDF/ }));
     await waitFor(() => expect(mockUpdate.mock.calls.at(-1)[0]).toMatchObject({ hide_discount: true }), { timeout: 3000 });
+  });
+
+  it('one meal: a before-discount price below the plate price swaps with it', async () => {
+    render(<Quotations />);
+    fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
+    await settle();
+    const box = screen.getByLabelText(/Price before discount/);
+    fireEvent.change(box, { target: { value: '180' } });
+    fireEvent.blur(box);
+    await waitFor(() => expect(mockUpdate.mock.calls.at(-1)?.[0]).toMatchObject({ per_plate_amount: 180, full_price: 200, total_amount: 25200 }), { timeout: 3000 });
   });
 
   it('a change still waiting is saved when the page closes', async () => {
