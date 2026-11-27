@@ -8,6 +8,9 @@ import { inr } from '../../lib/money';
 import { Tick } from './EventSection';
 import type { PackagePrice } from './usePackagePrice';
 import MealRangeBox from './MealRangeBox';
+import DiscountTick from './DiscountTick';
+import { Field } from './bits';
+import { useHasPlateDiscount } from '../../hooks/useSchemaStatus';
 
 interface Props { f: QuoteForm; pkg?: PackagePrice }
 
@@ -32,6 +35,8 @@ const PriceSection: React.FC<Props> = ({ f, pkg }) => {
   const picks = openPicks({ is_multi_day: false, event_days: [], items: f.selectedItems }).map(p => p.label.toLowerCase());
   const gap = f.isMultiDay ? null : pickRange(f.selectedItems);
   const fixed = onePickPrice(f.selectedItems);
+  const plateReady = useHasPlateDiscount();
+  const off = Math.max(0, f.fullPrice - f.plateLow);
   const list: Record<Kind, { rows: Charge[]; set: (fn: (prev: any[]) => any[]) => void; name: string }> = {
     transport: { rows: f.transportationCharges, set: f.setTransportationCharges as any, name: 'Transport' },
     discount: { rows: f.additionalDiscounts, set: f.setAdditionalDiscounts as any, name: 'Discount' },
@@ -75,6 +80,14 @@ const PriceSection: React.FC<Props> = ({ f, pkg }) => {
                 </span>
               )}</span>
           </div>
+        </div>
+      )}
+      {!f.isMultiDay && plateReady && (
+        <div className="q-fullprice">
+          <Field label="Full price a plate" hint={off ? `${inr(off)} off ${inr(f.fullPrice)} · saves ${inr(off * f.guestCount)}` : 'Your usual price, to show a discount'}>
+            <input type="number" min={0} inputMode="decimal" value={f.fullPrice || ''} placeholder="No discount" onChange={e => f.setFullPrice(parseFloat(e.target.value) || 0)} />
+          </Field>
+          <DiscountTick full={f.fullPrice} price={f.plateLow} hidden={f.hideDiscount} onShow={v => f.setHideDiscount(!v)} />
         </div>
       )}
       <MealRangeBox f={f} />

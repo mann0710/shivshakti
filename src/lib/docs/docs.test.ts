@@ -1,4 +1,5 @@
 import { quotationDoc } from './quotationDoc';
+import { priceLines } from '../quoteSummary';
 import { invoiceDoc, eventMenuDoc } from './invoiceDoc';
 import { posBillHtml } from '../thermalSlips';
 import { coursesOf, daysOf, courseGrid } from './menu';
@@ -65,6 +66,16 @@ describe('quotation', () => {
     expect(html).toContain('− ₹5,000');
     expect(html).toContain('2 meals over 1 day');
     expect(html).toContain('UPI QR code');
+  });
+  it('one meal: a plate discount gives one catering line with the full price struck, or stays off the PDF', () => {
+    const html = quotationDoc(quote({ full_price: 220 }), {}, ctx).html;
+    expect(html).toContain('<s>₹220</s> ₹200');
+    expect(html).toContain('You save ₹2,000');
+    expect(html).not.toContain('Menu value');
+    expect(priceLines(quote({ full_price: 220 }))[0].k).toContain('(₹20 off)');
+    const off = quotationDoc(quote({ full_price: 220, hide_discount: true }), {}, ctx).html;
+    expect(off).not.toContain('₹220');
+    expect(off).not.toContain('You save');
   });
   it('multi-day: a plate discount strikes the full price and adds to the saving, or stays off the PDF', () => {
     const din = { ...meal('dinner', 400, 690, 0), full_price: 710 };

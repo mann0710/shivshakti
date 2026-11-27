@@ -8,6 +8,7 @@ import { formatDateIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
 import MenuCourses from '../quotes/MenuCourses';
 import { Field } from '../quotes/bits';
+import DiscountTick from '../quotes/DiscountTick';
 import { useConfirm } from '../ui/ConfirmDialog';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Hi-Tea', 'Snacks', 'Dinner', 'Supper'];
@@ -109,13 +110,7 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           <span>{m.guest_count} × {inr(rate)}{rate !== m.per_plate_amount ? ` (offer, was ${inr(m.per_plate_amount)})` : ''}{off ? ` · ${inr(off)} off ${inr(Number(m.full_price))} saves ${inr(off * m.guest_count)}` : ''}</span>
           <b>{range(rate * m.guest_count, hi)}</b>
         </div>
-        {off > 0 && (
-          <label className="q-check">
-            <input type="checkbox" checked={!m.hide_discount} onChange={e => patchMeal(at, m.id, x => ({ ...x, hide_discount: !e.target.checked || undefined }))} />
-            <span className="t"><b>Discount on the PDF</b>
-              <small>{m.hide_discount ? `Off: the PDF shows ${inr(m.per_plate_amount)} a plate only` : `Shows ${inr(Number(m.full_price))} struck through, then ${inr(m.per_plate_amount)} a plate, and what they save`}</small></span>
-          </label>
-        )}
+        {off > 0 && <DiscountTick full={Number(m.full_price)} price={m.per_plate_amount} hidden={!!m.hide_discount} onShow={v => patchMeal(at, m.id, x => ({ ...x, hide_discount: !v || undefined }))} />}
         {showPrices && (
           <label className={`q-check${priced ? '' : ' off'}`}>
             <input type="checkbox" checked={priced && showsDishPrices(m)} disabled={!priced} onChange={e => patchMeal(at, m.id, x => ({ ...x, hide_prices: !e.target.checked || undefined }))} />

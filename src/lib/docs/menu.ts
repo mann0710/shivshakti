@@ -2,7 +2,7 @@ import type { QuotationLineItem, EventDay, MealSlot } from '../../hooks/useQuota
 import { mealNet } from '../quoteMath';
 import { formatDateIST } from '../ist';
 import { esc, money, cap, timeText } from './theme';
-import { discountSaving, plateOff, showsDishPrices, showsDiscount } from '../mealPrice';
+import { discountSaving, plateOff, showsDishPrices, showsDiscount, Plate } from '../mealPrice';
 import { planCourses, Course } from '../menuOrder';
 import { courseGrid, priceShow } from './menuGrid';
 
@@ -34,7 +34,7 @@ export const mealSaving = (m: MealSlot) => (offerOf(m) ? (m.per_plate_amount - o
 export const dayLabel = (g: DayGroup) => `Day ${g.number}${g.date ? ` · ${formatDateIST(g.date, 'EEE, dd MMM yyyy')}` : ''}`;
 
 // Full price struck through before a fixed plate price; a ranged one names the rupees off instead.
-export const wasText = (m: MealSlot) => (showsDiscount(m) && !m.per_plate_max ? `<s>${money(Number(m.full_price))}</s> ` : '');
+export const wasText = (m: Plate) => (showsDiscount(m) && !m.per_plate_max ? `<s>${money(Number(m.full_price))}</s> ` : '');
 const offText = (m: MealSlot) => (showsDiscount(m) && m.per_plate_max ? ` · ${money(plateOff(m))} off a plate` : '');
 const rateText = (m: MealSlot) => (offerOf(m)
   ? `<s>${money(m.per_plate_amount)}</s> ${money(offerOf(m))} / plate`

@@ -76,4 +76,5 @@ export const quoteCopy = (q: Quotation): QuotationPayload => ({
   notes: q.notes, food_type: q.food_type, status: 'draft',
   is_multi_day: q.is_multi_day || false, event_days: q.event_days || [],
   per_plate_max: q.per_plate_max ?? null, total_max: q.total_max ?? null,
+  full_price: q.full_price ?? null, hide_discount: !!q.hide_discount,
 });

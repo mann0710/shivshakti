@@ -38,7 +38,7 @@ jest.mock('../../hooks/useItemPrices', () => ({ useItemPrices: () => () => 0 }))
 jest.mock('../../hooks/useDataCenter', () => ({ useDataCenter: () => ({ data: { gst_rate: 5 } }), useEventTypes: () => ({ data: [] }), useTeamMembers: () => ({ data: [] }), DEFAULT_EVENTS: ['Wedding'] }));
 jest.mock('../../hooks/useInvoices', () => ({ useInvoices: () => ({ data: [] }) }));
 jest.mock('../../hooks/useBookingPayments', () => ({ usePaymentRows: () => ({ data: [] }), useSavePayment: () => ({ mutateAsync: jest.fn() }) }));
-jest.mock('../../hooks/useSchemaStatus', () => ({ useHasQuoteOptions: () => true }));
+jest.mock('../../hooks/useSchemaStatus', () => ({ useHasQuoteOptions: () => true, useHasPlateDiscount: () => true }));
 jest.mock('../../hooks/useMenus', () => ({ useMenus: () => ({ data: mockPackages }), useCreateMenu: () => ({ mutateAsync: jest.fn() }) }));
 jest.mock('../../hooks/useDocSettings', () => ({ useDocSettings: () => jest.requireActual('../../lib/docs/settings').DEFAULT_DOC_SETTINGS }));
 jest.mock('../catering/BookingFormModal', () => () => null);
@@ -72,6 +72,18 @@ describe('quote editor', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Quotations' }));
     expect(await screen.findByRole('heading', { name: 'Quotations' })).toBeInTheDocument();
+  });
+
+  it('one meal: a full price saves as a plate discount with its PDF tick', async () => {
+    render(<Quotations />);
+    fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
+    await settle();
+    fireEvent.change(screen.getByLabelText(/Full price a plate/), { target: { value: '220' } });
+    expect(screen.getByText('₹20 off ₹220 · saves ₹2,800')).toBeInTheDocument();
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled(), { timeout: 3000 });
+    expect(mockUpdate.mock.calls.at(-1)[0]).toMatchObject({ full_price: 220, hide_discount: false, total_amount: 28000 });
+    fireEvent.click(screen.getByRole('checkbox', { name: /Discount on the PDF/ }));
+    await waitFor(() => expect(mockUpdate.mock.calls.at(-1)[0]).toMatchObject({ hide_discount: true }), { timeout: 3000 });
   });
 
   it('a change still waiting is saved when the page closes', async () => {

@@ -46,7 +46,10 @@ export const hasDishPrices = (m: MealSlot) => (m.items ?? []).some(i => (Number(
 export const showsDishPrices = (m: MealSlot) => !m.hide_prices;
 
 // Plate discount: a full price above what they pay; printed unless turned off. An older offer price wins.
-export const plateOff = (m: Pick<MealSlot, 'full_price' | 'per_plate_amount' | 'discount_amount'>) =>
+export interface Plate { full_price?: number | null; per_plate_amount: number; per_plate_max?: number | null; hide_discount?: boolean; guest_count?: number; discount_amount?: number }
+export const plateOff = (m: Plate) =>
   (Number(m.discount_amount) > 0 ? 0 : Math.max(0, (Number(m.full_price) || 0) - (Number(m.per_plate_amount) || 0)));
-export const showsDiscount = (m: MealSlot) => plateOff(m) > 0 && !m.hide_discount;
-export const discountSaving = (m: MealSlot) => (showsDiscount(m) ? plateOff(m) * (m.guest_count || 0) : 0);
+export const showsDiscount = (m: Plate) => plateOff(m) > 0 && !m.hide_discount;
+export const discountSaving = (m: Plate) => (showsDiscount(m) ? plateOff(m) * (m.guest_count || 0) : 0);
+// A one-meal quote as a plate; its discount_amount is the quote's discounts, not an offer price.
+export const quotePlate = (q: Plate, guests: number): Plate => ({ ...q, discount_amount: 0, guest_count: guests });

@@ -10,7 +10,7 @@ import { useMenuItemsFull } from './useMenuBuilder';
 import { useItemPrices } from './useItemPrices';
 import { useDataCenter } from './useDataCenter';
 import { useQuotations, useCreateQuotation, useUpdateQuotation, Quotation, QuotationLineItem, EventDay, ChoiceMeta } from './useQuotations';
-import { getDayNumber, quoteTotals } from '../lib/quoteMath';
+import { getDayNumber, keepPlateOff, quoteTotals } from '../lib/quoteMath';
 import { plateRange, atMaxPrices, basePlate, ownRange, typedPrice, setPickPrices, listedForTop } from '../lib/quoteChoices';
 import { genId, lineOf, mergeLines, moveLine, PickerItem, Charge, Discount } from '../lib/quoteLines';
 
@@ -42,6 +42,8 @@ export const useQuoteForm = () => {
   const [foodType, setFoodType] = useState('');
   const [optionName, setOptionName] = useState('');
   const [isMultiDay, setIsMultiDay] = useState(false);
+  const [fullPrice, setFullPrice] = useState(0);
+  const [hideDiscount, setHideDiscount] = useState(false);
   const [eventDays, setEventDays] = useState<EventDay[]>([]);
 
   const selectedBookingId = ev.bookingId;
@@ -117,13 +119,15 @@ export const useQuoteForm = () => {
   const reorderItems = (from: number, to: number) => setSelectedItems(prev => moveLine(prev, from, to));
   const typePerPlate = (v: string) => { setAutoPrice(false); setPerPlate(v); };
   // One fixed plate price at the top of the range, whatever the customer picks; or let picks move it again.
-  const chargeHighest = () => { const top = perPlateMax ?? plateLow; setSelectedItems(setPickPrices(selectedItems, true)); typePerPlate(String(top)); };
-  const letPicksPrice = () => { const next = setPickPrices(selectedItems, false); setSelectedItems(next); typePerPlate(String(listedForTop(plateLow, next))); };
+  // Both keep the rupees off the full price.
+  const shiftFull = (to: number) => setFullPrice(f => keepPlateOff(f, plateLow, to) || 0);
+  const chargeHighest = () => { const top = perPlateMax ?? plateLow; setSelectedItems(setPickPrices(selectedItems, true)); typePerPlate(String(top)); shiftFull(top); };
+  const letPicksPrice = () => { const next = setPickPrices(selectedItems, false); const low = listedForTop(plateLow, next); setSelectedItems(next); typePerPlate(String(low)); shiftFull(low); };
 
   const resetForm = (keepOpen = false) => {
     setEditingId(null); ev.reset(); setSelectedItems([]); setNotes(''); setPerPlate('');
     setGstChecked(false); setSavedGstRate(null); setAdditionalDiscounts([]); setExtraCharges([]); setTransportationCharges([]);
-    setIsMultiDay(false); setEventDays([]); setFoodType(''); setOptionName('');
+    setIsMultiDay(false); setEventDays([]); setFoodType(''); setOptionName(''); setFullPrice(0); setHideDiscount(false);
     setAutoPrice(true);
     setShowForm(keepOpen);
   };
@@ -149,6 +153,7 @@ export const useQuoteForm = () => {
         : q.discount_amount > 0 ? [{ id: genId(), description: 'Discount', amount: q.discount_amount }] : []);
     }
     setNotes(q.notes || ''); setFoodType(q.food_type || ''); setOptionName(q.option_name || '');
+    setFullPrice(Number(q.full_price) || 0); setHideDiscount(!!q.hide_discount);
     setGstChecked(q.gst_rate > 0); setSavedGstRate(q.gst_rate > 0 ? q.gst_rate : null);
     setExtraCharges(q.extra_charges || []); setTransportationCharges(q.transportation_charges || []);
     if (q.is_multi_day) setAutoPrice(false);
@@ -172,6 +177,8 @@ export const useQuoteForm = () => {
     additional_discounts: additionalDiscounts.filter(d => d.description.trim() || d.amount > 0),
     total_amount: totals.final,
     total_max: totalMax,
+    full_price: isMultiDay || !fullPrice ? null : fullPrice,
+    hide_discount: hideDiscount,
     notes: notes || undefined,
     food_type: foodType || undefined,
     option_name: optionName.trim() || null,
@@ -232,7 +239,7 @@ export const useQuoteForm = () => {
     notes, setNotes, perPlate, typePerPlate, chargeHighest, letPicksPrice, autoPrice, setAutoPrice, range, perPlateMax, totalMax, plateLow, guestCount,
     gstChecked, setGstChecked, dcGstRate, additionalDiscounts, setAdditionalDiscounts, extraCharges, setExtraCharges,
     transportationCharges, setTransportationCharges, foodType, setFoodType, optionName, setOptionName,
-    isMultiDay, toggleMultiDay, eventDays, setEventDays, totals,
+    isMultiDay, toggleMultiDay, eventDays, setEventDays, totals, fullPrice, setFullPrice, hideDiscount, setHideDiscount,
     showPrices, hasItemPrices, priceFor, setItemPricesPref: (v: boolean) => setPrefs({ itemPrices: v }),
     toLine, resetForm, openCreate, openEdit, handleSave, draftQuotation, createQuotation, updateQuotation,
   };

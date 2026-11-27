@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
 import { todayIST } from '../lib/ist';
-import { useHasQuoteOptions } from './useSchemaStatus';
+import { useHasPlateDiscount, useHasQuoteOptions } from './useSchemaStatus';
 
 export interface QuotationLineItem {
   item_id: string;
@@ -80,6 +80,9 @@ export interface Quotation {
   option_name?: string | null;
   per_plate_max?: number | null;
   total_max?: number | null;
+  // After the plate-discount migration (one-meal quotes).
+  full_price?: number | null;
+  hide_discount?: boolean;
 }
 
 type QuotationPayload = {
@@ -107,19 +110,24 @@ type QuotationPayload = {
   option_name?: string | null;
   per_plate_max?: number | null;
   total_max?: number | null;
+  full_price?: number | null;
+  hide_discount?: boolean;
 };
 
 export type { QuotationPayload };
 
 const OPTION_FIELDS = ['option_group', 'option_label', 'option_name', 'per_plate_max', 'total_max'] as const;
 
-// Drops option / range fields until the quote-options migration has been run.
+const PLATE_FIELDS = ['full_price', 'hide_discount'] as const;
+
+// Drops fields whose migration has not been run yet.
 const useFitQuote = () => {
   const ready = useHasQuoteOptions();
+  const plate = useHasPlateDiscount();
   return <T extends object>(row: T): T => {
-    if (ready) return row;
     const out: any = { ...row };
-    OPTION_FIELDS.forEach(f => delete out[f]);
+    if (!ready) OPTION_FIELDS.forEach(f => delete out[f]);
+    if (!plate) PLATE_FIELDS.forEach(f => delete out[f]);
     return out;
   };
 };

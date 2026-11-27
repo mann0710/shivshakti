@@ -167,7 +167,7 @@ export function acceptPatch(q: Quotation, picked: Set<string>, guests?: number):
   const pp = lockPrice(q.per_plate_amount, q.per_plate_max, q.items ?? [], items);
   const additional = q.additional_discounts?.length ? q.additional_discounts : q.discount_amount > 0 ? [{ amount: q.discount_amount }] : [];
   const t = quoteTotals({ ...base, isMultiDay: false, eventDays: [], perPlate: pp, guests: g, additional });
-  return { items, per_plate_amount: pp, guest_count: g, subtotal: t.subtotal, discount_amount: t.discount, gst_amount: t.gst, total_amount: t.final, per_plate_max: null, total_max: null };
+  return { items, per_plate_amount: pp, full_price: keepPlateOff(q.full_price, q.per_plate_amount, pp), guest_count: g, subtotal: t.subtotal, discount_amount: t.discount, gst_amount: t.gst, total_amount: t.final, per_plate_max: null, total_max: null };
 }
 
 // Labels of "choose any" groups the customer has not picked from yet, across every meal.

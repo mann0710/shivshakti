@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useIsFetching } from '@tanstack/react-query';
 import {
-  useHasDocSettings, useHasPreorderColumns, useHasPriceColumns, useHasQuoteOptions, useHasTeamBin, useIsLegacySchema,
+  useHasDocSettings, useHasPreorderColumns, useHasPriceColumns, useHasQuoteOptions, useHasTeamBin, useIsLegacySchema, useHasPlateDiscount, PLATE_DISCOUNT_MIGRATION_FILE,
   DOC_SETTINGS_MIGRATION_FILE, PACK_MIGRATION_FILE, PREORDER_MIGRATION_FILE, PRICE_MIGRATION_FILE, QUOTE_OPTIONS_MIGRATION_FILE, TEAM_BIN_MIGRATION_FILE,
 } from '../../hooks/useSchemaStatus';
 import { useHasPosPayments, POS_MIGRATION_FILE } from '../../hooks/useSeasonalOrders';
@@ -27,6 +27,7 @@ export function useDbUpdates() {
     [useHasTeamBin(), TEAM_BIN_MIGRATION_FILE],
     [useHasCredit(), CREDIT_MIGRATION_FILE],
     [useHasBookingPayments(), BOOKING_PAYMENTS_MIGRATION_FILE],
+    [useHasPlateDiscount(), PLATE_DISCOUNT_MIGRATION_FILE],
   ];
   const checking = useIsFetching({ queryKey: ['schema_status'] }) > 0;
   return { checking, pending: checking ? [] : checks.filter(([ok]) => !ok).map(([, file]) => file) };

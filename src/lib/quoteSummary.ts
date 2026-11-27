@@ -5,7 +5,7 @@ import { scheduleAmounts, PayStep } from './docs/settings';
 import { mealTitle, offerOf } from './docs/menu';
 import { planCourses, Course } from './menuOrder';
 import { choiceGroups } from './quoteChoices';
-import { plateOff, showsDiscount } from './mealPrice';
+import { plateOff, quotePlate, showsDiscount } from './mealPrice';
 import { plateText, totalText, quoteGuests } from './quoteOptions';
 
 // What the quote editor and the list panel show about one quote.
@@ -31,7 +31,8 @@ export function priceLines(q: Quotation): Line[] {
   } else {
     const g = quoteGuests(q);
     const hi = q.per_plate_max != null && q.per_plate_max > q.per_plate_amount ? q.per_plate_max * g : null;
-    out.push({ k: `${plateText(q)} × ${g}`, v: range(q.per_plate_amount * g, hi) });
+    const off = showsDiscount(quotePlate(q, g)) ? ` (${inr(plateOff(quotePlate(q, g)))} off)` : '';
+    out.push({ k: `${plateText(q)}${off} × ${g}`, v: range(q.per_plate_amount * g, hi) });
   }
   (q.additional_discounts ?? []).filter(d => d.amount > 0).forEach(d => out.push({ k: d.description || 'Discount', v: `− ${inr(d.amount)}` }));
   (q.extra_charges ?? []).filter(c => c.amount > 0).forEach(c => out.push({ k: c.description || 'Extra', v: inr(c.amount) }));
