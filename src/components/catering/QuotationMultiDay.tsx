@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
 import { getDayNumber } from '../../lib/quoteMath';
-import { sumMeals, isOnePrice, mealGap, priceMeal, setMealOnePrice, typedOf, withItems, hasDishPrices, showsDishPrices } from '../../lib/mealPrice';
+import { sumMeals, isOnePrice, mealGap, priceMeal, setMealOnePrice, typedOf, withItems, hasDishPrices, showsDishPrices, plateOff } from '../../lib/mealPrice';
 import { genId, PickerItem } from '../../lib/quoteLines';
 import { range } from '../../lib/quoteSummary';
 import { formatDateIST } from '../../lib/ist';
@@ -80,6 +80,7 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
     const gap = mealGap(m);
     const one = isOnePrice(m);
     const priced = hasDishPrices(m);
+    const off = plateOff(m);
     return (
       <div key={m.id} className="q-meal">
         <div className="q-meal-row">
@@ -91,6 +92,7 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           <Field label="Time"><input type="time" value={m.time} onChange={e => setField(at, m.id, 'time', e.target.value)} /></Field>
           <Field label="Guests"><input type="number" min={0} inputMode="numeric" value={m.guest_count || ''} placeholder="0" onChange={e => setField(at, m.id, 'guest_count', parseInt(e.target.value, 10) || 0)} /></Field>
           <Field label="A plate"><input type="number" min={0} inputMode="decimal" value={typedOf(m) || ''} placeholder="₹" onChange={e => setField(at, m.id, 'per_plate_amount', parseFloat(e.target.value) || 0)} /></Field>
+          <Field label="Full price"><input type="number" min={0} inputMode="decimal" value={m.full_price || ''} placeholder="No discount" aria-label="Full price a plate, before discount" onChange={e => setField(at, m.id, 'full_price', parseFloat(e.target.value) || 0)} /></Field>
           <button type="button" className="q-x" aria-label={`Remove Day ${getDayNumber(day.date, eventDays)} ${m.meal_type}`} onClick={() => patchDay(at, meals => meals.filter(x => x.id !== m.id))}>×</button>
         </div>
         {gap && (
@@ -104,9 +106,16 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           preview={next => { const p = withItems(m, next); return `${range(p.per_plate_amount, p.per_plate_max)} a plate`; }}
           onChange={next => patchMeal(at, m.id, x => withItems(x, next))} />
         <div className="q-meal-foot">
-          <span>{m.guest_count} × {inr(rate)}{rate !== m.per_plate_amount ? ` (offer, was ${inr(m.per_plate_amount)})` : ''}</span>
+          <span>{m.guest_count} × {inr(rate)}{rate !== m.per_plate_amount ? ` (offer, was ${inr(m.per_plate_amount)})` : ''}{off ? ` · ${inr(off)} off ${inr(Number(m.full_price))} saves ${inr(off * m.guest_count)}` : ''}</span>
           <b>{range(rate * m.guest_count, hi)}</b>
         </div>
+        {off > 0 && (
+          <label className="q-check">
+            <input type="checkbox" checked={!m.hide_discount} onChange={e => patchMeal(at, m.id, x => ({ ...x, hide_discount: !e.target.checked || undefined }))} />
+            <span className="t"><b>Discount on the PDF</b>
+              <small>{m.hide_discount ? `Off: the PDF shows ${inr(m.per_plate_amount)} a plate only` : `Shows ${inr(Number(m.full_price))} struck through, then ${inr(m.per_plate_amount)} a plate, and what they save`}</small></span>
+          </label>
+        )}
         {showPrices && (
           <label className={`q-check${priced ? '' : ' off'}`}>
             <input type="checkbox" checked={priced && showsDishPrices(m)} disabled={!priced} onChange={e => patchMeal(at, m.id, x => ({ ...x, hide_prices: !e.target.checked || undefined }))} />
@@ -118,7 +127,7 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
           <summary>More for this meal</summary>
           <div className="q-fields">
             <Field label="Ceremony name"><input value={m.ceremony_name || ''} placeholder="e.g. Haldi" onChange={e => setField(at, m.id, 'ceremony_name', e.target.value)} /></Field>
-            <Field label="Offer price a plate" hint="Shown struck through beside the plate price"><input type="number" min={0} inputMode="decimal" value={m.discount_amount || ''} placeholder="Same" onChange={e => setField(at, m.id, 'discount_amount', parseFloat(e.target.value) || 0)} /></Field>
+            {m.discount_amount > 0 && <Field label="Offer price a plate" hint="Older way to discount; clear it and use Full price instead"><input type="number" min={0} inputMode="decimal" value={m.discount_amount || ''} placeholder="Same" onChange={e => setField(at, m.id, 'discount_amount', parseFloat(e.target.value) || 0)} /></Field>}
           </div>
           <div className="q-chips">
             <button type="button" className="q-mini" onClick={() => copyMeal(at, m)}>Copy this meal</button>

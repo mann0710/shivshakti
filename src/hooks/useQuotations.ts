@@ -37,6 +37,8 @@ export interface MealSlot {
   subtotal: number;
   per_plate_max?: number | null;
   hide_prices?: boolean;     // dish prices left off this meal on the PDF
+  full_price?: number | null; // price before the plate discount; per_plate_amount is what they pay
+  hide_discount?: boolean;   // plate discount kept off the PDF
 }
 
 export interface EventDay {

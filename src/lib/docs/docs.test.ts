@@ -66,6 +66,17 @@ describe('quotation', () => {
     expect(html).toContain('2 meals over 1 day');
     expect(html).toContain('UPI QR code');
   });
+  it('multi-day: a plate discount strikes the full price and adds to the saving, or stays off the PDF', () => {
+    const din = { ...meal('dinner', 400, 690, 0), full_price: 710 };
+    const q = (m: object) => quote({ is_multi_day: true, event_days: [{ day_number: 1, date: '2026-11-27', meals: [m], day_subtotal: 276000 }], subtotal: 276000, total_amount: 276000 });
+    const html = quotationDoc(q(din), {}, ctx).html;
+    expect(html).toContain('<s>₹710</s> ₹690');
+    expect(html).toContain('You save ₹8,000');
+    expect(html).toContain('₹2,76,000');
+    const off = quotationDoc(q({ ...din, hide_discount: true }), {}, ctx).html;
+    expect(off).not.toContain('₹710');
+    expect(off).not.toContain('You save');
+  });
 });
 
 describe('choose-any groups in documents', () => {

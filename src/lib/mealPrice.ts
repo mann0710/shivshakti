@@ -1,6 +1,6 @@
 import type { EventDay, MealSlot, QuotationLineItem } from '../hooks/useQuotations';
 import { basePlate, listedForTop, onePickPrice, ownRange, pickRange, setPickPrices, typedPrice } from './quoteChoices';
-import { getDayNumber } from './quoteMath';
+import { getDayNumber, keepPlateOff } from './quoteMath';
 
 // Meal prices on multi-day quotes: one price for any pick, ranges left open, dish prices on the PDF.
 
@@ -27,7 +27,8 @@ export const isRanged = (m: MealSlot) => m.per_plate_max != null && m.per_plate_
 // Same price whatever they choose (the top of the range), or let the pick move it again.
 export const setMealOnePrice = (m: MealSlot, one: boolean): MealSlot => {
   const items = setPickPrices(m.items ?? [], one);
-  return priceMeal(m, items, one ? m.per_plate_max ?? m.per_plate_amount : listedForTop(m.per_plate_amount, items));
+  const p = priceMeal(m, items, one ? m.per_plate_max ?? m.per_plate_amount : listedForTop(m.per_plate_amount, items));
+  return { ...p, full_price: keepPlateOff(m.full_price, m.per_plate_amount, p.per_plate_amount) };
 };
 
 // Meals whose price still depends on the pick, with their day number.
@@ -43,3 +44,9 @@ export const oneEveryMeal = (days: EventDay[]): EventDay[] => days.map(d => {
 export const hasDishPrices = (m: MealSlot) => (m.items ?? []).some(i => (Number(i.amount) || 0) > 0);
 // Dish prices print for a meal unless turned off on it.
 export const showsDishPrices = (m: MealSlot) => !m.hide_prices;
+
+// Plate discount: a full price above what they pay; printed unless turned off. An older offer price wins.
+export const plateOff = (m: Pick<MealSlot, 'full_price' | 'per_plate_amount' | 'discount_amount'>) =>
+  (Number(m.discount_amount) > 0 ? 0 : Math.max(0, (Number(m.full_price) || 0) - (Number(m.per_plate_amount) || 0)));
+export const showsDiscount = (m: MealSlot) => plateOff(m) > 0 && !m.hide_discount;
+export const discountSaving = (m: MealSlot) => (showsDiscount(m) ? plateOff(m) * (m.guest_count || 0) : 0);

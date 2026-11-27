@@ -1,5 +1,6 @@
-import { isOnePrice, mealGap, oneEveryMeal, priceMeal, rangedMeals, setMealOnePrice, showsDishPrices } from './mealPrice';
+import { discountSaving, isOnePrice, mealGap, oneEveryMeal, plateOff, priceMeal, rangedMeals, setMealOnePrice, showsDiscount, showsDishPrices } from './mealPrice';
 import { mealSchedule } from './docs/menu';
+import { acceptPatch, pickKey } from './quoteChoices';
 
 const g = { id: 'g', label: 'Gujarati', pick: 1 };
 const dish = (id: string, amount: number, choice?: object) => ({ item_id: id, item_name: id, category_name: 'Breakfast', subcategory_name: '', amount, choice }) as any;
@@ -39,5 +40,23 @@ describe('meal prices', () => {
     const html = mealSchedule([{ ...days[0], meals: [dinner, { ...off, id: 'x', items: [dish('Upma', 33)] }] }], { amounts: true, itemPrices: true });
     expect(html).toContain('₹70');
     expect(html).not.toContain('₹33');
+  });
+  it('a plate discount is the full price over what they pay, shown unless turned off', () => {
+    const d = { ...dinner, full_price: 120, guest_count: 400 };
+    expect([plateOff(d), showsDiscount(d), discountSaving(d)]).toEqual([20, true, 8000]);
+    expect([showsDiscount({ ...d, hide_discount: true }), discountSaving({ ...d, hide_discount: true })]).toEqual([false, 0]);
+    expect(plateOff({ ...d, full_price: 90 })).toBe(0);
+    const html = mealSchedule([{ ...days[0], meals: [d] }], { amounts: true, itemPrices: false });
+    expect(html).toContain('<s>₹120</s> ₹100 / plate');
+    expect(html).toContain('₹20 off a plate saves ₹8,000');
+    const hidden = mealSchedule([{ ...days[0], meals: [{ ...d, hide_discount: true }] }], { amounts: true, itemPrices: false });
+    expect(hidden).not.toContain('₹120');
+    expect(mealSchedule([{ ...days[1], meals: [{ ...breakfast, full_price: 80 }] }], { amounts: true, itemPrices: false })).toContain('₹15 off a plate');
+    expect(plateOff({ ...d, discount_amount: 95 })).toBe(0);
+    const one = setMealOnePrice({ ...breakfast, full_price: 80 }, true);
+    expect([one.per_plate_amount, plateOff(one), plateOff(setMealOnePrice(one, false))]).toEqual([105, 15, 15]);
+    const q = { is_multi_day: true, event_days: [{ ...days[1], meals: [{ ...breakfast, full_price: 80 }] }], gst_rate: 0 } as any;
+    const locked = acceptPatch(q, new Set([pickKey('Handvo', breakfast.id)])).event_days![0].meals[0];
+    expect([locked.per_plate_amount, plateOff(locked)]).toEqual([105, 15]);
   });
 });

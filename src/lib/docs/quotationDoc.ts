@@ -3,7 +3,8 @@ import { DocContext, docContext } from './context';
 import { scheduleAmounts } from './settings';
 import { page, esc, money, cap, timeText } from './theme';
 import { header, facts, sectionHead, sumRows, SumRow, banner, paySteps, StepOption, chips, terms, upiBox, signatures, endLine, footerText } from './parts';
-import { courseGrid, coursesOf, hasItemPrices, priceShow, PriceShow, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText } from './menu';
+import { courseGrid, coursesOf, hasItemPrices, priceShow, PriceShow, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, guestsText, wasText } from './menu';
+import { discountSaving } from '../mealPrice';
 import { plateRange, choiceGroups, pickedOf, dishCount } from '../quoteChoices';
 import { optionTitle, statusText } from '../quoteOptions';
 import { formatDateIST } from '../ist';
@@ -45,7 +46,7 @@ function priceSection(q: Quotation, itemPrices: PriceShow, title = 'Price'): str
 
   if (multi) {
     for (const g of daysOf(q.event_days)) for (const m of g.meals) {
-      rows.push(row(`Day ${g.number}${g.date ? `, ${formatDateIST(g.date, 'd MMM')}` : ''} · ${mealTitle(m)}`, '', m.guest_count || 0, rangeText(m.per_plate_amount, m.per_plate_max ?? 0), rangeText(m.subtotal, (m.per_plate_max ?? 0) * (m.guest_count || 0))));
+      rows.push(row(`Day ${g.number}${g.date ? `, ${formatDateIST(g.date, 'd MMM')}` : ''} · ${mealTitle(m)}`, '', m.guest_count || 0, `${wasText(m)}${rangeText(m.per_plate_amount, m.per_plate_max ?? 0)}`, rangeText(m.subtotal, (m.per_plate_max ?? 0) * (m.guest_count || 0))));
       if (mealSaving(m)) adj.push({ label: `${cap(m.meal_type)} offer · Day ${g.number} (${money(offerOf(m))} / plate)`, value: mealSaving(m), sign: '-' });
     }
     adj.push(...(q.additional_discounts ?? []).filter(d => Number(d.amount) > 0).map(d => ({ label: d.description || 'Discount', value: Number(d.amount), sign: '-' as const })));
@@ -73,7 +74,9 @@ function priceSection(q: Quotation, itemPrices: PriceShow, title = 'Price'): str
     detail = `${rangeText(q.per_plate_amount, top)} per plate × ${guests} guests${top ? ' · final once you choose' : ''}`;
   }
   if (!multi && q.discount_amount > 0) adj.push({ label: 'Discount', value: q.discount_amount, sign: '-' });
-  const saved = adj.filter(a => a.sign === '-').reduce((s, a) => s + a.value, 0);
+  // Plate discounts are already off the meal amounts, so they add to the saving without a row of their own.
+  const plateSaved = multi ? (q.event_days ?? []).reduce((s, d) => s + (d.meals ?? []).reduce((t, m) => t + discountSaving(m), 0), 0) : 0;
+  const saved = adj.filter(a => a.sign === '-').reduce((s, a) => s + a.value, 0) + plateSaved;
   const sums: SumRow[] = [first, ...adj, ...charges(q.extra_charges), ...charges(q.transportation_charges, 'Transportation'),
     ...(q.gst_rate > 0 && q.gst_amount > 0 ? [{ label: `GST @${q.gst_rate}%`, value: q.gst_amount }] : [])];
   const head = `<th>${multi ? 'Meal' : 'Description'}</th><th class="r">Guests</th><th class="r">${multi ? 'Rate' : 'Per plate'}</th><th class="r">Amount</th>`;

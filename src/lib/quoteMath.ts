@@ -17,6 +17,8 @@ export const mealNet = (m: MealLike) => {
   const offer = Number(m.discount_amount) || 0;
   return offer > 0 ? offer * (Number(m.guest_count) || 0) : Number(m.subtotal) || 0;
 };
+// A new plate price keeps the meal's rupees off its full price (picks and one-price moves).
+export const keepPlateOff = (full: number | null | undefined, from: number, to: number) => (full ? full + to - from : full);
 export const dayNet = (d: DayLike) => (d.meals ?? []).reduce((s, m) => s + mealNet(m), 0);
 
 export const sumCharges = (list: Charge[] | null | undefined) =>

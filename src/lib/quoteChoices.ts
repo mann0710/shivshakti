@@ -1,5 +1,5 @@
 import type { QuotationLineItem, ChoiceMeta, EventDay, Quotation, QuotationPayload } from '../hooks/useQuotations';
-import { quoteTotals, sumCharges } from './quoteMath';
+import { keepPlateOff, quoteTotals, sumCharges } from './quoteMath';
 
 // "Choose any N of M" groups live on the dishes themselves (item.choice), so they work in any menu or meal.
 export interface ChoiceGroup { meta: ChoiceMeta; items: QuotationLineItem[] }
@@ -155,7 +155,7 @@ export function acceptPatch(q: Quotation, picked: Set<string>, guests?: number):
       const meals = d.meals.map(m => {
         const items = withPicks(m.items ?? [], picked, m.id);
         const pp = lockPrice(m.per_plate_amount, m.per_plate_max, m.items ?? [], items);
-        return { ...m, items, per_plate_amount: pp, per_plate_max: null, subtotal: pp * m.guest_count };
+        return { ...m, items, per_plate_amount: pp, per_plate_max: null, full_price: keepPlateOff(m.full_price, m.per_plate_amount, pp), subtotal: pp * m.guest_count };
       });
       return { ...d, meals, day_subtotal: meals.reduce((s, m) => s + m.subtotal, 0) };
     });

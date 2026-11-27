@@ -294,7 +294,7 @@
 .q-dayline .q-field { width: 200px; }
 .q-dayline .q-link { margin-right: 0; }
 .q-meal { border: 1px solid #ECECE6; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-.q-meal-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 100px 110px 44px; gap: 10px; align-items: end; }
+.q-meal-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 100px 110px 120px 44px; gap: 10px; align-items: end; }
 .q-x { border: none; background: none; color: #9A9A93; font-size: 20px; min-height: 44px; cursor: pointer; }
 .q-meal-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; flex-wrap: wrap; }
 .q-more summary { font-size: 13px; color: #8A4B00; font-weight: 600; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
