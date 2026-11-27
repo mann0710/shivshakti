@@ -78,8 +78,8 @@ const nextOf = (g: QuoteGroup, section: Section, invoiced: boolean): BoardRow['n
   if (section !== 'waiting') return null;
   if (g.grouped) return { kind: 'option', label: 'Accept an option' };
   const p = openPicks(g.options[0]);
-  if (p.length) return { kind: 'pick', label: p.length === 1 ? `Pick ${p[0].label.toLowerCase()} & accept` : 'Pick dishes & accept' };
-  return { kind: 'accept', label: 'Mark accepted' };
+  if (p.length) return { kind: 'pick', label: p.length === 1 ? `Pick ${p[0].label.toLowerCase()} & confirm` : 'Pick dishes & confirm' };
+  return { kind: 'accept', label: 'Confirm booking' };
 };
 
 export function boardRow(g: QuoteGroup, today: string, invoiced: Set<string>): BoardRow {
@@ -186,6 +186,7 @@ export function quoteHistory(r: BoardRow, today: string): HistoryLine[] {
   if (r.section === 'accepted') {
     const won = acceptedOf(g)!;
     out.push({ when: '', what: `Accepted${g.grouped ? ` · ${optionTitle(won)}` : ''}` });
+    (won.revisions ?? []).forEach(v => out.push({ when: formatDateIST(v.at.slice(0, 10), 'd MMM'), what: `Changed after accepting · revision ${v.n} was ${inr(v.total)}` }));
   }
   if (r.section === 'waiting' && r.date >= today) out.push({ when: '', what: 'No reply yet — a reminder is on Home' });
   if (r.section === 'lost') out.push({ when: '', what: cap(lostWhy(g, today)) });

@@ -43,9 +43,9 @@ describe('event page facts', () => {
   it('asks for the pick before accepting', () => {
     const v = view(kavit, [kavitQ]);
     expect(openPicks(kavitQ)).toEqual(['1 farsan']);
-    expect(nextBanner(v, today)?.text).toBe('Next: Kavit picks 1 farsan, then you accept. The price is final after that.');
+    expect(nextBanner(v, today)?.text).toBe('Next: Kavit picks 1 farsan, then you confirm the booking. The price is final after that.');
     expect(stageRows(v, [kavitQ]).map(r => [r.title, r.sub, r.mark])).toEqual([
-      ['Inquiry', 'Booked 28 Oct', 'done'], ['Quoted', 'QTN-0023 sent · 29 Oct', 'now'], ['Confirmed', 'When the quote is accepted', ''], ['Invoiced', '', ''], ['Paid', '', ''],
+      ['Inquiry', 'Booked 28 Oct', 'done'], ['Quoted', 'QTN-0023 sent · 29 Oct', 'now'], ['Confirmed', 'When you confirm the booking', ''], ['Done', 'After the event', ''], ['Invoiced', '', ''], ['Paid', '', ''],
     ]);
   });
   it('sums the money before the invoice', () => {

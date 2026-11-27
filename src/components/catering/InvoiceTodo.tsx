@@ -5,11 +5,14 @@ import { inr } from '../../lib/money';
 import { formatDateIST } from '../../lib/ist';
 import { statusLabel } from '../StatusPill';
 import { DateTile, Chip } from '../money/MoneyUi';
-import { payState, PAY_CHIP } from '../../lib/invoiceEdit';
+import { payState, PAY_CHIP, needsGuests } from '../../lib/invoiceEdit';
+import type { Quotation } from '../../hooks/useQuotations';
 
 interface Props {
   owing: Owing[];
   ready: Ready[];
+  toConfirm: Ready[];                 // confirmed bookings whose quote was never accepted
+  onConfirm: (r: Ready) => void;
   past: Ready[];
   pastValue: number;
   invoices: Invoice[];
@@ -23,14 +26,15 @@ interface Props {
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const meals = (inv: Invoice) => {
-  const days = (inv.event_days ?? []) as any[];
+  // One-meal invoices keep a copy of their meal too; their guests live on the booking.
+  const days = (inv.is_multi_day ? inv.event_days ?? [] : []) as any[];
   const count = days.reduce((s, d) => s + (d.meals?.length ?? 0), 0);
   const guests = days.reduce((s, d) => s + Math.max(0, ...(d.meals ?? []).map((m: any) => Number(m.guest_count) || 0)), 0) || inv.booking?.guest_count || 0;
   return [count > 1 ? `${count} meals` : '', guests ? `${guests} guests` : ''].filter(Boolean).join(', ');
 };
 
 // Invoices page groups: waiting for money, ready to invoice, past events with no invoice.
-const InvoiceTodo: React.FC<Props> = ({ owing, ready, past, pastValue, invoices, onOpen, onPay, onCreate, onSettle, onSettleAll }) => {
+const InvoiceTodo: React.FC<Props> = ({ owing, ready, toConfirm, onConfirm, past, pastValue, invoices, onOpen, onPay, onCreate, onSettle, onSettleAll }) => {
   const byId = new Map(invoices.map(i => [i.id, i]));
   const [showPast, setShowPast] = useState(false);
   const readyRow = (r: Ready, action: string, run: () => void, past = false) => (
@@ -40,7 +44,7 @@ const InvoiceTodo: React.FC<Props> = ({ owing, ready, past, pastValue, invoices,
       <span className="mx-two-line"><b>{r.booking.customer?.name ?? 'Customer'} · {r.booking.event_type}</b>
         <span className={!r.booking.guest_count && !past ? 'mx-red' : undefined}>
           {[past ? cap(statusLabel(r.booking.status)) : '', past && r.booking.guest_count ? `${r.booking.guest_count} guests` : '',
-            r.quote?.quotation_number ?? 'No quote', !r.booking.guest_count && !past ? 'guest count missing' : ''].filter(Boolean).join(' · ')}
+            r.quote?.quotation_number ?? 'No quote', !past && needsGuests(r.quote as unknown as Quotation | undefined, r.booking) ? 'guest count missing' : ''].filter(Boolean).join(' · ')}
         </span></span>
       <span className="iv-amt"><b>{inr(r.quote?.total_amount ?? 0)}</b><span>{past ? 'quoted' : 'from the quote'}</span></span>
       <button type="button" className="ui-btn" onClick={e => { e.stopPropagation(); run(); }}>{action}</button>
@@ -73,6 +77,13 @@ const InvoiceTodo: React.FC<Props> = ({ owing, ready, past, pastValue, invoices,
         {!ready.length && <p className="mx-empty">No confirmed events are waiting for an invoice.</p>}
         {ready.map(r => readyRow(r, 'Create invoice', () => onCreate(r.booking.id)))}
       </section>
+
+      {toConfirm.length > 0 && (
+        <section aria-label="Confirm the quote first" className="mx-card iv-group">
+          <div className="mx-card-head"><span><b>Confirm the quote first · {toConfirm.length}</b><span className="mx-sub">Confirmed bookings whose quote was never accepted; confirming locks the menu and price for the invoice</span></span></div>
+          {toConfirm.map(r => readyRow(r, 'Confirm booking', () => onConfirm(r)))}
+        </section>
+      )}
 
       {past.length > 0 && (
         <section aria-label="Past events with no invoice" className={`mx-card iv-group iv-past${showPast ? ' open' : ''}`}>

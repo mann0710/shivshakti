@@ -1,18 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import type { QuoteForm } from '../../hooks/useQuoteForm';
 import { genId, Charge } from '../../lib/quoteLines';
-import { parseAmount, range } from '../../lib/quoteSummary';
-import { openPicks } from '../../lib/quoteBoard';
-import { onePickPrice, pickRange } from '../../lib/quoteChoices';
+import { parseAmount } from '../../lib/quoteSummary';
 import { inr } from '../../lib/money';
 import { Tick } from './EventSection';
-import type { PackagePrice } from './usePackagePrice';
 import MealRangeBox from './MealRangeBox';
-import DiscountTick from './DiscountTick';
-import { Field } from './bits';
-import { useHasPlateDiscount } from '../../hooks/useSchemaStatus';
 
-interface Props { f: QuoteForm; pkg?: PackagePrice }
+interface Props { f: QuoteForm }
 
 type Kind = 'transport' | 'discount' | 'extra';
 const ADD: [Kind, string][] = [['extra', 'Service staff'], ['extra', 'Counter / live station'], ['extra', 'Decoration'], ['extra', 'Other charge'], ['transport', 'Transport'], ['discount', 'Discount']];
@@ -28,15 +22,8 @@ const AmountInput: React.FC<{ value: number; base: number; label: string; onChan
   );
 };
 
-// Plate price (from dish prices or your own), whether picks move it, then transport, discounts, extras and GST.
-const PriceSection: React.FC<Props> = ({ f, pkg }) => {
-  const dishMode = f.showPrices && f.autoPrice;
-  const r = f.range;
-  const picks = openPicks({ is_multi_day: false, event_days: [], items: f.selectedItems }).map(p => p.label.toLowerCase());
-  const gap = f.isMultiDay ? null : pickRange(f.selectedItems);
-  const fixed = onePickPrice(f.selectedItems);
-  const plateReady = useHasPlateDiscount();
-  const off = Math.max(0, f.fullPrice - f.plateLow);
+// Meals and plate prices live on the meal cards; this is transport, discounts on the total, extras and GST.
+const PriceSection: React.FC<Props> = ({ f }) => {
   const list: Record<Kind, { rows: Charge[]; set: (fn: (prev: any[]) => any[]) => void; name: string }> = {
     transport: { rows: f.transportationCharges, set: f.setTransportationCharges as any, name: 'Transport' },
     discount: { rows: f.additionalDiscounts, set: f.setAdditionalDiscounts as any, name: 'Discount' },
@@ -62,54 +49,7 @@ const PriceSection: React.FC<Props> = ({ f, pkg }) => {
   return (
     <section className="q-sec" aria-label="Price">
       <h2><Tick ok={f.totals.final > 0} />Price</h2>
-      {!f.isMultiDay && (
-        <div className="q-radio2" role="radiogroup" aria-label="Plate price">
-          <button type="button" role="radio" aria-checked={dishMode} className={`q-rcard${dishMode ? ' on' : ''}`} onClick={() => { f.setItemPricesPref(true); f.setAutoPrice(true); }}>
-            <span className="dot" aria-hidden="true" />
-            <span><b>From the dish prices in this quote</b>
-              <span>{r.max > 0 ? `${range(r.min, r.max)} a plate${r.max > r.min && picks.length ? ` (the ${picks.join(' and ')} choice makes the range)` : ''}` : 'Tap a dish to give it a price'}</span></span>
-          </button>
-          <div role="radio" aria-checked={!dishMode} tabIndex={0} className={`q-rcard${!dishMode ? ' on' : ''}`} onClick={() => dishMode && f.typePerPlate(f.perPlate)}
-            onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') f.typePerPlate(f.perPlate); }}>
-            <span className="dot" aria-hidden="true" />
-            <span><b>My own price</b>
-              {dishMode ? <span>One price a plate</span> : (
-                <span className="q-own">
-                  <input type="number" min={0} inputMode="decimal" value={f.perPlate} placeholder="₹ a plate" aria-label="Own price a plate" onChange={e => f.typePerPlate(e.target.value)} />
-                  {f.perPlateMax != null && <small>picks make it {range(f.plateLow, f.perPlateMax)}</small>}
-                </span>
-              )}</span>
-          </div>
-        </div>
-      )}
-      {!f.isMultiDay && plateReady && (
-        <div className="q-fullprice">
-          <Field label="Price before discount" hint={off ? `${inr(off)} off ${inr(f.fullPrice)} · saves ${inr(off * f.guestCount)}` : 'Your usual price, to show a discount'}>
-            <input type="number" min={0} inputMode="decimal" value={f.fullPrice || ''} placeholder="No discount" onChange={e => f.setFullPrice(parseFloat(e.target.value) || 0)}
-              onBlur={() => { if (f.fullPrice > 0 && f.fullPrice < f.plateLow) { const was = f.plateLow; f.typePerPlate(String(f.fullPrice)); f.setFullPrice(was); } }} />
-          </Field>
-          <DiscountTick full={f.fullPrice} price={f.plateLow} hidden={f.hideDiscount} onShow={v => f.setHideDiscount(!v)} />
-        </div>
-      )}
       <MealRangeBox f={f} />
-      {gap && (
-        <div className="q-radio2 q-picks" role="radiogroup" aria-label="When the customer picks">
-          <button type="button" role="radio" aria-checked={!fixed} className={`q-rcard${!fixed ? ' on' : ''}`} onClick={() => fixed && f.letPicksPrice()}>
-            <span className="dot" aria-hidden="true" />
-            <span><b>The pick changes the price</b>
-              <span>{fixed ? 'Cheaper or dearer dishes move the plate price' : `${range(f.plateLow, f.perPlateMax ?? f.plateLow)} a plate, final once they choose`}</span></span>
-          </button>
-          <button type="button" role="radio" aria-checked={fixed} className={`q-rcard${fixed ? ' on' : ''}`} onClick={() => !fixed && f.chargeHighest()}>
-            <span className="dot" aria-hidden="true" />
-            <span><b>One price for any pick</b>
-              <span>{fixed ? `${inr(f.plateLow)} a plate whatever they pick; change it in My own price` : `${inr(f.perPlateMax ?? f.plateLow)} a plate, the highest`}</span></span>
-          </button>
-        </div>
-      )}
-      {pkg?.hint && (
-        <p className="q-hint" role="status">{pkg.hint.follows ? pkg.hint.text : <>
-          Package price: {pkg.hint.text} <button type="button" className="q-link" onClick={pkg.use}>Use {inr(pkg.hint.price)}</button></>}</p>
-      )}
       <div className="q-extras">
         {(['transport', 'discount', 'extra'] as Kind[]).flatMap(k => shown(k).map((c, i) => row(k, c, i)))}
         {f.gstChecked && (
@@ -123,7 +63,9 @@ const PriceSection: React.FC<Props> = ({ f, pkg }) => {
           {ADD.filter(([k]) => k === 'extra' || list[k].rows.length > 0).map(([k, label]) => (
             <button key={label} type="button" className="q-mini" onClick={() => add(k, label === 'Other charge' ? '' : label)}>+ {label}</button>
           ))}
-          {!f.gstChecked && <button type="button" className="q-mini" onClick={() => f.setGstChecked(true)}>+ GST {f.dcGstRate}%</button>}
+          {!f.gstChecked && (f.dcGstRate > 0
+            ? <button type="button" className="q-mini" onClick={() => f.setGstChecked(true)}>+ GST {f.dcGstRate}%</button>
+            : <span className="q-hint">GST rate is 0% in Settings › Money</span>)}
         </div>
       </div>
     </section>

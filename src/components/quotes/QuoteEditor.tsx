@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { QuoteForm } from '../../hooks/useQuoteForm';
-import type { Quotation, QuotationLineItem } from '../../hooks/useQuotations';
+import type { Quotation } from '../../hooks/useQuotations';
 import { useDocSettings } from '../../hooks/useDocSettings';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { siblingsOf } from '../../lib/quoteOptions';
-import { plateRange, ownRange, dishCount } from '../../lib/quoteChoices';
+import { dishCount } from '../../lib/quoteChoices';
 import { openPicks } from '../../lib/quoteBoard';
-import { readyChecks, quoteItems, coursesOf, range } from '../../lib/quoteSummary';
+import { readyChecks, quoteItems, coursesOf } from '../../lib/quoteSummary';
 import { quotePdf } from '../../lib/quotationShare';
 import { downloadDoc } from '../../lib/docs/output';
 import { priceAt } from '../../lib/priceTiers';
@@ -15,13 +15,21 @@ import QuotationMultiDay from '../catering/QuotationMultiDay';
 import { useAutosave } from './useAutosave';
 import OptionTabs, { CompareTable } from './OptionTabs';
 import EventSection, { Tick } from './EventSection';
-import MenuCourses from './MenuCourses';
+import OneMealCard from './OneMealCard';
 import PriceSection from './PriceSection';
 import { PaymentSection, PdfSection } from './PlanSections';
 import SummaryAside from './SummaryAside';
 import { PackageDialog, CopyDialog } from './MenuSources';
 import { usePackagePrice } from './usePackagePrice';
+import { pdfSummary } from '../../lib/quoteSummary';
 import { StatusChip, firstName } from './bits';
+import { usePaymentRows } from '../../hooks/useBookingPayments';
+import { useHasQuoteRevisions } from '../../hooks/useSchemaStatus';
+import { sameAsRevision, snapshotOf } from '../../lib/quoteRevisions';
+import { useUpdateBooking } from '../../hooks/useBookings';
+import ReviseDialog from './ReviseDialog';
+import { paymentsFor, receivedOf } from '../../lib/bookingMoney';
+import { inr } from '../../lib/money';
 
 interface Props {
   f: QuoteForm;
@@ -34,22 +42,29 @@ interface Props {
   onSwitch: (q: Quotation) => void;
   onClose: () => void;
   onOpenBooking?: (id: string) => void;
+  onMarkSent?: (q: Quotation) => void;
 }
 
 const STATUS_TEXT = { saved: 'All changes saved', pending: 'Saving…', saving: 'Saving…', error: 'Couldn\'t save' };
 
 // The quote editor: saves as you type, option tabs, sections and a sticky "Ready to send?".
-const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdfPrices, onSend, onAddOption, onSwitch, onClose, onOpenBooking }) => {
+const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdfPrices, onSend, onAddOption, onSwitch, onClose, onOpenBooking, onMarkSent }) => {
   const settings = useDocSettings();
   const { confirm, dialog } = useConfirm();
   const lastSaved = useRef<Quotation | null>(null);
   const save = async () => { const r = await f.handleSave(); if (r) lastSaved.current = r; return r; };
-  const auto = useAutosave({ session: String(session), snapshot: f.snapshot, ready: f.canSave, save });
+  // Declared before autosave: a locked accepted quote never saves, even from a drag.
+  const [unlocked, setUnlocked] = useState(false);
+  const lockedNow = f.editingQuotation?.status === 'accepted' && !unlocked;
+  const auto = useAutosave({ session: String(session), snapshot: f.snapshot, ready: f.canSave && !lockedNow, save });
   useEffect(() => { lastSaved.current = null; }, [session]);
   const [compare, setCompare] = useState(false);
   const [busy, setBusy] = useState(false);
   const [source, setSource] = useState<'package' | 'copy' | null>(null);
   const pkg = usePackagePrice(f, session);
+  // An accepted quote reads until you choose to change it.
+  useEffect(() => { setUnlocked(false); }, [session]);
+  const { data: payRows = [] } = usePaymentRows();
 
   const draft = f.draftQuotation();
   const siblings = f.editingQuotation ? siblingsOf(f.editingQuotation, f.quotations) : [];
@@ -67,6 +82,52 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
   // The saved quote (a brand-new one gets its id on the first save).
   const current = (): Quotation => (draft.id === 'draft' && lastSaved.current ? { ...draft, id: lastSaved.current.id, quotation_number: lastSaved.current.quotation_number } : draft);
 
+  const accepted = f.editingQuotation?.status === 'accepted';
+  const locked = accepted && !unlocked;
+  const paid = receivedOf(paymentsFor(payRows, f.editingQuotation?.booking_id ?? ''));
+  const revsReady = useHasQuoteRevisions();
+  const updateBooking = useUpdateBooking();
+  const [reviewing, setReviewing] = useState(false);
+  const revs = f.editingQuotation?.revisions ?? [];
+  // The accepted version is kept as a revision first, so every change can be undone.
+  const unlock = async () => {
+    const q = f.editingQuotation;
+    if (!q || !(await confirm({ title: `Change ${q.quotation_number}?`, confirmLabel: 'Change it',
+      message: `${who} accepted ${inr(q.total_amount)}${paid > 0 ? ` and ${inr(paid)} is received` : ''}. The accepted version is kept, changes save as you type and update the booking and kitchen sheet; an invoice already made keeps its own figures.` }))) return;
+    try {
+      if (revsReady) await f.updateQuotation.mutateAsync({ id: q.id, revisions: [...revs, snapshotOf(q, new Date().toISOString())] });
+      setUnlocked(true);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not keep the accepted version'); }
+  };
+  const [leaving, setLeaving] = useState(false);
+  const keep = async (sendNow: boolean) => {
+    if (!(await flushed())) return;
+    const q = f.editingQuotation;
+    const last = revs[revs.length - 1];
+    // Nothing changed after all: the kept version is not a revision.
+    if (q && last && sameAsRevision(last, current())) await f.updateQuotation.mutateAsync({ id: q.id, revisions: revs.slice(0, -1) }).catch(() => undefined);
+    setReviewing(false); setUnlocked(false);
+    if (sendNow) onSend(current());
+    if (leaving) onClose();
+  };
+  // Puts back the accepted version and forgets the revision made for this change.
+  const undoAll = async () => {
+    const q = f.editingQuotation;
+    const last = revs[revs.length - 1];
+    if (!q || !last) return;
+    setBusy(true);
+    try {
+      const back = { ...(last.quote as Partial<Quotation>), revisions: revs.slice(0, -1) };
+      const booking = q.booking && last.booking ? { ...q.booking, ...last.booking } : q.booking;
+      if (q.booking_id && last.booking && Object.keys(last.booking).length) await updateBooking.mutateAsync({ id: q.booking_id, ...last.booking });
+      const saved = await f.updateQuotation.mutateAsync({ id: q.id, ...back });
+      f.openEdit({ ...q, ...back, ...(saved ?? {}), booking } as Quotation);
+      if (q.booking_id && booking) f.ev.selectBooking(q.booking_id, q.is_multi_day ? undefined : Number(back.guest_count) || undefined, booking);
+      if (leaving) onClose();
+      setReviewing(false); setUnlocked(false);
+      toast.success(`${q.quotation_number} is back to what ${who} accepted`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Could not undo'); } finally { setBusy(false); }
+  };
   const flushed = async () => { if (await auto.flush()) return true; toast.error(auto.why()); return false; };
   const send = async () => { if (await flushed()) onSend(current(), live.length > 1 ? live.map(o => (o.id === draft.id ? current() : o)) : undefined); };
   const preview = () => downloadDoc(quotePdf(draft, pdfPrices));
@@ -75,23 +136,14 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
     if (!(await auto.flush()) && !(await confirm({ title: 'Leave without your last changes?', message: `They could not be saved: ${auto.why()}`, confirmLabel: 'Leave', danger: true }))) return;
     go();
   };
-  const leave = () => leaveTo(onClose);
+  // Leaving while changing an accepted quote shows the summary first.
+  const leave = () => (accepted && unlocked ? (setLeaving(true), setReviewing(true)) : leaveTo(onClose));
   const addOption = async () => {
     if (!(await flushed())) return;
     setBusy(true);
     try { await onAddOption(current()); } finally { setBusy(false); }
   };
   const switchTo = async (q: Quotation) => { setCompare(false); if (await flushed()) onSwitch(q); };
-  const oneMeal = async () => {
-    const meals = f.eventDays.reduce((s, d) => s + d.meals.length, 0);
-    if (meals && !(await confirm({ title: 'Switch to one meal?', message: `The ${meals} meal${meals > 1 ? 's' : ''} and their dishes are removed from this quote.`, confirmLabel: 'Switch', danger: true }))) return;
-    f.toggleMultiDay(false);
-  };
-  const platePreview = (next: QuotationLineItem[]) => {
-    if (f.showPrices && f.autoPrice) { const r = plateRange(next); return `${range(r.min, r.max)} a plate`; }
-    const r = ownRange(parseFloat(f.perPlate) || 0, next);
-    return `${range(r.low, r.high)} a plate`;
-  };
 
   return (
     <div className="q-editor">
@@ -115,16 +167,19 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
         {compare ? <CompareTable options={live} /> : (
           <div className="q-ed-cols">
             <div className="q-ed-main">
-              <EventSection f={f} onOpenBooking={onOpenBooking && (id => { leaveTo(() => onOpenBooking(id)); })} onSeveralDays={() => f.toggleMultiDay(true)} />
+              {accepted && (
+                <div role="status" className="q-warnbox q-lock">
+                  <span>{locked ? <><b>{f.editingQuotation?.quotation_number} is accepted and locked{revs.length ? ` · revision ${revs.length + 1}` : ''}.</b> {who} confirmed {inr(f.editingQuotation?.total_amount ?? 0)}{paid > 0 ? ` · ${inr(paid)} received` : ''}.</> : <><b>Changing an accepted quote.</b> Send {who} the updated quote when you are done.</>}</span>
+                  {locked ? <button type="button" className="ui-btn" onClick={unlock}>Change the accepted quote…</button>
+                    : <button type="button" className="ui-btn primary" onClick={() => setReviewing(true)}>Done changing…</button>}
+                </div>
+              )}
+              <fieldset className="q-fs" disabled={locked}>
+              <EventSection f={f} onOpenBooking={onOpenBooking && (id => { leaveTo(() => onOpenBooking(id)); })} />
               <section className="q-sec" aria-label="Menu">
                 <div className="q-sec-head">
                   <h2><Tick ok={dishes > 0} />Menu <small>{dishes} dish{dishes === 1 ? '' : 'es'}</small></h2>
-                  {f.isMultiDay ? (
-                    <div className="q-seg" role="radiogroup" aria-label="Menu shape">
-                      <button type="button" role="radio" aria-checked={false} onClick={oneMeal}>One meal</button>
-                      <button type="button" role="radio" aria-checked className="on">Several meals or days</button>
-                    </div>
-                  ) : (
+                  {!f.isMultiDay && (
                     <span className="q-chips">
                       <button type="button" className="ui-btn" onClick={() => setSource('package')}>Start from a package</button>
                       <button type="button" className="ui-btn" onClick={() => setSource('copy')}>Copy from another quote</button>
@@ -133,17 +188,17 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
                 </div>
                 {f.isMultiDay ? (
                   <QuotationMultiDay eventDays={f.eventDays} setEventDays={f.setEventDays} guestCount={f.guestCount} defaultDate={f.selectedBooking?.event_date || f.ev.draft.date}
-                    menuItems={f.activeItems} toLine={f.toLine} showPrices={f.showPrices} who={who} />
-                ) : <>
-                  <MenuCourses items={f.selectedItems} menu={f.activeItems} showPrices={f.showPrices} who={who} toLine={f.toLine} preview={platePreview} onChange={f.setSelectedItems} />
-                  <span className="q-hint">Tap a dish to set its price, note or "served with" items. Dishes with no price are part of the plate price and never show ₹0 on the PDF.</span>
-                </>}
+                    menuItems={f.activeItems} toLine={f.toLine} showPrices={f.showPrices} pdfPrices={pdfPrices} who={who} onOneMeal={f.toOne}
+                    quotes={f.quotations} currentId={f.editingId} />
+                ) : <OneMealCard f={f} who={who} pkg={pkg} pdfPrices={pdfPrices} onPdfPrices={onPdfPrices} />}
               </section>
-              <PriceSection f={f} pkg={pkg} />
+              <PriceSection f={f} />
               <PaymentSection steps={settings.schedule} lo={draft.total_amount} hi={draft.total_max ?? null} />
-              <PdfSection who={who} multi={f.isMultiDay} prices={pdfPrices} canPrice={f.hasItemPrices} onPrices={onPdfPrices} note={f.notes} onNote={f.setNotes} />
+              <PdfSection who={who} multi={f.isMultiDay} prices={pdfPrices} canPrice={f.hasItemPrices} onPrices={onPdfPrices} note={f.notes} onNote={f.setNotes} perMeal={pdfSummary(f.eventDays, pdfPrices)} />
+              </fieldset>
             </div>
-            <SummaryAside q={draft} checks={checks} picks={picks} who={who} />
+            <SummaryAside q={draft} checks={checks} picks={picks} who={who} dishPrices={pdfPrices}
+              onMarkSent={onMarkSent && f.editingQuotation?.status === 'draft' ? () => onMarkSent(current()) : undefined} />
           </div>
         )}
       </div>
@@ -164,6 +219,8 @@ const QuoteEditor: React.FC<Props> = ({ f, session, hasOptions, pdfPrices, onPdf
       {source === 'copy' && (
         <CopyDialog quotes={f.quotations} currentId={f.editingId} hasDishes={f.selectedItems.length > 0} onClose={() => setSource(null)} onCopy={f.copyItems} />
       )}
+      {reviewing && f.editingQuotation && <ReviseDialog now={current()} last={revs[revs.length - 1]} paid={paid} who={who} busy={busy}
+        onKeep={keep} onUndo={undoAll} onClose={() => { setReviewing(false); setLeaving(false); }} />}
       {dialog}
     </div>
   );

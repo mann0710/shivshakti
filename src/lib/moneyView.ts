@@ -164,6 +164,12 @@ export const awaitsAcceptance = (bookingId: string, quotes: QuoteLite[]) => {
   return !mine.some(q => q.status === 'accepted') && mine.some(q => q.status === 'sent');
 };
 
+// A booking whose quotes are all open (draft or sent): the quote is confirmed before the invoice.
+export const quoteNotConfirmed = (bookingId: string, quotes: QuoteLite[]) => {
+  const mine = quotes.filter(q => q.booking_id === bookingId);
+  return !mine.some(q => q.status === 'accepted') && mine.some(q => q.status === 'sent' || q.status === 'draft');
+};
+
 // Money not received yet: confirmed events to invoice, quotes waiting, drafts not sent.
 export function comingIn(d: MoneyData, today: string) {
   const todo = invoiceTodo(d.bookings, d.quotes, d.invoices, today);

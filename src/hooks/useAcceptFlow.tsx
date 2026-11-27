@@ -6,6 +6,8 @@ import { useQuoteLifecycle } from './useQuoteLifecycle';
 import { useStoredState } from './useStoredState';
 import { Navigate } from './useNavIntent';
 import { acceptPatch } from '../lib/quoteChoices';
+import { useConfirmBooking, missingFunction } from './useConfirmBooking';
+import { Booking } from '../types';
 import { siblingsOf } from '../lib/quoteOptions';
 import QuoteAcceptDialog from '../components/catering/QuoteAcceptDialog';
 import SendDialog from '../components/quotes/SendDialog';
@@ -31,6 +33,7 @@ export const useAcceptFlow = (onNavigate?: Navigate) => {
   const updateStatus = useUpdateQuotationStatus();
   const updateBooking = useUpdateBooking();
   const savePayment = useSavePayment();
+  const confirmBooking = useConfirmBooking();
   const [receipt, setReceipt] = useState<{ phone: string; info: ReceiptInfo } | null>(null);
   const [target, setTarget] = useState<{ q: Quotation; picks?: Set<string> } | null>(null);
   const [sending, setSending] = useState<SendTarget | null>(null);
@@ -38,21 +41,40 @@ export const useAcceptFlow = (onNavigate?: Navigate) => {
 
   const accept = (q: Quotation, picks?: Set<string>) => setTarget({ q, picks });
 
-  const confirm = async (chosen: Quotation, picked: Set<string>, guests?: number, advance?: { draft: PayDraft; receipt: boolean }) => {
+  // Older step-by-step save, used until the one-step database function exists.
+  const confirmInSteps = async (chosen: Quotation, patch: ReturnType<typeof acceptPatch>, guests?: number, advance?: { draft: PayDraft; receipt: boolean; id: string }) => {
+    await updateQuotation.mutateAsync({ id: chosen.id, ...patch });
+    for (const s of siblingsOf(chosen, all)) {
+      if (s.id !== chosen.id && s.status !== 'rejected') await updateStatus.mutateAsync({ id: s.id, status: 'rejected' });
+    }
+    if (guests && chosen.booking_id && chosen.booking?.guest_count !== guests) await updateBooking.mutateAsync({ id: chosen.booking_id, guest_count: guests });
+    // The advance is a payment on the booking, like any other.
+    const amount = amountOf(advance?.draft.amount ?? '');
+    const b = chosen.booking;
+    const day = advance?.draft.payment_date || todayIST();
+    if (amount > 0 && chosen.booking_id) await savePayment.mutateAsync({ bookingId: chosen.booking_id, amount, payment_type: payTypeOn(b?.event_date ?? day, day), payment_mode: advance!.draft.payment_mode, notes: advance!.draft.notes, payment_date: day, createId: advance!.id });
+    await lifecycle.setStatus([{ ...chosen, ...patch } as Quotation], 'accepted');
+  };
+
+  const confirm = async (chosen: Quotation, picked: Set<string>, guests?: number, advance?: { draft: PayDraft; receipt: boolean; id: string }) => {
     setBusy(true);
     try {
       const patch = acceptPatch(chosen, picked, guests);
-      await updateQuotation.mutateAsync({ id: chosen.id, ...patch });
-      for (const s of siblingsOf(chosen, all)) {
-        if (s.id !== chosen.id && s.status !== 'rejected') await updateStatus.mutateAsync({ id: s.id, status: 'rejected' });
-      }
-      if (guests && chosen.booking_id && chosen.booking?.guest_count !== guests) await updateBooking.mutateAsync({ id: chosen.booking_id, guest_count: guests });
-      // The advance is a payment on the booking, like any other.
       const amount = amountOf(advance?.draft.amount ?? '');
       const b = chosen.booking;
       const day = advance?.draft.payment_date || todayIST();
-      if (amount > 0 && chosen.booking_id) await savePayment.mutateAsync({ bookingId: chosen.booking_id, amount, payment_type: payTypeOn(b?.event_date ?? day, day), payment_mode: advance!.draft.payment_mode, notes: advance!.draft.notes, payment_date: day });
-      await lifecycle.setStatus([{ ...chosen, ...patch } as Quotation], 'accepted');
+      try {
+        if (!chosen.booking_id) throw Object.assign(new Error('confirm_booking needs a booking'), { code: 'PGRST202' });
+        const moved = await confirmBooking.mutateAsync({
+          bookingId: chosen.booking_id, quoteId: chosen.id, patch, siblings: siblingsOf(chosen, all).map(s => s.id),
+          guests: guests && chosen.booking?.guest_count !== guests ? guests : undefined,
+          payment: amount > 0 ? { id: advance!.id, amount, payment_type: payTypeOn(b?.event_date ?? day, day), payment_mode: advance!.draft.payment_mode, notes: advance!.draft.notes, payment_date: day } : null,
+        });
+        lifecycle.announce({ ...chosen, ...patch } as Quotation, moved && b ? ({ ...b, status: 'confirmed', customer: b.customer ?? chosen.customer } as Booking) : null);
+      } catch (e) {
+        if (!missingFunction(e)) throw e;
+        await confirmInSteps(chosen, patch, guests, advance);
+      }
       setTarget(null);
       const phone = chosen.customer?.phone ?? '';
       if (amount > 0 && advance?.receipt && phone.replace(/\D/g, '').length >= 10 && b) {

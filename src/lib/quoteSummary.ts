@@ -1,11 +1,12 @@
-import type { Quotation, QuotationLineItem } from '../hooks/useQuotations';
+import type { EventDay, MealSlot, Quotation, QuotationLineItem } from '../hooks/useQuotations';
 import type { Booking } from '../types';
 import { inr } from './money';
+import { formatDateIST } from './ist';
 import { scheduleAmounts, PayStep } from './docs/settings';
-import { mealTitle, offerOf } from './docs/menu';
+import { mealSaving, mealTitle, offerOf } from './docs/menu';
 import { planCourses, Course } from './menuOrder';
 import { choiceGroups } from './quoteChoices';
-import { plateOff, quotePlate, showsDiscount } from './mealPrice';
+import { discountSaving, hasDishPrices, plateOff, quotePlate, showsDiscount, showsDishPrices } from './mealPrice';
 import { plateText, totalText, quoteGuests } from './quoteOptions';
 
 // What the quote editor and the list panel show about one quote.
@@ -19,19 +20,22 @@ export const coursesOf = (items: QuotationLineItem[]): Course[] => planCourses(i
 export interface Line { k: string; v: string; muted?: boolean }
 
 // Price lines as the customer sees them, ending before the total.
-export function priceLines(q: Quotation): Line[] {
+export function priceLines(q: Quotation, dishPrices = true): Line[] {
   const out: Line[] = [];
   if (q.is_multi_day) {
+    // Two dinners on two days read apart only with their day.
+    const days = new Set((q.event_days ?? []).map(d => d.date)).size > 1;
     (q.event_days ?? []).forEach(d => d.meals.forEach(m => {
       const rate = offerOf(m) || m.per_plate_amount;
       const hi = m.per_plate_max != null && m.per_plate_max > m.per_plate_amount ? m.per_plate_max * m.guest_count : null;
-      const off = !offerOf(m) && showsDiscount(m) ? ` (${inr(plateOff(m))} off)` : '';
-      out.push({ k: `${mealTitle(m)} · ${m.guest_count} × ${inr(rate)}${off}`, v: range(rate * m.guest_count, hi) });
+      const off = !offerOf(m) && showsDiscount(m, dishPrices) ? ` (${inr(plateOff(m))} off)` : '';
+      const day = days && d.date ? `${formatDateIST(d.date, 'EEE d MMM')} · ` : '';
+      out.push({ k: `${day}${mealTitle(m)} · ${m.guest_count} × ${inr(rate)}${off}`, v: range(rate * m.guest_count, hi) });
     }));
   } else {
     const g = quoteGuests(q);
     const hi = q.per_plate_max != null && q.per_plate_max > q.per_plate_amount ? q.per_plate_max * g : null;
-    const off = showsDiscount(quotePlate(q, g)) ? ` (${inr(plateOff(quotePlate(q, g)))} off)` : '';
+    const off = showsDiscount(quotePlate(q, g), dishPrices) ? ` (${inr(plateOff(quotePlate(q, g)))} off)` : '';
     out.push({ k: `${plateText(q)}${off} × ${g}`, v: range(q.per_plate_amount * g, hi) });
   }
   (q.additional_discounts ?? []).filter(d => d.amount > 0).forEach(d => out.push({ k: d.description || 'Discount', v: `− ${inr(d.amount)}` }));
@@ -39,6 +43,23 @@ export function priceLines(q: Quotation): Line[] {
   (q.transportation_charges ?? []).filter(c => c.amount > 0).forEach(c => out.push({ k: c.description || 'Transport', v: inr(c.amount) }));
   out.push(q.gst_rate > 0 ? { k: `GST ${q.gst_rate}%`, v: inr(q.gst_amount) } : { k: 'GST', v: 'Not added', muted: true });
   return out;
+}
+
+// What the customer saves on the PDF: plate discounts, older offer prices and discounts on the total.
+export function youSave(q: Quotation, dishPrices = true): number {
+  const plates = q.is_multi_day
+    ? (q.event_days ?? []).reduce((s, d) => s + d.meals.reduce((t, m) => t + discountSaving(m, dishPrices) + mealSaving(m), 0), 0)
+    : discountSaving(quotePlate(q, quoteGuests(q)), dishPrices);
+  return plates + (q.additional_discounts ?? []).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+}
+
+// "On the PDF" notes for meals that differ: dish prices left off, plate discounts shown.
+export function pdfSummary(days: EventDay[], dishPrices: boolean): string[] {
+  const name = (d: EventDay, m: MealSlot) => `${mealTitle(m)}${d.date ? ` (${formatDateIST(d.date, 'EEE d MMM')})` : ''}`;
+  const meals = days.flatMap(d => d.meals.map(m => ({ d, m })));
+  const off = meals.filter(x => dishPrices && hasDishPrices(x.m) && !showsDishPrices(x.m)).map(x => name(x.d, x.m));
+  const disc = meals.filter(x => showsDiscount(x.m, dishPrices)).map(x => `${name(x.d, x.m)} ${inr(plateOff(x.m))} off`);
+  return [off.length ? `Dish prices off for: ${off.join(', ')}` : '', disc.length ? `Plate discount shown on: ${disc.join(', ')}` : ''].filter(Boolean);
 }
 
 export interface Check { tone: 'ok' | 'warn' | 'bad'; text: string }

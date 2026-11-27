@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import Modal from '../ui/Modal';
 import { useMenus } from '../../hooks/useMenus';
-import type { Quotation } from '../../hooks/useQuotations';
+import type { Quotation, QuotationLineItem } from '../../hooks/useQuotations';
+import { mealTitle } from '../../lib/docs/menu';
 import type { PickerItem } from '../../lib/quoteLines';
 import { dishCount } from '../../lib/quoteChoices';
 import { formatDateIST } from '../../lib/ist';
@@ -59,31 +60,38 @@ export const PackageDialog: React.FC<PackageProps> = ({ menuItems, hasDishes, gu
   );
 };
 
-interface CopyProps { quotes: Quotation[]; currentId: string | null; hasDishes: boolean; onClose: () => void; onCopy: (q: Quotation, replace: boolean) => void }
+interface CopyProps { quotes: Quotation[]; currentId: string | null; hasDishes: boolean; onClose: () => void; onCopy: (items: QuotationLineItem[], replace: boolean) => void }
 
-// "Copy from another quote": its dishes, prices, notes and choices.
+interface Source { key: string; title: string; line: string; items: QuotationLineItem[] }
+
+// Every menu that can be copied: a one-meal quote, or each meal of a several-meal quote.
+const sourcesOf = (quotes: Quotation[], currentId: string | null): Source[] => quotes.filter(q => q.id !== currentId).flatMap(q => {
+  const who = `${q.customer?.name ?? 'Customer'} · ${q.booking?.event_type ?? 'Event'}`;
+  const tag = `${q.quotation_number}${q.option_label ? ` · Option ${q.option_label}` : ''}`;
+  if (!q.is_multi_day) return (q.items ?? []).length ? [{ key: q.id, title: who, line: `${tag} · ${dishCount(q.items)} dishes · ${formatDateIST(q.created_at, 'd MMM yyyy')}`, items: q.items }] : [];
+  return (q.event_days ?? []).flatMap(d => d.meals.filter(m => (m.items ?? []).length).map(m => ({
+    key: `${q.id}:${m.id}`, title: `${who} · ${mealTitle(m)}`, line: `${tag}${d.date ? ` · ${formatDateIST(d.date, 'EEE d MMM')}` : ''} · ${dishCount(m.items)} dishes`, items: m.items,
+  })));
+});
+
+// "Copy from another quote": its dishes, prices, notes and choices (a whole one-meal menu or one meal).
 export const CopyDialog: React.FC<CopyProps> = ({ quotes, currentId, hasDishes, onClose, onCopy }) => {
   const [find, setFind] = useState('');
   const [replace, setReplace] = useState(false);
-  const shown = useMemo(() => quotes
-    .filter(q => q.id !== currentId && !q.is_multi_day && (q.items ?? []).length > 0)
-    .filter(q => !find.trim() || `${q.quotation_number} ${q.customer?.name ?? ''} ${q.booking?.event_type ?? ''}`.toLowerCase().includes(key(find)))
-    .slice(0, 30), [quotes, currentId, find]);
+  const shown = useMemo(() => sourcesOf(quotes, currentId)
+    .filter(x => !find.trim() || `${x.title} ${x.line}`.toLowerCase().includes(key(find)))
+    .slice(0, 40), [quotes, currentId, find]);
   const [pick, setPick] = useState<string | null>(null);
-  const chosen = shown.find(q => q.id === pick) ?? shown[0];
+  const chosen = shown.find(x => x.key === pick) ?? shown[0];
   return (
     <Modal title="Copy from another quote" onClose={onClose} width={560}
       footer={<><button type="button" className="ui-btn" onClick={onClose}>Cancel</button>
-        <button type="button" className="ui-btn primary" disabled={!chosen} onClick={() => { if (chosen) { onCopy(chosen, replace); onClose(); } }}>
+        <button type="button" className="ui-btn primary" disabled={!chosen} onClick={() => { if (chosen) { onCopy(chosen.items.map(i => ({ ...i, chosen: undefined })), replace); onClose(); } }}>
           {chosen ? `Copy ${dishCount(chosen.items)} dishes` : 'Copy'}</button></>}>
       <p className="q-dlg-sub">Its dishes come over with their prices, notes and choices.</p>
-      <label className="q-field">Find<input type="search" value={find} onChange={e => setFind(e.target.value)} placeholder="Name, event or QTN number" /></label>
+      <label className="q-field">Find<input type="search" value={find} onChange={e => setFind(e.target.value)} placeholder="Name, event, meal or QTN number" /></label>
       <div className="q-cards q-scroll" role="radiogroup" aria-label="Quotes">
-        {shown.map(q => (
-          <PickCard key={q.id} on={chosen?.id === q.id} title={`${q.customer?.name ?? 'Customer'} · ${q.booking?.event_type ?? 'Event'}`}
-            line={`${q.quotation_number}${q.option_label ? ` · Option ${q.option_label}` : ''} · ${dishCount(q.items)} dishes · ${formatDateIST(q.created_at, 'd MMM yyyy')}`}
-            onClick={() => setPick(q.id)} />
-        ))}
+        {shown.map(x => <PickCard key={x.key} on={chosen?.key === x.key} title={x.title} line={x.line} onClick={() => setPick(x.key)} />)}
         {!shown.length && <p className="q-hint">No other quote with a menu yet.</p>}
       </div>
       {hasDishes && <AddOrReplace replace={replace} onChange={setReplace} />}

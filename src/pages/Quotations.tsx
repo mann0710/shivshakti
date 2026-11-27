@@ -59,7 +59,7 @@ const Quotations: React.FC<Props> = ({ onNavigate }) => {
     <>
       {f.showForm ? (
         <QuoteEditor f={f} session={session} hasOptions={hasOptions} pdfPrices={pdf.prices} onPdfPrices={prices => setPdf({ prices })}
-          onSend={(q, options) => flow.share(q, pdf.prices, options, false)} onAddOption={actions.addOption} onSwitch={openEdit}
+          onSend={(q, options) => flow.share(q, pdf.prices, options, false)} onMarkSent={q => flow.setStatus([q], 'sent')} onAddOption={actions.addOption} onSwitch={openEdit}
           onClose={() => (route.id ? route.close() : f.resetForm())} onOpenBooking={onNavigate ? id => onNavigate('bookings', { action: 'open', id }) : undefined} />
       ) : (
         <QuoteBoard quotes={f.quotations} loading={f.isLoading} invoiced={invoiced} a={actions} onNew={() => setNewOpen(true)} />

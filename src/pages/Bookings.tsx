@@ -88,8 +88,8 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
 
   const setStatus = async (b: Booking, status: Booking['status']) => {
     const v = viewOf(b);
-    // Confirming asks for the advance; going back keeps any money already received.
-    if (status === 'confirmed' && b.status !== 'confirmed' && b.status !== 'completed' && v) return setConfirming(v);
+    // Confirming locks a quote when there is one (the Confirm booking dialog), else asks only for the advance.
+    if (status === 'confirmed' && b.status !== 'confirmed' && b.status !== 'completed' && v) return v.quote && v.quote.status !== 'accepted' ? accept.accept(v.quote) : setConfirming(v);
     if ((status === 'inquiry' || status === 'followup') && v && v.money.received > 0
       && !(await confirm({ title: `Move back to ${status === 'inquiry' ? 'Inquiry' : 'Follow-up'}?`, message: <>The <b>{inr(v.money.received)}</b> received stays recorded on this booking. To give it back, cancel the event instead.</>, confirmLabel: 'Move back' }))) return;
     try {
@@ -240,7 +240,7 @@ const Bookings: React.FC<Props> = ({ onNavigate, startView }) => {
       )}
       {paying && <PaymentDialog booking={paying.b} invoice={paying.invoice} quote={paying.quote} onClose={() => setPaying(null)} />}
       {confirming && <ConfirmBookingDialog view={confirming} onClose={() => setConfirming(null)} onConfirmed={saved => promptCalendar(saved, teamEmails)} />}
-      {cancelling && <CancelBookingDialog view={cancelling} onClose={() => setCancelling(null)} onDone={() => setCancelling(null)} />}
+      {cancelling && <CancelBookingDialog view={cancelling} onClose={() => setCancelling(null)} onDone={() => setCancelling(null)} onNewDate={() => setFormFor(cancelling.b)} />}
       {accept.ui}
       {dialog}
     </div>

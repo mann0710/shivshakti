@@ -37,7 +37,7 @@ export const bookingMenuGroups = (v: BookingView, a: BoardActions, onPage = fals
     [
       ...(v.stage !== 'cancelled' ? [{ label: 'Record payment', onSelect: () => a.pay(v) }] : []),
       ...(live ? [{ label: 'Make quotation', onSelect: () => a.quote(b) }] : []),
-      ...(v.stage === 'confirmed' ? [{ label: 'Create invoice', onSelect: () => a.invoice(b) }] : []),
+      ...(v.stage === 'confirmed' || v.stage === 'done' ? [{ label: 'Create invoice', onSelect: () => a.invoice(b) }] : []),
     ],
     [
       ...(phone ? [{ label: 'WhatsApp', href: `https://wa.me/${waNumber(phone)}`, external: true }, { label: 'Call', href: `tel:${phone.replace(/[^\d+]/g, '')}` }] : []),

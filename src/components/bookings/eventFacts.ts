@@ -38,13 +38,17 @@ export function nextBanner(v: BookingView, today: string, options = 1): Banner |
     return after > 0 ? { tone: 'danger', text: `${inr(due)} still due, ${after} day${after > 1 ? 's' : ''} after the event.` }
       : { tone: 'warn', text: `Next: record payments as they come in. ${inr(due)} still due.` };
   }
-  const final = 'then you accept. The price is final after that.';
+  const final = 'then you confirm the booking. The price is final after that.';
   switch (v.next?.kind) {
     case 'pick': return { tone: 'warn', text: options > 1 ? `Next: ${name} picks one of the ${options} options, ${final}` : `Next: ${name} picks ${andList(openPicks(v.quote!))}, ${final}` };
-    case 'accept': return { tone: 'warn', text: `Next: when ${name} agrees, accept ${v.quote?.quotation_number ?? 'the quote'}.` };
+    case 'accept': return v.stage === 'confirmed' || v.stage === 'done'
+      ? { tone: 'warn', text: `${v.money.received > 0 ? `${inr(v.money.received)} is recorded, but` : 'This booking is confirmed, but'} no quote is accepted. Confirm with ${v.quote?.quotation_number ?? 'the quote'} so the menu, picks and price are locked before the invoice.` }
+      : { tone: 'warn', text: `Next: when ${name} agrees, confirm the booking with ${v.quote?.quotation_number ?? 'the quote'}.` };
     case 'quote': return { tone: 'warn', text: `Next: make a quotation and send it to ${name}.` };
     case 'advance': return { tone: 'warn', text: 'Next: record the advance (token) that holds the date.' };
-    case 'invoice': return { tone: 'warn', text: 'Next: create the invoice. It uses the accepted menu and price.' };
+    case 'invoice': return v.stage === 'done'
+      ? { tone: 'warn', text: 'The event is done. Create the invoice with the final counts, or mark it settled on Invoices if it was paid outside the app.' }
+      : { tone: 'warn', text: 'Next: create the invoice. It uses the accepted menu and price.' };
     case 'complete': return { tone: 'warn', text: 'Next: mark the event completed so your totals stay right.' };
     case 'close': return { tone: 'warn', text: v.stage === 'inquiry' ? 'The date has passed without a quote. Close it as lost.'
       : `The date has passed and nothing was agreed. Close it as lost, or accept the quote if ${name} went ahead.` };
@@ -61,9 +65,10 @@ export function stageRows(v: BookingView, quotes: Quotation[]): StageRow[] {
   const adv = v.money.received;
   const inv = v.invoice;
   const sub: Record<string, string> = {
-    inquiry: v.b.created_at ? `Booked ${formatDateIST(v.b.created_at, 'd MMM')}` : '',
+    inquiry: [v.b.created_at ? `Booked ${formatDateIST(v.b.created_at, 'd MMM')}` : '', at < 2 && adv > 0 ? `advance held ${inr(adv)}` : ''].filter(Boolean).join(' · '),
     quoted: q ? `${q.quotation_number} ${q.status === 'draft' ? 'not sent yet' : q.status}${q.issue_date ? ` · ${formatDateIST(q.issue_date, 'd MMM')}` : ''}` : 'When a quotation is made',
-    confirmed: at >= 2 ? (adv > 0 ? `Confirmed · ${inr(adv)} received` : 'Confirmed · no advance yet') : 'When the quote is accepted',
+    confirmed: at >= 2 ? (adv > 0 ? `Confirmed · ${inr(adv)} received` : 'Confirmed · no advance yet') : 'When you confirm the booking',
+    done: at >= 3 ? `Event on ${formatDateIST(v.end, 'd MMM')}` : 'After the event',
     invoiced: inv ? `${inv.invoice_number}${inv.issue_date ? ` · ${formatDateIST(inv.issue_date, 'd MMM')}` : ''}` : '',
     paid: v.stage === 'paid' ? 'Paid in full' : inv ? `${inr(Number(inv.balance_due))} still due` : '',
   };

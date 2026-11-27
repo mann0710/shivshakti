@@ -19,7 +19,7 @@ interface Props {
   onClose: () => void;
 }
 
-// "Let Kavit choose": which dishes of a course are offered, how many they pick and how the price moves.
+// "Make it a choice": which dishes of a course are offered, how many the customer picks and how the price moves.
 const ChoiceDialog: React.FC<Props> = ({ course, items, menu, who, toLine, preview, onChange, onClose }) => {
   const group = course.entries.find(e => e.choice)?.choice;
   const [extra, setExtra] = useState<QuotationLineItem[]>([]);
@@ -45,7 +45,7 @@ const ChoiceDialog: React.FC<Props> = ({ course, items, menu, who, toLine, previ
   const ready = ticked.size >= 2;
 
   return (
-    <Modal title={`Let ${who} choose`} onClose={onClose} width={560}
+    <Modal title={group ? `Edit choice · ${who} picks` : `Make it a choice · ${who} picks`} onClose={onClose} width={560}
       footer={<>
         {group && <button type="button" className="q-link danger" onClick={() => { onChange(tidyGroups(items.map(i => (i.choice?.id === group.meta.id ? { ...i, choice: undefined, chosen: undefined } : i)))); onClose(); }}>Remove the choice</button>}
         <button type="button" className="ui-btn" onClick={onClose}>Cancel</button>
@@ -67,7 +67,7 @@ const ChoiceDialog: React.FC<Props> = ({ course, items, menu, who, toLine, previ
       {!ready && <p className="q-hint">Tick at least two dishes.</p>}
       <div className="q-fields">
         <div className="q-field">They pick<Chips label="They pick" value={n} options={Array.from({ length: Math.min(max, 4) }, (_, k) => [k + 1, String(k + 1)] as [number, string])} onChange={setPick} /></div>
-        <div className="q-field">Price<Chips label="Price" value={same ? 'same' : 'dish'} options={[['dish', 'Follows the dish'], ['same', 'Same for all']]} onChange={v => setSame(v === 'same')} /></div>
+        <div className="q-field">Price<Chips label="Price" value={same ? 'same' : 'dish'} options={[['dish', 'Follows the dish'], ['same', 'Included in the plate']]} onChange={v => setSame(v === 'same')} /></div>
       </div>
       {ready && <div className="q-rows"><SumRow k="Plate price on the quote" v={preview(build())} tone="total" /></div>}
     </Modal>

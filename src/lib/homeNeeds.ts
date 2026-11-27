@@ -56,7 +56,7 @@ export function homeNeeds(base: NeedItem[], ctx: {
       const parts = i.line.split(' · ');
       return { ...i, kind, ref, tone: 'amber', title: `${i.title.split(':')[0].replace(/'s quote is still a draft$/, '')}: which ${what}?`,
         line: [parts[0], open[0].options.join(' or '), parts.find(p => p.startsWith('₹'))].filter(Boolean).join(' · '),
-        first: `Pick ${what} & accept`, firstShort: `Pick ${what}`, second: 'WhatsApp', secondShort: 'WhatsApp' };
+        first: `Pick ${what} & confirm`, firstShort: `Pick ${what}`, second: 'WhatsApp', secondShort: 'WhatsApp' };
     }
     const sent = i.action === 'Follow up';
     return { ...i, kind, ref, tone: 'purple',
@@ -95,10 +95,10 @@ function sameMonthJoin(dates: string[]): string {
 
 // The short "what is missing" note on a Next events row.
 export function eventNote(e: { stage: string; guests: number; time?: string | null; pick?: string; hasDraft: boolean; valueText: string }): string {
-  if (!(e.guests > 0) && e.stage === 'confirmed') return 'Guest count missing';
+  if (!(e.guests > 0) && (e.stage === 'confirmed' || e.stage === 'done')) return 'Guest count missing';
   const note = e.pick ? `${e.pick.toLowerCase()} not picked`
     : e.stage === 'inquiry' ? (e.hasDraft ? 'quote not sent' : 'no quote yet')
-      : e.stage === 'confirmed' || e.stage === 'invoiced' ? e.valueText : '';
+      : e.stage === 'confirmed' || e.stage === 'done' || e.stage === 'invoiced' ? e.valueText : '';
   return [clock(e.time), e.guests > 0 ? `${e.guests} guests` : '', note].filter(Boolean).join(' · ');
 }
 

@@ -1,5 +1,5 @@
 import type { EventDay, MealSlot, QuotationLineItem } from '../hooks/useQuotations';
-import { basePlate, listedForTop, onePickPrice, ownRange, pickRange, setPickPrices, typedPrice } from './quoteChoices';
+import { basePlate, listedForTop, onePickPrice, ownRange, pickRange, plateRange, setPickPrices, typedPrice } from './quoteChoices';
 import { getDayNumber, keepPlateOff } from './quoteMath';
 
 // Meal prices on multi-day quotes: one price for any pick, ranges left open, dish prices on the PDF.
@@ -45,17 +45,20 @@ export const hasDishPrices = (m: MealSlot) => (m.items ?? []).some(i => (Number(
 // Dish prices print for a meal unless turned off on it.
 export const showsDishPrices = (m: MealSlot) => !m.hide_prices;
 
-// Plate discount: a full price above what they pay; printed unless turned off. An older offer price wins.
-export interface Plate { full_price?: number | null; per_plate_amount: number; per_plate_max?: number | null; hide_discount?: boolean; guest_count?: number; discount_amount?: number }
-export const plateOff = (m: Plate) =>
-  (Number(m.discount_amount) > 0 ? 0 : Math.max(0, (Number(m.full_price) || 0) - (Number(m.per_plate_amount) || 0)));
-export const showsDiscount = (m: Plate) => plateOff(m) > 0 && !m.hide_discount;
-export const discountSaving = (m: Plate) => (showsDiscount(m) ? plateOff(m) * (m.guest_count || 0) : 0);
+// Plate discount: the menu value (a list price, else what the dishes add up to as listed) less your price.
+export interface Plate {
+  items?: QuotationLineItem[]; full_price?: number | null; per_plate_amount: number; per_plate_max?: number | null;
+  hide_discount?: boolean; hide_prices?: boolean; guest_count?: number; discount_amount?: number;
+}
+// "One price for any pick" charges the dearest pick, so its menu value counts the dearest dishes too.
+export const menuValueOf = (m: Plate) => (Number(m.full_price) > 0 ? Number(m.full_price)
+  : onePickPrice(m.items) ? plateRange(setPickPrices(m.items ?? [], false)).max : basePlate(m.items));
+export const yourPriceOf = (m: Plate) => typedPrice(Number(m.per_plate_amount) || 0, m.per_plate_max, m.items);
+// An older offer price on the meal wins; it already lowers the total.
+export const plateOff = (m: Plate) => (Number(m.discount_amount) > 0 || !(yourPriceOf(m) > 0) ? 0 : Math.max(0, menuValueOf(m) - yourPriceOf(m)));
+// Printed unless turned off, and only when the customer can see why: a list price, or the dish prices print.
+export const showsDiscount = (m: Plate, dishPrices = true) =>
+  plateOff(m) > 0 && !m.hide_discount && (Number(m.full_price) > 0 || (dishPrices && !m.hide_prices && (m.items ?? []).some(i => Number(i.amount) > 0)));
+export const discountSaving = (m: Plate, dishPrices = true) => (showsDiscount(m, dishPrices) ? plateOff(m) * (m.guest_count || 0) : 0);
 // A one-meal quote as a plate; its discount_amount is the quote's discounts, not an offer price.
 export const quotePlate = (q: Plate, guests: number): Plate => ({ ...q, discount_amount: 0, guest_count: guests });
-// A "before discount" price typed below the plate price means the two were entered the other way round.
-export const swapLower = (m: MealSlot): MealSlot => {
-  const full = Number(m.full_price) || 0;
-  const typed = typedOf(m);
-  return full > 0 && full < typed ? { ...priceMeal(m, m.items ?? [], full), full_price: typed } : m;
-};

@@ -53,7 +53,7 @@ export const EventQuotes: React.FC<QuotesProps> = ({ quotes, live, canAccept, on
           acts={[
             { label: 'Edit', onClick: () => onEdit(q) },
             { label: 'Send', onClick: () => onSend(q) },
-            ...(canAccept(q) ? [{ label: 'Accept', onClick: () => onAccept(q) }] : []),
+            ...(canAccept(q) ? [{ label: 'Confirm booking', onClick: () => onAccept(q) }] : []),
           ]} />
       ))}
     </div>

@@ -30,8 +30,17 @@ const guessMeal = (time?: string) => {
 };
 const lastPart = (s: string) => s.split('›').pop()!.split('·').pop()!.trim();
 
+// The plate price a one-meal invoice was made with; older invoices read it from the quote.
+export const snapRate = (inv: Pick<Invoice, 'is_multi_day' | 'event_days'>, q?: { per_plate_amount?: number }) =>
+  (!inv.is_multi_day && Number((inv.event_days as any[] | undefined)?.[0]?.meals?.[0]?.per_plate_amount)) || q?.per_plate_amount || 0;
+
+// Guests the accepted quote was confirmed for: by meal id, or one number for a one-meal quote.
+export const confirmedGuests = (q?: Pick<Quotation, 'is_multi_day' | 'event_days' | 'guest_count'>): Map<string, number> | number =>
+  (q?.is_multi_day ? new Map((q.event_days ?? []).flatMap(d => d.meals.map(m => [m.id, Number(m.guest_count) || 0] as [string, number]))) : Number(q?.guest_count) || 0);
+const confirmedNote = (n: number | undefined, served: number) => (n && n !== served ? ` · ${n} confirmed` : '');
+
 // One row per meal; a repeated meal type on the same day is flagged so it can be fixed.
-export function mealRows(inv: Pick<Invoice, 'is_multi_day' | 'event_days' | 'subtotal' | 'line_items'>, eventDays: any[], plateRate: number): MealRow[] {
+export function mealRows(inv: Pick<Invoice, 'is_multi_day' | 'event_days' | 'subtotal' | 'line_items'>, eventDays: any[], plateRate: number, confirmed: Map<string, number> | number = 0): MealRow[] {
   if (inv.is_multi_day && eventDays.length) {
     const many = eventDays.length > 1;
     return eventDays.flatMap((d: any, di: number) => (d.meals ?? []).map((m: any, mi: number): MealRow => {
@@ -40,16 +49,18 @@ export function mealRows(inv: Pick<Invoice, 'is_multi_day' | 'event_days' | 'sub
       const guess = guessMeal(m.time);
       const note = repeat ? `Saved as "${type}"${m.time ? ` at ${clock(m.time)}` : ''}${guess && guess !== type ? ` — ${guess}?` : ''}`
         : m.time ? clock(m.time) : 'No time set';
+      const told = confirmedNote(confirmed instanceof Map ? confirmed.get(m.id) : undefined, Number(m.guest_count) || 0);
       return {
         key: `${di}-${mi}`, day: di, meal: mi, name: `${repeat ? 'Second meal' : cap(type)}${many ? ` · Day ${d.day_number ?? di + 1}` : ''}`,
-        note, warn: repeat, guests: Number(m.guest_count) || 0, rate: Number(m.per_plate_amount) || 0, total: Number(m.subtotal) || 0,
+        note: note + told, warn: repeat, guests: Number(m.guest_count) || 0, rate: Number(m.per_plate_amount) || 0, total: Number(m.subtotal) || 0,
         dishes: servedItems(m.items).map((x: any) => x.item_name), rateEditable: true,
       };
     }));
   }
   const dishes = (inv.line_items ?? []).map(l => lastPart(l.description));
   const guests = plateRate > 0 ? Math.round(inv.subtotal / plateRate) : 0;
-  return [{ key: 'single', day: -1, meal: 0, name: 'Food', note: plateRate > 0 ? '' : 'Priced per dish', warn: false, guests, rate: plateRate, total: inv.subtotal, dishes, rateEditable: false }];
+  const told = typeof confirmed === 'number' ? confirmedNote(confirmed, guests).replace(/^ · /, '') : '';
+  return [{ key: 'single', day: -1, meal: 0, name: 'Food', note: plateRate > 0 ? told : 'Priced per dish', warn: false, guests, rate: plateRate, total: inv.subtotal, dishes, rateEditable: false }];
 }
 
 // New event_days with one meal's guests or plate rate changed and the totals redone.
@@ -130,9 +141,10 @@ export const quickAmounts = (balance: number) => (balance > 0
 
 export const afterThis = (balance: number, amount: number) => (amount >= balance ? 'Paid in full' : `${inr(balance - amount)} still due`);
 
-// Neither the booking nor its quote has a guest count, so the invoice needs the final one.
-export const needsGuests = (q: Pick<Quotation, 'guest_count'> | undefined, b?: Pick<Booking, 'guest_count'>) =>
-  !((b?.guest_count ?? 0) > 0) && !((q?.guest_count ?? 0) > 0);
+// Neither the booking nor its quote has a guest count, so the invoice needs the final one; several meals carry their own.
+export const needsGuests = (q: Pick<Quotation, 'guest_count'> & Partial<Pick<Quotation, 'is_multi_day' | 'event_days'>> | undefined, b?: Pick<Booking, 'guest_count'>) =>
+  !((b?.guest_count ?? 0) > 0) && !((q?.guest_count ?? 0) > 0)
+  && !(q?.is_multi_day && (q.event_days ?? []).some(d => d.meals.some(m => (m.guest_count || 0) > 0)));
 
 // The invoice a confirmed booking gets from its accepted quote; final guests reprice a per-plate single-day quote.
 export function invoiceFromQuote(booking: Booking, quote: Quotation | undefined, guests?: number): Partial<Invoice> {
@@ -151,8 +163,39 @@ export function invoiceFromQuote(booking: Booking, quote: Quotation | undefined,
     booking_id: booking.id, quotation_id: quote.id, subtotal, line_items,
     discount_amount: quote.discount_amount, discount_type: quote.discount_type, gst_rate: quote.gst_rate, gst_amount,
     extra_charges: quote.extra_charges || [], transportation_charges: quote.transportation_charges || [], additional_discounts: quote.additional_discounts || [],
-    is_multi_day: quote.is_multi_day, event_days: quote.event_days,
+    is_multi_day: quote.is_multi_day,
+    // A one-meal invoice keeps its plate price, so later quote edits never change it.
+    event_days: multi ? quote.event_days : [{ day_number: 1, date: booking.event_date, day_subtotal: subtotal, meals: [{
+      id: 'one', meal_type: '', time: booking.event_time ?? '', guest_count: reprice ? guests! : quote.guest_count, per_plate_amount: quote.per_plate_amount,
+      discount_amount: 0, items: servedItems(quote.items), subtotal, full_price: quote.full_price ?? null, hide_discount: quote.hide_discount }] }],
   };
+}
+
+// "Quoted ₹11,69,850 · 20 fewer at Dinner −₹13,800 · …": every rupee between the quote and the invoice.
+export function quoteToInvoice(inv: Pick<Invoice, 'is_multi_day' | 'event_days' | 'subtotal' | 'total_amount'>, q: Pick<Quotation, 'is_multi_day' | 'event_days' | 'subtotal' | 'guest_count' | 'per_plate_amount' | 'total_amount'> | undefined): SumLine[] {
+  if (!q) return [];
+  const sign = (n: number) => `${n < 0 ? '− ' : '+ '}${inr(Math.abs(n))}`;
+  const change = (name: string, g0: number, g1: number, r0: number, r1: number, amount: number) =>
+    ({ k: r0 === r1 && g0 !== g1 ? `${Math.abs(g1 - g0)} ${g1 < g0 ? 'fewer' : 'more'} at ${name}` : `${name} changed`, v: sign(amount) });
+  const lines: SumLine[] = [{ k: 'Quoted', v: inr(q.total_amount) }];
+  let meals = 0;
+  if (inv.is_multi_day && q.is_multi_day) {
+    const was = new Map((q.event_days ?? []).flatMap(d => d.meals.map(m => [m.id, m] as [string, any])));
+    for (const d of (inv.event_days ?? []) as any[]) for (const m of d.meals ?? []) {
+      const o = was.get(m.id);
+      const diff = (Number(m.subtotal) || 0) - (Number(o?.subtotal) || 0);
+      if (!diff) continue;
+      meals += diff;
+      lines.push(o ? change(cap(String(m.meal_type)), Number(o.guest_count) || 0, Number(m.guest_count) || 0, Number(o.per_plate_amount) || 0, Number(m.per_plate_amount) || 0, diff) : { k: `${cap(String(m.meal_type))} added`, v: sign(diff) });
+    }
+  } else if (inv.subtotal !== q.subtotal) {
+    meals = inv.subtotal - q.subtotal;
+    const rate = Number(q.per_plate_amount) || 0;
+    lines.push(change('the meal', Number(q.guest_count) || 0, rate ? Math.round(inv.subtotal / rate) : 0, rate, rate, meals));
+  }
+  const rest = inv.total_amount - q.total_amount - meals;
+  if (rest) lines.push({ k: 'Extras, discount and GST', v: sign(rest) });
+  return lines.length > 1 ? lines : [];
 }
 
 // Same order as the Invoices page: quote total, else the booking's estimate.

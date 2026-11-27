@@ -29,6 +29,7 @@ export interface PaymentInput {
   payment_mode: Payment['payment_mode'];
   notes?: string;
   payment_date?: string;
+  createId?: string;         // a new payment's id chosen up front, so a retry cannot add it twice
 }
 
 const useRefresh = () => {
@@ -46,7 +47,9 @@ export const useSavePayment = () => {
         payment_mode: p.payment_mode, notes: p.notes?.trim() || null, payment_date: p.payment_date || todayIST(),
       };
       if (p.invoiceId && !p.id) await ensureAdvanceRow(p.invoiceId);
-      const { error } = p.id ? await supabase.from('payments').update(row).eq('id', p.id) : await supabase.from('payments').insert(row);
+      const { error } = p.id ? await supabase.from('payments').update(row).eq('id', p.id)
+        : p.createId ? await supabase.from('payments').upsert({ ...row, id: p.createId }, { onConflict: 'id', ignoreDuplicates: true })
+        : await supabase.from('payments').insert(row);
       if (error) throw error;
       if (p.invoiceId) await recalculateInvoice(p.invoiceId);
     },

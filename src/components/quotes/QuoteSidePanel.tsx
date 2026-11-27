@@ -9,7 +9,7 @@ import { inr } from '../../lib/money';
 import { fmtTime } from '../catering/BookingCalendar';
 import QuoteMenu, { QuoteActions } from './QuoteMenu';
 import { runNext } from './QuoteRow';
-import { Letter, StatusChip, SumRow, useMedia, PHONE } from './bits';
+import { Letter, StatusChip, SumRow, useMedia, PHONE, firstName } from './bits';
 
 interface Props { r: BoardRow; a: QuoteActions; today: string }
 
@@ -25,6 +25,8 @@ const QuoteSidePanel: React.FC<Props> = ({ r, a, today }) => {
   const single = r.section === 'waiting' && !g.grouped && open.length === 1 && Math.max(1, open[0].meta.pick) === 1 ? open[0] : null;
   const [pick, setPick] = useState('');
   useEffect(() => { setPick(single?.items[0]?.item_id ?? ''); }, [single]);
+  // The next-step button already says Send for a draft; otherwise Send sits beside Edit.
+  const sendHere = single ? true : r.next?.kind !== 'send';
   const totalWith = (itemId: string) => acceptPatch(q, new Set([pickKey(itemId)])).total_amount ?? q.total_amount;
   const meta = [b?.event_type, b?.event_date && formatDateIST(b.event_date, 'EEE d MMM'), fmtTime(b?.event_time),
     quoteGuests(q) ? `${quoteGuests(q)} guests` : '', q.food_type].filter(Boolean).join(' · ');
@@ -58,8 +60,8 @@ const QuoteSidePanel: React.FC<Props> = ({ r, a, today }) => {
       )}
 
       {single ? (
-        <div className="q-pickbox" role="radiogroup" aria-label={`${single.meta.label} — customer picks 1`}>
-          <b>{single.meta.label} — customer picks 1</b>
+        <div className="q-pickbox" role="radiogroup" aria-label={`${single.meta.label} — ${firstName(q)} picks 1`}>
+          <b>{single.meta.label} — {firstName(q)} picks 1</b>
           {single.items.map(i => (
             <label key={i.item_id}>
               <span><input type="radio" name="panel-pick" checked={pick === i.item_id} onChange={() => setPick(i.item_id)} /> {i.item_name}{i.served_with ? ` + ${i.served_with}` : ''}</span>
@@ -72,9 +74,9 @@ const QuoteSidePanel: React.FC<Props> = ({ r, a, today }) => {
         <button type="button" className={`ui-btn${r.next.kind === 'send' ? '' : ' primary'}`} onClick={() => runNext(r, a)}>{r.next.label}</button>
       )}
 
-      <div className="q-acts" style={phone ? { gridTemplateColumns: 'repeat(3, minmax(0, 1fr)) 44px' } : undefined}>
-        <button type="button" className="ui-btn" onClick={() => a.send(q, g.grouped ? g.options : undefined)}>WhatsApp</button>
-        <button type="button" className="ui-btn" onClick={() => a.pdf(q, g.grouped ? g.options : undefined)}>PDF</button>
+      {/* One Send: WhatsApp and Download PDF live inside the Send dialog. */}
+      <div className="q-acts" style={{ gridTemplateColumns: `repeat(${sendHere ? 2 : 1}, minmax(0, 1fr))${phone ? ' 44px' : ''}` }}>
+        {sendHere && <button type="button" className="ui-btn" onClick={() => a.send(q, g.grouped ? g.options : undefined)}>Send…</button>}
         <button type="button" className="ui-btn" onClick={() => a.open(q)}>Edit</button>
         {phone && <QuoteMenu g={g} q={q} a={a} />}
       </div>

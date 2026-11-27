@@ -9,12 +9,17 @@ import { useStoredState } from './useStoredState';
 import { useMenuItemsFull } from './useMenuBuilder';
 import { useItemPrices } from './useItemPrices';
 import { useDataCenter } from './useDataCenter';
-import { useQuotations, useCreateQuotation, useUpdateQuotation, Quotation, QuotationLineItem, EventDay, ChoiceMeta } from './useQuotations';
+import { useQuotations, useCreateQuotation, useUpdateQuotation, Quotation, QuotationLineItem, EventDay, ChoiceMeta, MealSlot } from './useQuotations';
+import { typedOf } from '../lib/mealPrice';
+import { addDays } from '../lib/reports/model';
 import { getDayNumber, keepPlateOff, quoteTotals } from '../lib/quoteMath';
 import { plateRange, atMaxPrices, basePlate, ownRange, typedPrice, setPickPrices, listedForTop } from '../lib/quoteChoices';
 import { genId, lineOf, mergeLines, moveLine, PickerItem, Charge, Discount } from '../lib/quoteLines';
 
 // Everything the quotation editor holds: booking, menu, prices, charges, totals and save.
+// Meal type from a time of day, for a one-meal quote turning into meals.
+const mealOfTime = (t?: string) => { const h = Number((t ?? '').split(':')[0]); return !t ? 'lunch' : h < 11 ? 'breakfast' : h < 16 ? 'lunch' : h < 19 ? 'hi-tea' : 'dinner'; };
+
 export const useQuoteForm = () => {
   const { data: bookings = [], isFetched: bookingsFetched } = useBookings();
   const { data: menuItems = [] } = useMenuItemsFull();
@@ -99,10 +104,32 @@ export const useQuoteForm = () => {
     ? quoteTotals({ ...base, isMultiDay: false, eventDays: [], perPlate: perPlateMax, guests: guestCount }).final
     : multiMax ? quoteTotals({ ...base, isMultiDay: true, eventDays: atMaxPrices(eventDays), perPlate: 0, guests: 0 }).final : null;
 
-  const toggleMultiDay = (checked: boolean) => {
-    setIsMultiDay(checked);
-    if (checked && eventDays.length === 0) setEventDays([{ day_number: 1, date: selectedBooking?.event_date || ev.draft.date || '', meals: [], day_subtotal: 0 }]);
-    if (!checked) setEventDays([]);
+  const blankMeal = (): MealSlot => ({ id: genId(), meal_type: 'lunch', ceremony_name: '', time: '', guest_count: guestCount, per_plate_amount: 0, discount_amount: 0, items: [], subtotal: 0 });
+  // A one-meal quote grows into meals: its dishes, price and discount become Day 1's first meal, then a new meal or day.
+  const toSeveral = (add: 'meal' | 'day') => {
+    const first: MealSlot = {
+      ...blankMeal(), meal_type: mealOfTime(ev.draft.time), time: ev.draft.time || '', items: selectedItems,
+      per_plate_amount: plateLow, per_plate_max: perPlateMax, subtotal: plateLow * guestCount, full_price: fullPrice || null, hide_discount: hideDiscount || undefined,
+    };
+    const date = ev.draft.date || selectedBooking?.event_date || '';
+    setEventDays(add === 'meal'
+      ? [{ day_number: 1, date, meals: [first, blankMeal()], day_subtotal: first.subtotal }]
+      : [{ day_number: 1, date, meals: [first], day_subtotal: first.subtotal }, { day_number: 2, date: date ? addDays(date, 1) : '', meals: [blankMeal()], day_subtotal: 0 }]);
+    setIsMultiDay(true);
+    setSelectedItems([]);
+  };
+  // The last meal left goes back to a one-meal quote with its date, time, guests and price.
+  const toOne = (date: string, m: MealSlot) => {
+    const typed = typedOf(m);
+    setSelectedItems(m.items ?? []);
+    setAutoPrice(typed === basePlate(m.items));
+    setPerPlate(typed > 0 ? String(typed) : '');
+    setFullPrice(Number(m.full_price) || 0);
+    setHideDiscount(!!m.hide_discount);
+    ev.patch({ date, time: m.time || '' });
+    ev.setGuests(String(m.guest_count || ''));
+    setIsMultiDay(false);
+    setEventDays([]);
   };
 
   const toLine = (it: PickerItem): QuotationLineItem => lineOf(it, priceFor(it.id));
@@ -114,7 +141,7 @@ export const useQuoteForm = () => {
     setPerPlate(price > 0 ? String(price) : '');
   };
   // Another quote's dishes, prices and notes join (or replace) this menu.
-  const copyItems = (from: Quotation, replace: boolean) => setSelectedItems(prev => mergeLines(prev, (from.items ?? []).map(i => ({ ...i, chosen: undefined })), replace));
+  const copyItems = (items: QuotationLineItem[], replace: boolean) => setSelectedItems(prev => mergeLines(prev, items, replace));
   const patchItem = (itemId: string, change: Partial<QuotationLineItem>) => setSelectedItems(prev => prev.map(i => (i.item_id === itemId ? { ...i, ...change } : i)));
   const reorderItems = (from: number, to: number) => setSelectedItems(prev => moveLine(prev, from, to));
   const typePerPlate = (v: string) => { setAutoPrice(false); setPerPlate(v); };
@@ -210,7 +237,7 @@ export const useQuoteForm = () => {
       if (error) throw new Error(`Quote saved, but the booking's last day was not updated: ${error.message}`);
       qc.invalidateQueries({ queryKey: ['bookings'] });
     }
-    await ev.syncBooking(selectedBooking.id, !isMultiDay);
+    await ev.syncBooking(selectedBooking.id, isMultiDay ? Math.max(0, ...eventDays.flatMap(d => d.meals.map(m => m.guest_count || 0))) : true);
     return saved;
   };
 
@@ -239,7 +266,7 @@ export const useQuoteForm = () => {
     notes, setNotes, perPlate, typePerPlate, chargeHighest, letPicksPrice, autoPrice, setAutoPrice, range, perPlateMax, totalMax, plateLow, guestCount,
     gstChecked, setGstChecked, dcGstRate, additionalDiscounts, setAdditionalDiscounts, extraCharges, setExtraCharges,
     transportationCharges, setTransportationCharges, foodType, setFoodType, optionName, setOptionName,
-    isMultiDay, toggleMultiDay, eventDays, setEventDays, totals, fullPrice, setFullPrice, hideDiscount, setHideDiscount,
+    isMultiDay, toSeveral, toOne, eventDays, setEventDays, totals, fullPrice, setFullPrice, hideDiscount, setHideDiscount,
     showPrices, hasItemPrices, priceFor, setItemPricesPref: (v: boolean) => setPrefs({ itemPrices: v }),
     toLine, resetForm, openCreate, openEdit, handleSave, draftQuotation, createQuotation, updateQuotation,
   };

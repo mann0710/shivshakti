@@ -19,7 +19,7 @@ describe('homeNeeds', () => {
     const list = homeNeeds(base, ctx);
     expect(list.map(i => i.kind)).toEqual(['bill', 'invoice', 'quote', 'preorders', 'quote', 'tidy']);
     const kavit = list.find(i => i.key === 'q23')!;
-    expect(kavit).toMatchObject({ title: 'Kavit Mangrolya, 25 Nov: which farsan?', line: 'QTN-0023 · South Boll or Mix Bhajiya · ₹28,800 – ₹31,600', first: 'Pick farsan & accept', firstShort: 'Pick farsan', second: 'WhatsApp' });
+    expect(kavit).toMatchObject({ title: 'Kavit Mangrolya, 25 Nov: which farsan?', line: 'QTN-0023 · South Boll or Mix Bhajiya · ₹28,800 – ₹31,600', first: 'Pick farsan & confirm', firstShort: 'Pick farsan', second: 'WhatsApp' });
     expect(list.find(i => i.key === 'q15')).toMatchObject({ tone: 'purple', first: 'Send on WhatsApp', second: 'Open' });
     expect(list.find(i => i.kind === 'bill')).toMatchObject({ line: 'Bill #5 · 30 Oct · not paid', first: 'Record payment' });
     expect(list.find(i => i.kind === 'preorders')).toMatchObject({ ref: '2026-11-04', first: 'Ask for advance', second: 'Open' });

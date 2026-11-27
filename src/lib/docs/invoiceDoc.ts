@@ -5,6 +5,7 @@ import { page, esc, money, cap, timeText } from './theme';
 import { header, facts, sectionHead, sumRows, SumRow, upiBox, endLine, footerText } from './parts';
 import { courseGrid, mealSchedule, daysOf, mealTitle, mealSaving, offerOf, dayLabel, guestsText } from './menu';
 import { Doc, docFileName } from './quotationDoc';
+import { snapRate } from '../invoiceEdit';
 import { amountInWords, taxSplit, placeOfSupply } from '../gst';
 import { modeLabel } from '../preorders';
 import { formatDateIST } from '../ist';
@@ -23,7 +24,7 @@ function linesOf(inv: Invoice, q?: Quotation): Line[] {
       qty: m.guest_count || 0, rate: m.per_plate_amount || 0, amount: m.subtotal || 0,
     })));
   }
-  const pp = q?.per_plate_amount ?? 0;
+  const pp = snapRate(inv, q);
   if (pp > 0) {
     const dishes = q?.items?.length ?? 0;
     return [{ title: `Catering — ${inv.booking?.event_type || 'event'}`, sub: `${dishes}-dish ${q?.food_type || ''} menu`.replace(/\s+/g, ' '), qty: Math.round(inv.subtotal / pp), rate: pp, amount: inv.subtotal }];

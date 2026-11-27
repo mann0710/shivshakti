@@ -7,7 +7,7 @@ import { useDeleteInvoice, usePaymentHistory } from '../../hooks/useInvoices';
 import { useConfirm } from '../ui/ConfirmDialog';
 import { formatDateIST, todayIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
-import { MealRow, editMeal, mealRows, payState, PAY_CHIP, paymentPlan } from '../../lib/invoiceEdit';
+import { MealRow, editMeal, mealRows, payState, PAY_CHIP, paymentPlan, snapRate, confirmedGuests } from '../../lib/invoiceEdit';
 import { Chip, Tile } from '../money/MoneyUi';
 import { useInvoiceDraft } from './InvoiceDraft';
 import { useInvoiceSend } from './InvoiceActions';
@@ -30,7 +30,7 @@ const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted, backLabel 
   const del = useDeleteInvoice();
   const { confirm, dialog } = useConfirm();
   const quote = quotations.find(q => q.id === invoice.quotation_id);
-  const plateRate = quote?.per_plate_amount ?? 0;
+  const plateRate = snapRate(invoice, quote);
   const { draft, change, status, flush, retry } = useInvoiceDraft(invoice, plateRate);
   const send = useInvoiceSend(invoice, quote, payments);
   const [paying, setPaying] = useState<Payment | 'new' | null>(null);
@@ -38,8 +38,8 @@ const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted, backLabel 
   const name = b?.customer?.name ?? 'Customer';
   const st = payState(invoice);
 
-  const rows = useMemo(() => mealRows({ ...invoice, subtotal: draft.guests !== null ? plateRate * draft.guests : invoice.subtotal }, draft.days, plateRate),
-    [invoice, draft.days, draft.guests, plateRate]);
+  const rows = useMemo(() => mealRows({ ...invoice, subtotal: draft.guests !== null ? plateRate * draft.guests : invoice.subtotal }, draft.days, plateRate, confirmedGuests(quote)),
+    [invoice, draft.days, draft.guests, plateRate, quote]);
   const plan = useMemo(() => paymentPlan(payments, invoice, b?.event_date, todayIST()), [payments, invoice, b?.event_date]);
   const registered = !!dc?.gst_number;
   const gstRates = Array.from(new Set(registered ? [0, 5, 18, dc?.gst_rate ?? 18, invoice.gst_rate || 0] : [0, invoice.gst_rate || 0])).sort((x, y) => x - y);
@@ -88,7 +88,7 @@ const InvoiceEditor: React.FC<Props> = ({ invoice, onBack, onDeleted, backLabel 
         </div>
 
         <aside aria-label="Summary" className="iv-side">
-          <InvoiceTotals invoice={invoice} />
+          <InvoiceTotals invoice={invoice} quote={quote} />
           <div className="iv-sec desk">
             <button type="button" className="ui-btn primary iv-main-btn" onClick={record} disabled={!owed}>{owed ? 'Record payment' : 'Paid in full'}</button>
             <span className="mx-sub">Each change saves by itself. Send… shares the invoice or a payment reminder; the PDF lists every payment and a UPI QR for the balance.</span>

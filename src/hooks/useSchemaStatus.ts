@@ -10,6 +10,7 @@ export const DOC_SETTINGS_MIGRATION_FILE = 'supabase/migrations/20261105_doc_set
 export const QUOTE_OPTIONS_MIGRATION_FILE = 'supabase/migrations/20261106_quote_options.sql';
 export const TEAM_BIN_MIGRATION_FILE = 'supabase/migrations/20261110_team_bin_tiers.sql';
 export const PACKED_STATUS_MIGRATION_FILE = 'supabase/migrations/20261111_preorder_packed_status.sql';
+export const REVISIONS_MIGRATION_FILE = 'supabase/migrations/20261128_quote_revisions_confirm.sql';
 export const PLATE_DISCOUNT_MIGRATION_FILE = 'supabase/migrations/20261127_plate_discount.sql';
 export const SALE_CANCEL_MIGRATION_FILE = 'supabase/migrations/20261112_sale_cancel_bin.sql';
 
@@ -65,6 +66,11 @@ export const useHasQuoteOptions = () => useSchema('quote_options', () => [
 // Full price and its PDF tick on one-meal quotes.
 export const useHasPlateDiscount = () => useSchema('plate_discount', () => [
   supabase.from('quotations').select('full_price, hide_discount').limit(1),
+]).data === 'ready';
+
+// Quote revisions (and the one-step Confirm booking function in the same file).
+export const useHasQuoteRevisions = () => useSchema('quote_revisions', () => [
+  supabase.from('quotations').select('revisions').limit(1),
 ]).data === 'ready';
 
 // Team roles, the recycle bin, dish food styles and package price by guest count.

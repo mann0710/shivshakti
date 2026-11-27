@@ -155,6 +155,7 @@ button.iv-plan:hover { background: #FFFCF6; }
 .iv-sum { display: flex; flex-direction: column; gap: 8px; }
 .iv-sum > span { display: flex; justify-content: space-between; font-size: 14px; }
 .iv-sum > span.big { font-size: 18px; font-weight: 700; }
+.iv-sum > span.rule-after { border-bottom: 1px solid #E5E5E0; padding-bottom: 8px; }
 .iv-sum > span.rule { border-top: 1px solid #ECECE6; padding-top: 8px; }
 .iv-main-btn { width: 100%; min-height: 48px !important; font-size: 15px !important; }
 .iv-menu { position: relative; }

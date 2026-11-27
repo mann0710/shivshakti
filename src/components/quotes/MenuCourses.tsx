@@ -25,7 +25,7 @@ interface Props {
 
 // A course that is only one "choose any" group; a group inside a bigger course shows as its own block.
 const pickOf = (c: Course) => (c.entries.length === 1 ? c.entries[0].choice : undefined);
-const picksText = (g: ChoiceGroup) => `customer picks ${Math.min(Math.max(1, g.meta.pick), g.items.length)} of ${g.items.length}`;
+const picksText = (g: ChoiceGroup, who: string) => `${who} picks ${Math.min(Math.max(1, g.meta.pick), g.items.length)} of ${g.items.length}`;
 // The choice dialog sees a course's plain dishes plus one group (none: a new choice).
 const forDialog = (c: Course, groupId?: string): Course => ({ ...c, entries: c.entries.filter(e => !e.choice || e.choice.meta.id === groupId) });
 
@@ -104,8 +104,8 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
               <span className="q-sub-l">{nameBtn(`g:${ch.meta.id}`, ch.meta.label, 'q-sub-name', 'Rename this choice in this quote', to => renameChoice(items, c.name, ch.meta.id, to))}</span>
               <div className="q-sub-b">
                 <div className="q-chips">{chipsOf(g.entries)}</div>
-                <span className="q-sub-acts"><span className="n">{picksText(ch)}</span>
-                  <button type="button" className="q-mini" onClick={() => setChoose({ course: c.name, group: ch.meta.id })}>Edit the choice</button></span>
+                <span className="q-sub-acts"><span className="n">{picksText(ch, who)}</span>
+                  <button type="button" className="q-mini" onClick={() => setChoose({ course: c.name, group: ch.meta.id })}>Edit choice</button></span>
               </div>
             </div>
           );
@@ -144,10 +144,10 @@ const MenuCourses: React.FC<Props> = ({ items, menu, showPrices, who, toLine, pr
                 <span className="q-grip" draggable title="Drag to move this course" aria-hidden="true"
                   onDragStart={e => start(e, { course: c.name }, e.currentTarget.closest('.q-course'))} onDragEnd={end}>⠿</span>
                 {nameBtn(c.name, c.name, 'q-cname', 'Rename this course in this quote', to => renameCourse(items, c.name, to))}
-                <span className="n">{g ? `· ${picksText(g)}` : c.count > 1 ? `· ${c.count}` : ''}</span></span>
+                <span className="n">{g ? `· ${picksText(g, who)}` : c.count > 1 ? `· ${c.count}` : ''}</span></span>
               <span className="q-course-acts">
                 {!compact && <span className="r">{right(c)}</span>}
-                {(dishes.length > 1 || g) && <button type="button" className="q-mini" onClick={() => setChoose({ course: c.name, group: g?.meta.id })}>{g ? 'Edit the choice' : `Let ${who} choose`}</button>}
+                {(dishes.length > 1 || g) && <button type="button" className="q-mini" onClick={() => setChoose({ course: c.name, group: g?.meta.id })}>{g ? 'Edit choice' : 'Make it a choice'}</button>}
               </span>
             </div>
             {sections(c)}

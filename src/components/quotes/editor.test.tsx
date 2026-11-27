@@ -38,7 +38,8 @@ jest.mock('../../hooks/useItemPrices', () => ({ useItemPrices: () => () => 0 }))
 jest.mock('../../hooks/useDataCenter', () => ({ useDataCenter: () => ({ data: { gst_rate: 5 } }), useEventTypes: () => ({ data: [] }), useTeamMembers: () => ({ data: [] }), DEFAULT_EVENTS: ['Wedding'] }));
 jest.mock('../../hooks/useInvoices', () => ({ useInvoices: () => ({ data: [] }) }));
 jest.mock('../../hooks/useBookingPayments', () => ({ usePaymentRows: () => ({ data: [] }), useSavePayment: () => ({ mutateAsync: jest.fn() }) }));
-jest.mock('../../hooks/useSchemaStatus', () => ({ useHasQuoteOptions: () => true, useHasPlateDiscount: () => true }));
+jest.mock('../../hooks/useSchemaStatus', () => ({ useHasQuoteOptions: () => true, useHasPlateDiscount: () => true, useHasQuoteRevisions: () => true }));
+jest.mock('../../hooks/useConfirmBooking', () => ({ useConfirmBooking: () => ({ mutateAsync: jest.fn(), isPending: false }), missingFunction: () => true, newId: () => 'id1' }));
 jest.mock('../../hooks/useMenus', () => ({ useMenus: () => ({ data: mockPackages }), useCreateMenu: () => ({ mutateAsync: jest.fn() }) }));
 jest.mock('../../hooks/useDocSettings', () => ({ useDocSettings: () => jest.requireActual('../../lib/docs/settings').DEFAULT_DOC_SETTINGS }));
 jest.mock('../catering/BookingFormModal', () => () => null);
@@ -93,26 +94,46 @@ describe('quote editor', () => {
     expect(window.location.pathname).toBe('/quotations');
   });
 
-  it('one meal: a full price saves as a plate discount with its PDF tick', async () => {
+  it('one meal: a list price makes a plate discount with its PDF tick', async () => {
     render(<Quotations />);
     fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
     await settle();
-    fireEvent.change(screen.getByLabelText(/Price before discount/), { target: { value: '220' } });
-    expect(screen.getByText('₹20 off ₹220 · saves ₹2,800')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/List price a plate/), { target: { value: '220' } });
+    expect(screen.getByText('₹20 off a plate · ₹2,800 off this meal')).toBeInTheDocument();
     await waitFor(() => expect(mockUpdate).toHaveBeenCalled(), { timeout: 3000 });
     expect(mockUpdate.mock.calls.at(-1)[0]).toMatchObject({ full_price: 220, hide_discount: false, total_amount: 28000 });
-    fireEvent.click(screen.getByRole('checkbox', { name: /Discount on the PDF/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Show the discount/ }));
     await waitFor(() => expect(mockUpdate.mock.calls.at(-1)[0]).toMatchObject({ hide_discount: true }), { timeout: 3000 });
   });
 
-  it('one meal: a before-discount price below the plate price swaps with it', async () => {
+  it('one meal grows into meals keeping its dishes and price, and comes back', async () => {
     render(<Quotations />);
     fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
     await settle();
-    const box = screen.getByLabelText(/Price before discount/);
-    fireEvent.change(box, { target: { value: '180' } });
-    fireEvent.blur(box);
-    await waitFor(() => expect(mockUpdate.mock.calls.at(-1)?.[0]).toMatchObject({ per_plate_amount: 180, full_price: 200, total_amount: 25200 }), { timeout: 3000 });
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a meal' }));
+    await waitFor(() => expect(mockUpdate.mock.calls.at(-1)?.[0]).toMatchObject({ is_multi_day: true }), { timeout: 3000 });
+    const days = mockUpdate.mock.calls.at(-1)[0].event_days;
+    expect(days[0].meals).toHaveLength(2);
+    expect(days[0].meals[0]).toMatchObject({ per_plate_amount: 200, guest_count: 140, items: [expect.objectContaining({ item_name: 'Puri' })] });
+    expect(days[0].meals[0].meal_type).toBe('lunch');
+    fireEvent.click(screen.getAllByRole('button', { name: /^Remove Day 1/ })[1]);
+    fireEvent.click(screen.getByRole('button', { name: 'Make it a one-meal quote' }));
+    await waitFor(() => expect(mockUpdate.mock.calls.at(-1)?.[0]).toMatchObject({ is_multi_day: false, per_plate_amount: 200, guest_count: 140, total_amount: 28000 }), { timeout: 3000 });
+  });
+
+  it('an accepted quote is locked until you choose to change it', async () => {
+    const q = mockQuotes[0] as any;
+    q.status = 'accepted';
+    try {
+      render(<Quotations />);
+      fireEvent.click(screen.getByRole('tab', { name: /Accepted/ }));
+      fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
+      expect(screen.getByText(/is accepted and locked/)).toBeInTheDocument();
+      expect(screen.getByLabelText('Guests')).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Change the accepted quote…' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Change it' }));
+      await waitFor(() => expect(screen.getByLabelText('Guests')).toBeEnabled());
+    } finally { q.status = 'sent'; }
   });
 
   it('a change still waiting is saved when the page closes', async () => {
@@ -134,11 +155,11 @@ describe('quote editor', () => {
       render(<Quotations />);
       fireEvent.click(within(screen.getByRole('complementary', { name: 'Selected quotation' })).getByRole('button', { name: 'Edit' }));
       await settle();
-      const price = screen.getByRole('region', { name: 'Price' });
+      const price = screen.getByRole('group', { name: 'Price a plate' });
       fireEvent.click(within(price).getByRole('radio', { name: /One price for any pick/ }));
-      expect((screen.getByLabelText('Own price a plate') as HTMLInputElement).value).toBe('75');
-      expect(within(price).getByText('₹75 a plate whatever they pick; change it in My own price')).toBeInTheDocument();
-      fireEvent.click(within(price).getByRole('radio', { name: /The pick changes the price/ }));
+      expect((screen.getByLabelText('Your price') as HTMLInputElement).value).toBe('75');
+      expect(within(price).getByText('₹75 a plate · change it in Your price')).toBeInTheDocument();
+      fireEvent.click(within(price).getByRole('radio', { name: /Price follows the pick/ }));
       expect(within(price).getByText('₹65 – ₹75 a plate, final once they choose')).toBeInTheDocument();
     } finally {
       Object.assign(q, before);
@@ -152,7 +173,7 @@ describe('quote editor', () => {
     await settle();
     fireEvent.click(screen.getByRole('button', { name: 'Start from a package' }));
     fireEvent.click(screen.getByRole('button', { name: 'Use Besic' }));
-    const own = screen.getByLabelText('Own price a plate') as HTMLInputElement;
+    const own = screen.getByLabelText('Your price') as HTMLInputElement;
     expect(own.value).toBe('270');
     expect(screen.getByText('₹270 a plate for up to 150 guests (Besic)')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Guests'), { target: { value: '200' } });

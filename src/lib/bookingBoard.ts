@@ -37,19 +37,20 @@ export const STAGE_STYLE: Record<Stage, { bg: string; fg: string; dot: string }>
   inquiry: { bg: '#E6F1FB', fg: '#185FA5', dot: '#3B7FC4' },
   quoted: { bg: '#EEEDFE', fg: '#4A41A8', dot: '#6B62CF' },
   confirmed: { bg: '#EAF3DE', fg: '#2F5A0E', dot: '#4F8A1E' },
+  done: { bg: '#F1EFE6', fg: '#5C4A12', dot: '#8A6A1F' },
   invoiced: { bg: '#FAEEDA', fg: '#7A4A0A', dot: '#C98A1E' },
   paid: { bg: '#E1F5EE', fg: '#0F6E56', dot: '#16967A' },
   cancelled: { bg: '#FCEBEB', fg: '#A32D2D', dot: '#C04545' },
 };
 
 const pickLabel = (q: Quotation, siblings: number) => {
-  if (pendingChoice(q, siblings) === 'option') return 'Pick option & accept';
+  if (pendingChoice(q, siblings) === 'option') return 'Pick option & confirm';
   const labels = openChoiceLabels(q);
-  return labels.length === 1 ? `Pick ${labels[0].toLowerCase()} & accept` : 'Pick dishes & accept';
+  return labels.length === 1 ? `Pick ${labels[0].toLowerCase()} & confirm` : 'Pick dishes & confirm';
 };
 
 // One next step per booking; past events ask to be closed so totals stay right.
-function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | undefined, toPick: Quotation | undefined, siblings: number, drafted = false, received = 0): Next | null {
+function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | undefined, toPick: Quotation | undefined, siblings: number, drafted = false, received = 0, unlocked?: Quotation): Next | null {
   if (stage === 'cancelled') return null;
   if (invoice) {
     if (Number(invoice.balance_due) > 0) return { kind: 'payment', label: 'Record payment' };
@@ -58,7 +59,11 @@ function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | un
   if (b.status === 'completed') return null;
   if (toPick) return { kind: 'pick', label: pickLabel(toPick, siblings) };
   if (stage === 'inquiry') return past ? { kind: 'close', label: 'Close as lost' } : { kind: 'quote', label: drafted ? 'Send quote' : 'Make quotation' };
-  if (stage === 'quoted') return past ? { kind: 'close', label: 'Close as lost' } : { kind: 'accept', label: 'Mark accepted' };
+  if (stage === 'quoted') return past ? { kind: 'close', label: 'Close as lost' } : { kind: 'accept', label: 'Confirm booking' };
+  // Confirmed by status while its quote was never accepted: lock the quote before anything else.
+  if ((stage === 'confirmed' || stage === 'done') && unlocked) return { kind: 'accept', label: `Confirm with ${unlocked.quotation_number}` };
+  // The event is over: invoice it (Mark completed stays under ⋯ → Change status).
+  if (stage === 'done') return { kind: 'invoice', label: 'Create invoice' };
   // A confirmed event with nothing received yet asks for the advance before the invoice.
   if (stage === 'confirmed') return past ? { kind: 'complete', label: 'Mark completed' } : received > 0 ? { kind: 'invoice', label: 'Create invoice' } : { kind: 'advance', label: 'Record advance' };
   return null;
@@ -67,18 +72,21 @@ function nextStep(b: Booking, stage: Stage, past: boolean, invoice: Invoice | un
 export function bookingView(b: Booking, ctx: { quotes: Quotation[]; invoices: Invoice[]; value: number; today: string; payments?: Payment[] }): BookingView {
   const quotes = ctx.quotes.filter(q => q.booking_id === b.id);
   const invoice = ctx.invoices.find(i => i.booking_id === b.id);
-  const stage = eventStage(b, quotes, invoice);
   const start = b.event_date;
   const end = b.end_date && b.end_date > start ? b.end_date : start;
   const past = end < ctx.today;
+  // By the date: a postponed event only needs its new date.
+  const was = eventStage(b, quotes, invoice);
+  const stage: Stage = was === 'confirmed' && past ? 'done' : was;
   const sibs = (q: Quotation) => siblingsOf(q, ctx.quotes).length;
   // Only a sent quote can be picked from or accepted; an unsent draft waits to be sent.
   const toPick = quotes.find(q => q.status === 'sent' && pendingChoice(q, sibs(q)));
   const payments = paymentsFor(ctx.payments ?? [], b.id);
   const chosen = pickQuotation(ctx.quotes, b.id);
   const money = moneyOf(basisOf(invoice, chosen), payments);
-  const next = nextStep(b, stage, past, invoice, toPick, toPick ? sibs(toPick) : 1, quotes.some(q => q.status === 'draft'), money.received);
-  const quote = toPick ?? (next?.kind === 'accept' ? quotes.find(q => q.status === 'sent') : undefined) ?? chosen;
+  const unlocked = (b.status === 'confirmed' || b.status === 'completed') && chosen && chosen.status !== 'accepted' && chosen.status !== 'rejected' ? chosen : undefined;
+  const next = nextStep(b, stage, past, invoice, toPick, toPick ? sibs(toPick) : 1, quotes.some(q => q.status === 'draft'), money.received, unlocked);
+  const quote = toPick ?? unlocked ?? (next?.kind === 'accept' ? quotes.find(q => q.status === 'sent') : undefined) ?? chosen;
   const tab: Tab = stage === 'cancelled' ? 'cancelled' : past && next ? 'attention' : past ? 'past' : 'upcoming';
   const valueText = invoice ? inr(ctx.value) : quote && quote.status !== 'rejected' ? totalText(quote) : ctx.value > 0 ? inr(ctx.value) : 'No quote yet';
   return { b, stage, tab, next, quote, invoice, payments, money, value: ctx.value, valueText, start, end };
@@ -119,7 +127,7 @@ export function boardStats(views: BookingView[]) {
 }
 
 // Pipeline: open work plus what was paid in the last 90 days.
-export const PIPELINE: Stage[] = ['inquiry', 'quoted', 'confirmed', 'invoiced', 'paid'];
+export const PIPELINE: Stage[] = ['inquiry', 'quoted', 'confirmed', 'done', 'invoiced', 'paid'];
 export const PAID_DAYS = 90;
 export function pipelineColumns(views: BookingView[], today: string) {
   const since = new Date(`${today}T00:00:00Z`);
@@ -136,7 +144,7 @@ export function pipelineColumns(views: BookingView[], today: string) {
 }
 
 // Finished events with an accepted quote but no invoice: money that was never billed.
-export const neverInvoiced = (views: BookingView[]) => views.filter(v => (v.tab === 'past' || v.tab === 'attention') && v.stage === 'confirmed');
+export const neverInvoiced = (views: BookingView[]) => views.filter(v => (v.tab === 'past' || v.tab === 'attention') && v.stage === 'done');
 
 // Festival markers for the calendar: each occasion on its last (main) day.
 export function festivalDays(occasions: { name: string; end_date?: string | null }[]): Map<string, string[]> {

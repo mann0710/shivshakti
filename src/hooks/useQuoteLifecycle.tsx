@@ -64,5 +64,5 @@ export const useQuoteLifecycle = (onNavigate?: Navigate) => {
     } catch { /* sending already succeeded */ }
   };
 
-  return { setStatus, markSent };
+  return { setStatus, markSent, announce: acceptedToast };
 };

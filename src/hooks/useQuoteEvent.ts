@@ -30,11 +30,11 @@ export const useQuoteEvent = (bookings: Booking[]) => {
   const reset = () => { setBookingId(''); setDraft(blankDraft); setGuests(''); };
   const patch = (p: Partial<EventDraft>) => setDraft(d => ({ ...d, ...p }));
 
-  // Event type, date, time, venue and (single-day) guests typed in the quote go to the booking.
-  const syncBooking = async (id: string, withGuests: boolean) => {
+  // Event type, date, time, venue and guests (a number for several meals: the largest meal) go to the booking.
+  const syncBooking = async (id: string, withGuests: boolean | number) => {
     const b = bookings.find(x => x.id === id);
     if (!b) return;
-    const n = parseInt(guests, 10) || 0;
+    const n = typeof withGuests === 'number' ? withGuests : parseInt(guests, 10) || 0;
     const change: Partial<Booking> = {};
     if (draft.eventType.trim() && draft.eventType.trim() !== b.event_type) change.event_type = draft.eventType.trim();
     if (draft.date && draft.date !== b.event_date) {

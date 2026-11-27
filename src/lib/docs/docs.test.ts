@@ -55,7 +55,7 @@ describe('quotation', () => {
   it('per item: menu value, special price and saving', () => {
     const html = quotationDoc(quote({ per_plate_amount: 180, subtotal: 18000, total_amount: 18000 }), {}, ctx).html;
     expect(html).toContain('Menu value');
-    expect(html).toContain('Special price · ₹20 off per plate');
+    expect(html).toContain('Plate discount · ₹20 off per plate');
     expect(html).toContain('You save ₹2,000');
     expect(html).toContain('₹90</span>');
   });

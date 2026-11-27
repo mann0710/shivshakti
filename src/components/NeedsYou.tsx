@@ -102,7 +102,7 @@ const NeedsYou: React.FC<Props> = ({ items, data, quotes, today, onNavigate, onL
     } else if (i.kind === 'quote') {
       const q = quoteOf(i.ref);
       if (!q) return onNavigate('quotations');
-      // Pick rows: Pick & accept | WhatsApp. Sent: Follow up | Open. Draft: Send | Open.
+      // Pick rows: Pick & confirm | WhatsApp. Sent: Follow up | Open. Draft: Send | Open.
       const pick = i.second === 'WhatsApp';
       if (pick && first) flow.accept(q);
       else if (first === pick) onNavigate('quotations', { action: 'open', id: q.id });

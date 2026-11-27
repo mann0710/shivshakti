@@ -1,10 +1,11 @@
 // Where a catering event stands, derived from its booking, quotes and invoice.
 
-export const STAGES = ['inquiry', 'quoted', 'confirmed', 'invoiced', 'paid'] as const;
+// Done: a confirmed event whose date has passed and has no invoice yet (worked out from the date in bookingView).
+export const STAGES = ['inquiry', 'quoted', 'confirmed', 'done', 'invoiced', 'paid'] as const;
 export type Stage = typeof STAGES[number] | 'cancelled';
 
 export const STAGE_LABELS: Record<Stage, string> = {
-  inquiry: 'Inquiry', quoted: 'Quoted', confirmed: 'Confirmed', invoiced: 'Invoiced', paid: 'Paid', cancelled: 'Cancelled',
+  inquiry: 'Inquiry', quoted: 'Quoted', confirmed: 'Confirmed', done: 'Done', invoiced: 'Invoiced', paid: 'Paid', cancelled: 'Cancelled',
 };
 
 interface BookingLike { status: string }
@@ -26,6 +27,7 @@ export const NEXT_STEP: Record<Stage, string> = {
   inquiry: 'Make a quotation and share it',
   quoted: 'When the customer agrees, mark the quote Accepted',
   confirmed: 'Create the invoice',
+  done: 'Create the invoice, or settle it if it was paid outside the app',
   invoiced: 'Record payments as they come in',
   paid: 'All paid',
   cancelled: 'This event was cancelled',

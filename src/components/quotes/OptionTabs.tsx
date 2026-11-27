@@ -62,7 +62,7 @@ export const CompareTable: React.FC<{ options: Quotation[] }> = ({ options }) =>
         ))}
       </tbody>
     </table>
-    <p className="q-hint q-pad">"+ Add option" starts as a copy of the open one, so you only change what differs. Each option keeps its own guests, extras and payment plan.</p>
+    <p className="q-hint q-pad">"+ Add option" starts as a copy of the open one, so you only change what differs. Each option keeps its own guests, extras and discounts; the payment plan is the same for all.</p>
   </div>
 );
 

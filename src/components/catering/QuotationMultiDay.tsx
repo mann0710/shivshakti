@@ -1,18 +1,16 @@
 import React, { useState } from 'react';
-import { EventDay, MealSlot, QuotationLineItem } from '../../hooks/useQuotations';
+import { EventDay, MealSlot, Quotation, QuotationLineItem } from '../../hooks/useQuotations';
 import { getDayNumber } from '../../lib/quoteMath';
-import { sumMeals, isOnePrice, mealGap, priceMeal, setMealOnePrice, typedOf, withItems, hasDishPrices, showsDishPrices, plateOff, swapLower } from '../../lib/mealPrice';
-import { basePlate } from '../../lib/quoteChoices';
-import { genId, PickerItem } from '../../lib/quoteLines';
-import { range } from '../../lib/quoteSummary';
+import { sumMeals } from '../../lib/mealPrice';
 import { formatDateIST } from '../../lib/ist';
-import { inr } from '../../lib/money';
-import MenuCourses from '../quotes/MenuCourses';
+import MealCard from './MealCard';
+import toast from 'react-hot-toast';
+import { PackageDialog, CopyDialog } from '../quotes/MenuSources';
+import { priceAt } from '../../lib/priceTiers';
+import { genId, mergeLines, PickerItem } from '../../lib/quoteLines';
+import { priceMeal, withItems } from '../../lib/mealPrice';
 import { Field } from '../quotes/bits';
-import DiscountTick from '../quotes/DiscountTick';
 import { useConfirm } from '../ui/ConfirmDialog';
-
-const MEAL_TYPES = ['Breakfast', 'Lunch', 'Hi-Tea', 'Snacks', 'Dinner', 'Supper'];
 
 interface Props {
   eventDays: EventDay[];
@@ -22,8 +20,15 @@ interface Props {
   menuItems: PickerItem[];
   toLine: (it: PickerItem) => QuotationLineItem;
   showPrices: boolean;
+  pdfPrices: boolean;
   who: string;
+  onOneMeal?: (date: string, m: MealSlot) => void;
+  quotes: Quotation[];
+  currentId: string | null;
 }
+
+// A one-meal quote has no offer price, ceremony name or per-meal dish-price switch, so such a meal stays a meal.
+const oneMealFits = (m: MealSlot) => !(m.discount_amount > 0) && !m.ceremony_name && !m.hide_prices;
 
 const nextDate = (iso: string) => {
   if (!iso) return '';
@@ -33,7 +38,8 @@ const nextDate = (iso: string) => {
 };
 
 // Several meals or days: one tab per day, a card per meal with its time, guests, rate and dishes.
-const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCount, defaultDate, menuItems, toLine, showPrices, who }) => {
+const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCount, defaultDate, menuItems, toLine, showPrices, pdfPrices, who, onOneMeal, quotes, currentId }) => {
+  const [source, setSource] = useState<{ kind: 'package' | 'copy'; id: string } | null>(null);
   const [dayIdx, setDayIdx] = useState(0);
   const { confirm, dialog } = useConfirm();
   const at = Math.min(dayIdx, Math.max(0, eventDays.length - 1));
@@ -46,12 +52,6 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
       return { ...d, meals, day_subtotal: sumMeals(meals) };
     }));
   const patchMeal = (idx: number, id: string, fn: (m: MealSlot) => MealSlot) => patchDay(idx, meals => meals.map(m => (m.id === id ? fn(m) : m)));
-  const setField = (idx: number, id: string, field: keyof MealSlot, value: string | number) => patchMeal(idx, id, m => {
-    if (field === 'per_plate_amount') return priceMeal(m, m.items ?? [], Number(value));
-    const u = { ...m, [field]: value };
-    return { ...u, subtotal: u.per_plate_amount * u.guest_count };
-  });
-
   const addDay = () => {
     const last = eventDays[eventDays.length - 1]?.date || defaultDate;
     setEventDays(prev => [...prev, { day_number: prev.length + 1, date: prev.length ? nextDate(last) : last, meals: [], day_subtotal: 0 }]);
@@ -76,66 +76,15 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
     return { ...d, meals, day_subtotal: sumMeals(meals) };
   }));
 
-  const meal = (m: MealSlot) => {
-    const rate = m.discount_amount > 0 && m.discount_amount < m.per_plate_amount ? m.discount_amount : m.per_plate_amount;
-    const hi = m.per_plate_max != null && m.per_plate_max > m.per_plate_amount ? m.per_plate_max * m.guest_count : null;
-    const gap = mealGap(m);
-    const one = isOnePrice(m);
-    const priced = hasDishPrices(m);
-    const off = plateOff(m);
-    const dishes = basePlate(m.items);
-    return (
-      <div key={m.id} className="q-meal">
-        <div className="q-meal-row">
-          <Field label="Meal">
-            <select value={m.meal_type} onChange={e => setField(at, m.id, 'meal_type', e.target.value)}>
-              {MEAL_TYPES.map(t => <option key={t} value={t.toLowerCase()}>{t}</option>)}
-            </select>
-          </Field>
-          <Field label="Time"><input type="time" value={m.time} onChange={e => setField(at, m.id, 'time', e.target.value)} /></Field>
-          <Field label="Guests"><input type="number" min={0} inputMode="numeric" value={m.guest_count || ''} placeholder="0" onChange={e => setField(at, m.id, 'guest_count', parseInt(e.target.value, 10) || 0)} /></Field>
-          <Field label="A plate"><input type="number" min={0} inputMode="decimal" value={typedOf(m) || ''} placeholder={dishes ? `₹${dishes}` : '₹'} onChange={e => setField(at, m.id, 'per_plate_amount', parseFloat(e.target.value) || 0)}
-            onBlur={e => { if (!e.target.value && dishes) setField(at, m.id, 'per_plate_amount', dishes); }} /></Field>
-          <Field label="Before discount"><input type="number" min={0} inputMode="decimal" value={m.full_price || ''} placeholder="No discount" aria-label="Price a plate before discount" onChange={e => setField(at, m.id, 'full_price', parseFloat(e.target.value) || 0)}
-            onBlur={() => patchMeal(at, m.id, swapLower)} /></Field>
-          <button type="button" className="q-x" aria-label={`Remove Day ${getDayNumber(day.date, eventDays)} ${m.meal_type}`} onClick={() => patchDay(at, meals => meals.filter(x => x.id !== m.id))}>×</button>
-        </div>
-        {gap && (
-          <label className="q-check">
-            <input type="checkbox" checked={one} onChange={e => patchMeal(at, m.id, x => setMealOnePrice(x, e.target.checked))} />
-            <span className="t"><b>Same price whatever they choose ({inr(one ? m.per_plate_amount : m.per_plate_max ?? m.per_plate_amount)} a plate)</b>
-              <small>{one ? 'Change it in A plate' : `Off: ${range(m.per_plate_amount, m.per_plate_max)} a plate, final once they choose`}</small></span>
-          </label>
-        )}
-        <MenuCourses compact items={m.items ?? []} menu={menuItems} showPrices={showPrices} who={who} toLine={toLine}
-          preview={next => { const p = withItems(m, next); return `${range(p.per_plate_amount, p.per_plate_max)} a plate`; }}
-          onChange={next => patchMeal(at, m.id, x => withItems(x, next))} />
-        <div className="q-meal-foot">
-          <span>{m.guest_count} × {inr(rate)}{rate !== m.per_plate_amount ? ` (offer, was ${inr(m.per_plate_amount)})` : ''}{off ? ` · ${inr(off)} off ${inr(Number(m.full_price))} saves ${inr(off * m.guest_count)}` : ''}{dishes && dishes !== m.per_plate_amount ? ` · dishes add up to ${inr(dishes)}` : ''}</span>
-          <b>{range(rate * m.guest_count, hi)}</b>
-        </div>
-        {off > 0 && <DiscountTick full={Number(m.full_price)} price={m.per_plate_amount} hidden={!!m.hide_discount} onShow={v => patchMeal(at, m.id, x => ({ ...x, hide_discount: !v || undefined }))} />}
-        {showPrices && (
-          <label className={`q-check${priced ? '' : ' off'}`}>
-            <input type="checkbox" checked={priced && showsDishPrices(m)} disabled={!priced} onChange={e => patchMeal(at, m.id, x => ({ ...x, hide_prices: !e.target.checked || undefined }))} />
-            <span className="t"><b>Dish prices on the PDF</b>
-              <small>{!priced ? 'No dish prices in this meal' : showsDishPrices(m) ? 'Each dish shows its price' : `Off for this meal: only the plate price prints`}</small></span>
-          </label>
-        )}
-        <details className="q-more">
-          <summary>More for this meal</summary>
-          <div className="q-fields">
-            <Field label="Ceremony name"><input value={m.ceremony_name || ''} placeholder="e.g. Haldi" onChange={e => setField(at, m.id, 'ceremony_name', e.target.value)} /></Field>
-            {m.discount_amount > 0 && <Field label="Offer price a plate" hint="Older way to discount; clear it and use Before discount instead"><input type="number" min={0} inputMode="decimal" value={m.discount_amount || ''} placeholder="Same" onChange={e => setField(at, m.id, 'discount_amount', parseFloat(e.target.value) || 0)} /></Field>}
-          </div>
-          <div className="q-chips">
-            <button type="button" className="q-mini" onClick={() => copyMeal(at, m)}>Copy this meal</button>
-            {eventDays.map((d, i) => i !== at && <button key={i} type="button" className="q-mini" onClick={() => moveMeal(at, i, m)}>Move to Day {getDayNumber(d.date, eventDays)}</button>)}
-          </div>
-        </details>
-      </div>
-    );
-  };
+  const mealCount = eventDays.reduce((n, d) => n + d.meals.length, 0);
+  const meal = (m: MealSlot) => (
+    <MealCard key={m.id} m={m} label={`Day ${getDayNumber(day.date, eventDays)} ${m.meal_type}`} menuItems={menuItems} toLine={toLine}
+      showPrices={showPrices} pdfPrices={pdfPrices} who={who} onChange={fn => patchMeal(at, m.id, fn)}
+      onRemove={() => patchDay(at, meals => meals.filter(x => x.id !== m.id))} onCopy={() => copyMeal(at, m)}
+      moves={eventDays.map((d, i) => ({ i, label: `Move to Day ${getDayNumber(d.date, eventDays)}` })).filter(x => x.i !== at).map(x => ({ label: x.label, go: () => moveMeal(at, x.i, m) }))}
+      onSource={kind => setSource({ kind, id: m.id })}
+      onOneMeal={mealCount === 1 && onOneMeal && oneMealFits(m) ? () => onOneMeal(day.date, m) : undefined} />
+  );
 
   return (
     <>
@@ -156,6 +105,19 @@ const QuotationMultiDay: React.FC<Props> = ({ eventDays, setEventDays, guestCoun
         {!day.meals.length && <p className="q-hint">No meals on this day yet.</p>}
         <button type="button" className="q-otab add" onClick={() => addMeal(at)}>+ Add a meal to Day {getDayNumber(day.date, eventDays)}</button>
       </>}
+      {source && (() => {
+        const m = day?.meals.find(x => x.id === source.id);
+        if (!m) return null;
+        const into = (add: QuotationLineItem[], replace: boolean, price?: number) =>
+          patchMeal(at, m.id, x => { const items = mergeLines(x.items ?? [], add, replace); return price && price > 0 ? priceMeal(x, items, price) : withItems(x, items); });
+        return source.kind === 'package'
+          ? <PackageDialog menuItems={menuItems} hasDishes={(m.items ?? []).length > 0} guests={m.guest_count} onClose={() => setSource(null)}
+              onApply={(found, menu, replace, missing) => {
+                into(found.map(it => (it.choice ? { ...toLine(it), choice: it.choice } : toLine(it))), replace, priceAt(menu, m.guest_count));
+                toast.success(`Added ${found.length} dish${found.length === 1 ? '' : 'es'} to ${m.meal_type}${missing.length ? ` · not in Menu Builder: ${missing.join(', ')}` : ''}`, { duration: 6000 });
+              }} />
+          : <CopyDialog quotes={quotes} currentId={currentId} hasDishes={(m.items ?? []).length > 0} onClose={() => setSource(null)} onCopy={(items, replace) => into(items, replace)} />;
+      })()}
       {dialog}
     </>
   );

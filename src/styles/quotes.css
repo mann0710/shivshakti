@@ -294,7 +294,7 @@
 .q-dayline .q-field { width: 200px; }
 .q-dayline .q-link { margin-right: 0; }
 .q-meal { border: 1px solid #ECECE6; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
-.q-meal-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 100px 110px 120px 44px; gap: 10px; align-items: end; }
+.q-meal-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 110px 44px; gap: 10px; align-items: end; }
 .q-x { border: none; background: none; color: #9A9A93; font-size: 20px; min-height: 44px; cursor: pointer; }
 .q-meal-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; flex-wrap: wrap; }
 .q-more summary { font-size: 13px; color: #8A4B00; font-weight: 600; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
@@ -388,5 +388,23 @@
 
 /* Price: whether the customer's pick moves the plate price */
 .q-picks { margin-top: 10px; }
-.q-fullprice { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 4px 16px; align-items: center; margin-top: 10px; }
-@media (max-width: 768px) { .q-fullprice { grid-template-columns: 1fr; } }
+/* Price a plate: one block per meal */
+.q-plate { border: 1px solid #E5E5E0; border-radius: 12px; padding: 12px 14px; background: #FCFCFA; display: flex; flex-direction: column; gap: 10px; }
+.q-plate-h, .q-plate .k { font-size: 12px; font-weight: 700; color: #5A5A55; }
+.q-plate-h { letter-spacing: .5px; text-transform: uppercase; }
+.q-plate-grid { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 14px; align-items: center; font-size: 14px; }
+.q-plate-grid small { color: #5A5A55; font-size: 12.5px; }
+.q-plate-grid .good { color: #2F5A0E; font-weight: 600; }
+.q-plate-grid .warn { color: #8A4B00; font-weight: 600; }
+.q-plate-in { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.q-plate-in input { width: 130px; font-size: 16px; font-weight: 600; }
+.q-plate .q-rcard input { width: 18px; height: 18px; accent-color: var(--accent); margin-top: 2px; flex-shrink: 0; }
+.q-plate-pdf { display: flex; flex-direction: column; border-top: 1px solid #EFEFEA; padding-top: 8px; }
+.q-plate-foot { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid #EFEFEA; padding-top: 8px; font-size: 14px; }
+.q-plate-foot b { font-size: 16px; }
+.q-fs { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: inherit; }
+.q-fs:disabled { opacity: .75; pointer-events: none; }
+.q-lock { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.q-save { align-self: flex-start; background: #E7F2DC; color: #2F5A0E; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 600; }
+.q-meal-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 768px) { .q-plate-grid { grid-template-columns: 1fr; gap: 4px; } .q-plate-grid .k { margin-top: 6px; } }

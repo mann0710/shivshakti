@@ -34,7 +34,7 @@ describe('quotation board', () => {
   it('says what is missing and what to do next', () => {
     expect(row('23').line).toBe('QTN-23 · 100 guests · sent');
     expect(row('23').flag).toBe('has to pick 1 farsan');
-    expect(row('23').next?.label).toBe('Pick farsan & accept');
+    expect(row('23').next?.label).toBe('Pick farsan & confirm');
     expect(pickText(kavit)).toBe('has to pick 1 farsan');
     expect(row('15').flag).toBe('event in 26 days');
     expect(row('15').line).toBe('QTN-15 · 100 guests · draft since 5 Sep');

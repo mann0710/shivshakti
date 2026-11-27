@@ -10,7 +10,7 @@ import { formatDateIST, todayIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
 import { pickQuotation } from '../../lib/quoteMath';
 import { invoiceTodo } from '../../lib/cateringTodo';
-import { awaitsAcceptance } from '../../lib/moneyView';
+import { awaitsAcceptance, quoteNotConfirmed } from '../../lib/moneyView';
 import { amountOf, invoiceFromQuote, needsGuests, quoteValue } from '../../lib/invoiceEdit';
 import { Empty } from '../money/MoneyUi';
 import { grouped } from './PaymentFields';
@@ -29,7 +29,7 @@ const InvoiceCreateModal: React.FC<Props> = ({ bookingId, onClose, onCreated }) 
 
   const choices = useMemo(() => {
     const t = invoiceTodo(bookings, quotations, invoices, today);
-    const ids = t.ready.map(r => r.booking.id).filter(id => !awaitsAcceptance(id, quotations));
+    const ids = t.ready.map(r => r.booking.id).filter(id => !awaitsAcceptance(id, quotations) && !quoteNotConfirmed(id, quotations));
     return [...ids, ...(bookingId && !ids.includes(bookingId) ? [bookingId] : [])].map(id => bookings.find(b => b.id === id)!).filter(Boolean);
   }, [bookings, quotations, invoices, today, bookingId]);
   const waiting = useMemo(() => {

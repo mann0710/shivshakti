@@ -9,7 +9,9 @@ import { sumCharges } from '../../lib/quoteMath';
 import { confirmPicks, paymentsFor, receivedOf } from '../../lib/bookingMoney';
 import { amountOf } from '../../lib/invoiceEdit';
 import { usePaymentRows } from '../../hooks/useBookingPayments';
-import PaymentFields, { blankPay, PayDraft, ReceiptCheck } from './PaymentFields';
+import { blankPay, PayDraft } from './PaymentFields';
+import AdvanceChoice, { AdvanceKind } from './AdvanceChoice';
+import { newId } from '../../hooks/useConfirmBooking';
 import { mealTitle } from '../../lib/docs/menu';
 import { formatDateIST } from '../../lib/ist';
 import { inr } from '../../lib/money';
@@ -21,7 +23,7 @@ interface Props {
   busy: boolean;
   picks?: Set<string>;
   onClose: () => void;
-  onConfirm: (chosen: Quotation, picked: Set<string>, guests?: number, advance?: { draft: PayDraft; receipt: boolean }) => void;
+  onConfirm: (chosen: Quotation, picked: Set<string>, guests?: number, advance?: { draft: PayDraft; receipt: boolean; id: string }) => void;
 }
 
 interface Block { title?: string; mealId: string; group: ChoiceGroup }
@@ -42,8 +44,11 @@ const QuoteAcceptDialog: React.FC<Props> = ({ quote, options, busy, picks, onClo
   const [guests, setGuests] = useState(String(chosen.guest_count || ''));
   const { data: rows = [] } = usePaymentRows();
   const had = receivedOf(paymentsFor(rows, quote.booking_id ?? ''));
-  const [typed, setPay] = useState<PayDraft | null>(null);
-  const [receipt, setReceipt] = useState(true);
+  const [pay, setPay] = useState<PayDraft>(() => blankPay(0));
+  const [kind, setKind] = useState<AdvanceKind | null>(null);
+  const [receipt, setReceipt] = useState(false);
+  // Fixed for this dialog, so pressing Confirm again never records the advance twice.
+  const [payId] = useState(newId);
   const blocks = useMemo(() => blocksOf(chosen), [chosen]);
   const single = !(chosen.is_multi_day && chosen.event_days?.length);
   const who = firstName(quote);
@@ -64,19 +69,18 @@ const QuoteAcceptDialog: React.FC<Props> = ({ quote, options, busy, picks, onClo
   const finalGuests = single && g > 0 ? g : undefined;
   const preview = acceptPatch(chosen, picked, finalGuests);
   const total = preview.total_amount ?? chosen.total_amount;
-  // Until the amount is typed it follows the plan's first step of the current total.
-  const pay = typed ?? blankPay(had > 0 ? 0 : confirmPicks(total, settings.schedule)[0]?.value ?? 0);
-  const paid = amountOf(pay.amount);
+  const paid = kind === 'new' ? amountOf(pay.amount) : 0;
+  const ready = complete && !!kind && (kind !== 'new' || paid > 0);
   const transport = sumCharges(chosen.transportation_charges) + sumCharges(chosen.extra_charges);
   const date = chosen.booking?.event_date ? formatDateIST(chosen.booking.event_date, 'EEE d MMM') : '';
 
   return (
-    <Modal title={`Accept ${quote.quotation_number}`} onClose={onClose} busy={busy} dirty={guests !== String(chosen.guest_count || '')} width={560}
+    <Modal title={`Confirm booking · ${quote.quotation_number}`} onClose={onClose} busy={busy} dirty={guests !== String(chosen.guest_count || '')} width={560}
       footer={<>
         <button type="button" className="ui-btn" onClick={onClose}>Cancel</button>
-        <button type="button" className="ui-btn primary" disabled={!complete || busy}
-          onClick={() => onConfirm(chosen, picked, finalGuests, { draft: pay, receipt })}>
-          {busy ? 'Saving…' : `Accept${options.length > 1 && chosen.option_label ? ` ${chosen.option_label}` : ''} · ${inr(total)}`}
+        <button type="button" className="ui-btn primary" disabled={!ready || busy}
+          onClick={() => onConfirm(chosen, picked, finalGuests, kind === 'new' ? { draft: pay, receipt, id: payId } : undefined)}>
+          {busy ? 'Saving…' : `Confirm booking${options.length > 1 && chosen.option_label ? ` · option ${chosen.option_label}` : ''}`}
         </button>
       </>}>
       <p className="q-dlg-sub">{[quote.customer?.name, quote.booking?.event_type, date].filter(Boolean).join(' · ')}</p>
@@ -114,10 +118,9 @@ const QuoteAcceptDialog: React.FC<Props> = ({ quote, options, busy, picks, onClo
           </Field>
         )}
       </div>
-      <div className="mx-dlg" style={{ marginTop: 14 }}>
-        <span className="mx-heading">Advance (token) received now{had > 0 ? ` · ${inr(had)} already received` : ''}</span>
-        <PaymentFields value={pay} onChange={setPay} picks={confirmPicks(total, settings.schedule)} picksHint="From your payment plan (Settings › Money). Empty if nothing was paid yet." autoFocus={false} upiNote={`Booking ${quote.quotation_number}`} />
-        <ReceiptCheck phone={quote.customer?.phone} on={receipt} onChange={setReceipt} />
+      <div style={{ marginTop: 14 }}>
+        <AdvanceChoice had={had} kind={kind} onKind={setKind} draft={pay} onDraft={setPay} picks={confirmPicks(total, settings.schedule)}
+          picksHint="From your payment plan (Settings › Money)." phone={quote.customer?.phone} receipt={receipt} onReceipt={setReceipt} upiNote={`Booking ${quote.quotation_number}`} />
       </div>
 
       <div className="q-rows">
@@ -125,7 +128,7 @@ const QuoteAcceptDialog: React.FC<Props> = ({ quote, options, busy, picks, onClo
         {paid + had > 0 && <SumRow k="Advance" v={`− ${inr(paid + had)}`} />}
         {paid + had > 0 && <SumRow k="Balance due" v={inr(Math.max(0, total - paid - had))} />}
       </div>
-      <p className="q-hint">The booking becomes Confirmed{options.length > 1 ? ' and the other options are kept as not chosen' : ''}. {paid > 0 ? 'The advance is saved on the booking and appears on the invoice later.' : 'No advance yet: you can record it later from ⋯ → Record payment.'}</p>
+      <p className="q-hint">Locks {chosen.quotation_number} at {inr(total)}, marks the booking Confirmed{options.length > 1 ? ' and keeps the other options as not chosen' : ''}{paid > 0 ? ` and records ${inr(paid)}` : ''}{paid > 0 && receipt ? ', then shows the receipt to send' : ''}.</p>
     </Modal>
   );
 };

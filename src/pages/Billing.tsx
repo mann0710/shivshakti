@@ -11,7 +11,8 @@ import { todayIST } from '../lib/ist';
 import { inr } from '../lib/money';
 import { invoiceTodo, Ready } from '../lib/cateringTodo';
 import { pickQuotation } from '../lib/quoteMath';
-import { awaitsAcceptance } from '../lib/moneyView';
+import { awaitsAcceptance, quoteNotConfirmed } from '../lib/moneyView';
+import { useAcceptFlow } from '../hooks/useAcceptFlow';
 import InvoiceTodo from '../components/catering/InvoiceTodo';
 import InvoiceList, { invoiceMatches } from '../components/catering/InvoiceList';
 import InvoiceEditor from '../components/catering/InvoiceEditor';
@@ -23,7 +24,7 @@ import { Empty, LoadError, Skeleton } from '../components/money/MoneyUi';
 interface Props { onNavigate?: Navigate }
 
 // Invoices: who still owes, what is ready to invoice, past events never invoiced; one invoice opens full page.
-const Billing: React.FC<Props> = () => {
+const Billing: React.FC<Props> = ({ onNavigate }) => {
   const intent = useNavIntent('billing');
   const { data: invoices = [], isLoading, error, refetch } = useInvoices();
   const { data: quotations = [] } = useQuotations();
@@ -39,11 +40,13 @@ const Billing: React.FC<Props> = () => {
   const [settling, setSettling] = useState<Ready | null>(null);
   const [q, setQ] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const flow = useAcceptFlow(onNavigate);
   const today = todayIST();
   const todo = useMemo(() => {
     // Cancelled bookings' invoices stay out, as on Home and Money.
     const t = invoiceTodo(bookings, quotations, invoices.filter(i => i.booking?.status !== 'cancelled'), today);
-    return { ...t, ready: t.ready.filter(r => !awaitsAcceptance(r.booking.id, quotations)) };
+    const open = t.ready.filter(r => !awaitsAcceptance(r.booking.id, quotations));
+    return { ...t, ready: open.filter(r => !quoteNotConfirmed(r.booking.id, quotations)), toConfirm: open.filter(r => quoteNotConfirmed(r.booking.id, quotations)) };
   }, [bookings, quotations, invoices, today]);
   const owed = todo.owing.reduce((s, o) => s + o.invoice.balance_due, 0);
   const open = invoices.find(i => i.id === route.id);
@@ -95,7 +98,7 @@ const Billing: React.FC<Props> = () => {
       ) : (
         <>
           <InvoiceTodo {...todo} invoices={invoices} onOpen={i => openInvoice(i.id)} onPay={setPaying}
-            onCreate={id => setCreating(id)} onSettle={setSettling} onSettleAll={() => { if (!settlingAll) settleAll(); }} />
+            onCreate={id => setCreating(id)} onConfirm={r => { const q = quotations.find(x => x.id === r.quote?.id); if (q) flow.accept(q); }} onSettle={setSettling} onSettleAll={() => { if (!settlingAll) settleAll(); }} />
           <InvoiceList title="All invoices" invoices={invoices} onOpen={i => openInvoice(i.id)} collapsed={!showAll} onToggle={() => setShowAll(v => !v)} />
         </>
       )}
@@ -108,6 +111,7 @@ const Billing: React.FC<Props> = () => {
         <InvoiceSettle item={settling} booking={settleBooking} quote={pickQuotation(quotations, settleBooking.id)} onClose={() => setSettling(null)}
           onInvoice={id => { setSettling(null); setCreating(id); }} onDone={() => setSettling(null)} />
       )}
+      {flow.ui}
       {dialog}
     </div>
   );

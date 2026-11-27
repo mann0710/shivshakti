@@ -64,7 +64,7 @@ export type ChipTone = 'good' | 'warn';
 // One line under the amount on the bookings list.
 export function moneyChip(stage: string, m: Money): { text: string; tone: ChipTone } | null {
   if (stage === 'cancelled' || stage === 'inquiry') return null;
-  if (m.received <= 0) return stage === 'confirmed' ? { text: 'No advance yet', tone: 'warn' } : null;
+  if (m.received <= 0) return stage === 'confirmed' || stage === 'done' ? { text: 'No advance yet', tone: 'warn' } : null;
   if (m.over > 0) return { text: `${inr(m.received)} received · ${inr(m.over)} extra`, tone: 'warn' };
   if (m.total > 0 && m.due <= 0) return { text: 'Paid in full', tone: 'good' };
   return { text: `${inr(m.received)} received${m.total > 0 ? ` · ${inr(m.due)} due` : ''}`, tone: 'good' };

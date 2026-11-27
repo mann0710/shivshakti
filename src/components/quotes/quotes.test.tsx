@@ -34,7 +34,7 @@ describe('quotation list', () => {
     const titles = screen.getAllByText(/· 1$/).map(e => e.textContent);
     expect(titles).toEqual(['Waiting for the customer · 1', 'Drafts to send · soonest event first · 1']);
     const panel = screen.getByRole('complementary', { name: 'Selected quotation' });
-    expect(within(panel).getByText('Farsan — customer picks 1')).toBeInTheDocument();
+    expect(within(panel).getByText('Farsan — Kavit picks 1')).toBeInTheDocument();
     expect(within(panel).getByText('No reply yet — a reminder is on Home')).toBeInTheDocument();
     fireEvent.click(within(panel).getByText('Accept with this farsan'));
     expect(a.accept).toHaveBeenCalledWith(kavit, new Set([':South Boll']));
@@ -58,15 +58,21 @@ describe('quotation list', () => {
 });
 
 describe('quote popups', () => {
-  it('accept records the pick, final guests and an advance only once it is paid', () => {
+  it('confirm booking records the pick, final guests and an advance only when one is chosen', () => {
     const onConfirm = jest.fn();
     render(<QuoteAcceptDialog quote={kavit} options={[kavit]} busy={false} onClose={jest.fn()} onConfirm={onConfirm} />);
     fireEvent.click(screen.getByRole('radio', { name: /Mix Bhajiya/ }));
+    const confirm = screen.getByRole('button', { name: 'Confirm booking' });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: /Received a new payment/ }));
+    expect(confirm).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /₹9,480/ }));
     fireEvent.click(screen.getByRole('button', { name: 'UPI' }));
-    const accept = screen.getByRole('button', { name: /^Accept · / });
-    expect(accept).toHaveTextContent('Accept · ₹31,600');
-    fireEvent.click(accept);
-    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'k' }), new Set([':Mix Bhajiya']), 140, { draft: expect.objectContaining({ amount: '9480', payment_mode: 'upi' }), receipt: true });
+    fireEvent.click(confirm);
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'k' }), new Set([':Mix Bhajiya']), 140, { draft: expect.objectContaining({ amount: '9480', payment_mode: 'upi' }), receipt: false, id: expect.any(String) });
+    fireEvent.click(screen.getByRole('radio', { name: /No advance yet/ }));
+    fireEvent.click(confirm);
+    expect(onConfirm).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'k' }), new Set([':Mix Bhajiya']), 140, undefined);
   });
   it('send shows the saved number, the message and mark as sent', () => {
     render(<SendDialog quote={bhavin} options={[bhavin]} all={false} withPrices onClose={jest.fn()} onSent={jest.fn()} />);

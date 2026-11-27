@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
 import { todayIST } from '../lib/ist';
-import { useHasPlateDiscount, useHasQuoteOptions } from './useSchemaStatus';
+import { useHasPlateDiscount, useHasQuoteOptions, useHasQuoteRevisions } from './useSchemaStatus';
 
 export interface QuotationLineItem {
   item_id: string;
@@ -24,6 +24,9 @@ export interface QuotationLineItem {
 }
 
 export interface ChoiceMeta { id: string; label: string; pick: number; included?: boolean }
+
+// What an accepted quote looked like before a change (the fields a revision restores).
+export interface QuoteRevision { n: number; at: string; total: number; quote: Record<string, unknown>; booking?: Record<string, unknown> }
 
 export interface MealSlot {
   id: string;
@@ -83,6 +86,7 @@ export interface Quotation {
   // After the plate-discount migration (one-meal quotes).
   full_price?: number | null;
   hide_discount?: boolean;
+  revisions?: QuoteRevision[];
 }
 
 type QuotationPayload = {
@@ -112,6 +116,8 @@ type QuotationPayload = {
   total_max?: number | null;
   full_price?: number | null;
   hide_discount?: boolean;
+  // After the revisions migration: an accepted quote before each change.
+  revisions?: QuoteRevision[];
 };
 
 export type { QuotationPayload };
@@ -119,15 +125,18 @@ export type { QuotationPayload };
 const OPTION_FIELDS = ['option_group', 'option_label', 'option_name', 'per_plate_max', 'total_max'] as const;
 
 const PLATE_FIELDS = ['full_price', 'hide_discount'] as const;
+const REVISION_FIELDS = ['revisions'] as const;
 
 // Drops fields whose migration has not been run yet.
 const useFitQuote = () => {
   const ready = useHasQuoteOptions();
   const plate = useHasPlateDiscount();
+  const revs = useHasQuoteRevisions();
   return <T extends object>(row: T): T => {
     const out: any = { ...row };
     if (!ready) OPTION_FIELDS.forEach(f => delete out[f]);
     if (!plate) PLATE_FIELDS.forEach(f => delete out[f]);
+    if (!revs) REVISION_FIELDS.forEach(f => delete out[f]);
     return out;
   };
 };

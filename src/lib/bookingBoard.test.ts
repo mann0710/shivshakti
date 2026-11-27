@@ -30,9 +30,9 @@ const of = (id: string) => views.find(v => v.b.id === id)!;
 
 describe('bookings board', () => {
   it('gives each booking one next step', () => {
-    expect(of('kavit').next?.label).toBe('Pick farsan & accept');
+    expect(of('kavit').next?.label).toBe('Pick farsan & confirm');
     expect(of('kavit').valueText).toBe('₹28,800 – ₹31,600');
-    expect(of('bhavin').next?.label).toBe('Mark accepted');
+    expect(of('bhavin').next?.label).toBe('Confirm booking');
     expect(of('amit').next?.label).toBe('Record advance');
     const paid = bookingView(of('amit').b, { quotes, invoices, today, value: 37000, payments: [{ id: 'p', booking_id: 'amit', amount: 3700, payment_date: '2026-10-30' } as any] });
     expect(paid.next?.label).toBe('Create invoice');
@@ -50,11 +50,19 @@ describe('bookings board', () => {
     const ravi = bk('ravi', 'Ravi Patel', '2026-12-12', 'followup');
     const sent = { id: 's1', booking_id: 'ravi', status: 'sent', created_at: '2026-10-01', total_amount: 5000, items: [] };
     const v = bookingView(ravi, ctx([{ ...sent, id: 's2', status: 'draft', created_at: '2026-10-20' }, sent]));
-    expect([v.next?.label, v.quote?.id]).toEqual(['Mark accepted', 's1']);
+    expect([v.next?.label, v.quote?.id]).toEqual(['Confirm booking', 's1']);
+  });
+  it('a confirmed booking whose quote was never accepted asks to confirm with it, before and after the event', () => {
+    const draft = [{ id: 'd1', quotation_number: 'QTN-0101', booking_id: 'up', status: 'draft', created_at: '2026-10-01', total_amount: 5000, items: [] },
+      { id: 'd2', quotation_number: 'QTN-0102', booking_id: 'gone', status: 'draft', created_at: '2026-10-01', total_amount: 5000, items: [] }] as any[];
+    const up = bookingView(bk('up', 'Up', '2026-12-11', 'confirmed'), { quotes: draft, invoices: [], today, value: 0 });
+    const gone = bookingView(bk('gone', 'Gone', '2026-10-20', 'confirmed'), { quotes: draft, invoices: [], today, value: 0 });
+    expect([up.next?.kind, up.next?.label, up.quote?.id]).toEqual(['accept', 'Confirm with QTN-0101', 'd1']);
+    expect([gone.stage, gone.next?.label]).toEqual(['done', 'Confirm with QTN-0102']);
   });
   it('puts past events that are still open under Needs attention', () => {
     expect([of('dirgha').tab, of('dirgha').next?.label]).toEqual(['attention', 'Close as lost']);
-    expect([of('jigar').tab, of('jigar').next?.label]).toEqual(['attention', 'Mark completed']);
+    expect([of('jigar').stage, of('jigar').tab, of('jigar').next?.label]).toEqual(['done', 'attention', 'Create invoice']);
     expect([of('exxat').tab, of('exxat').next?.label]).toEqual(['attention', 'Record payment']);
     expect([of('grand').tab, of('grand').next]).toEqual(['past', null]);
     expect(of('sanjay').tab).toBe('cancelled');
@@ -64,15 +72,15 @@ describe('bookings board', () => {
     expect(groupByMonth(upcoming).map(g => [g.title, g.views.length])).toEqual([['November 2026', 2], ['December 2026', 3]]);
     const s = boardStats(views);
     expect([s.upcoming, s.nextUp?.b.id, s.confirmedValue, s.waiting]).toEqual([5, 'kavit', 37000, 8]);
-    expect(s.waitingNote).toBe('2 advances · 1 quote · 2 decisions · 1 payment · 2 to close');
+    expect(s.waitingNote).toBe('2 advances · 1 invoice · 1 quote · 2 decisions · 1 payment · 1 to close');
   });
   it('builds pipeline columns; a confirmed booking waiting on its sent quote stays quoted', () => {
     const cols = pipelineColumns(views, today);
     expect(cols.map(c => [c.stage, c.cards.map(v => v.b.id)])).toEqual([
-      ['inquiry', ['dirgha', 'rushi']], ['quoted', ['kavit', 'bhavin']], ['confirmed', ['jigar', 'amit', 'wed']],
+      ['inquiry', ['dirgha', 'rushi']], ['quoted', ['kavit', 'bhavin']], ['confirmed', ['amit', 'wed']], ['done', ['jigar']],
       ['invoiced', ['exxat']], ['paid', ['grand']],
     ]);
-    expect(cols.map(c => c.note)).toEqual(['', '', '₹37,000', '₹5,000 due', 'Last 90 days']);
+    expect(cols.map(c => c.note)).toEqual(['', '', '₹37,000', '', '₹5,000 due', 'Last 90 days']);
   });
   it('finds finished events that were never invoiced', () => {
     expect(neverInvoiced(views).map(v => v.b.id)).toEqual(['jigar']);
